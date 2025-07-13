@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Glyph Dashboard</title>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 10px;
+    background: #111;
+    color: #eee;
+}
+h1 {
+    color: #ffcc00;
+    text-align: center;
+}
+.section {
+    margin-bottom: 0.5em;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1em;
+}
+th, td {
+    border: 1px solid #555;
+    padding: 4px;
+    text-align: center;
+}
+select {
+    background: #222;
+    color: #eee;
+    border: 1px solid #555;
+}
+canvas {
+    width: 100% !important;
+    max-height: 200px;
+    margin-top: 1em;
+}
+</style>
+</head>
+<body>
+<h1>Glyph Dashboard</h1>
+<div class="section">Workers: <span id="workers">0</span></div>
+<div class="section">Queue Length: <span id="queue">0</span></div>
+<div class="section">Found Results: <span id="results">0</span></div>
+<div class="section">GPU Temps: <span id="gpu">N/A</span></div>
+<div class="section">
+  Hashrate Target:
+  <select id="hashrate-target" onchange="loadHashrate()">
+    <option value="">Total</option>
+  </select>
+</div>
+<canvas id="hashrateChart"></canvas>
+
+<table>
+  <thead>
+    <tr><th>Worker</th><th>Status</th><th>Change</th></tr>
+  </thead>
+  <tbody id="worker-body"></tbody>
+</table>
+
+<script>
+async function updateMetrics() {
+    const res = await fetch('/server_status');
+    const data = await res.json();
+    document.getElementById('workers').textContent = data.worker_count;
+    document.getElementById('queue').textContent = data.queue_length;
+    document.getElementById('results').textContent = data.found_results;
+    document.getElementById('gpu').textContent = (data.gpu_temps || []).join(', ');
+}
+
+async function loadWorkers() {
+    const res = await fetch('/workers');
+    const workers = await res.json();
+    const tbody = document.getElementById('worker-body');
+    tbody.innerHTML = '';
+    for (const w of workers) {
+        const tr = document.createElement('tr');
+        const nameTd = document.createElement('td');
+        nameTd.textContent = w.name;
+        const statusTd = document.createElement('td');
+        statusTd.textContent = w.status;
+        const actionTd = document.createElement('td');
+        const select = document.createElement('select');
+        for (const opt of ['idle', 'maintenance', 'offline']) {
+            const o = document.createElement('option');
+            o.value = opt;
+            o.textContent = opt;
+            if (opt === w.status) o.selected = true;
+            select.appendChild(o);
+        }
+        select.onchange = async () => {
+            await fetch('/worker_status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: w.name, status: select.value })
+            });
+            statusTd.textContent = select.value;
+        };
+        actionTd.appendChild(select);
+        tr.appendChild(nameTd);
+        tr.appendChild(statusTd);
+        tr.appendChild(actionTd);
+        tbody.appendChild(tr);
+    }
+}
+
+function tick() {
+    updateMetrics();
+    loadWorkers();
+    loadHashrate();
+}
+setInterval(tick, 5000);
+tick();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let chart;
+async function loadHashrate() {
+    const target = document.getElementById('hashrate-target').value;
+    const url = target ? `/hashrate?worker=${encodeURIComponent(target)}` : '/hashrate';
+    const res = await fetch(url);
+    const data = await res.json();
+    const labels = data.map(d => new Date(d.ts * 1000).toLocaleTimeString());
+    const rates = data.map(d => d.rate);
+    if (!chart) {
+        const ctx = document.getElementById('hashrateChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets: [{ label: 'Hashrate', data: rates, borderColor: '#ffcc00', backgroundColor: 'rgba(255,204,0,0.2)' }] },
+            options: { scales: { y: { beginAtZero: true } } }
+        });
+    } else {
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = rates;
+        chart.update();
+    }
+}
+</script>
+</body>
+</html>
