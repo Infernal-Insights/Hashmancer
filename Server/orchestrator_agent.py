@@ -5,8 +5,7 @@ import time
 import uuid
 import redis
 
-LOW_QUEUE = os.getenv("LOW_QUEUE", "task:low")
-HIGH_QUEUE = os.getenv("HIGH_QUEUE", "task:high")
+JOB_STREAM = os.getenv("JOB_STREAM", "jobs")
 
 r = redis.Redis(host="localhost", port=6379, decode_responses=True)
 
@@ -46,27 +45,19 @@ def dispatch_batches():
     elif batch.get("wordlist"):
         attack = "dict"
 
-    high_workers, low_workers = worker_counts()
-    high_load = r.llen(HIGH_QUEUE) / max(high_workers, 1)
-    low_load = r.llen(LOW_QUEUE) / max(low_workers, 1)
-
-    if attack in {"dict", "hybrid"}:
-        queue = HIGH_QUEUE if high_workers else LOW_QUEUE
-    else:
-        queue = HIGH_QUEUE if high_load < low_load and high_workers else LOW_QUEUE
-
     task_id = str(uuid.uuid4())
     r.hset(
-        f"task:{task_id}",
+        f"job:{task_id}",
         mapping={
             "hashes": batch.get("hashes", "[]"),
             "mask": batch.get("mask", ""),
             "wordlist": batch.get("wordlist", ""),
             "attack_mode": attack,
+            "status": "queued",
         },
     )
-    r.expire(f"task:{task_id}", 3600)
-    r.rpush(queue, task_id)
+    r.expire(f"job:{task_id}", 3600)
+    r.xadd(JOB_STREAM, {"job_id": task_id})
 
 
 if __name__ == "__main__":
