@@ -1,20 +1,22 @@
-# Hashmancer-Worker
+# Hashmancer Worker
 
-This repository contains the worker agent used with the Hashmancer-Server project. It registers GPUs, fetches tasks, runs hashcat, reports results, and sends health updates.
+This directory contains a minimal Redis based worker implementation for the Hashmancer project.
+Workers register their GPUs with Redis, consume jobs from a stream and update job status when
+processing completes. Each GPU is handled by a lightweight sidecar thread.
 
-## Modules
-- `task_fetcher.py` – fetch tasks from Redis according to GPU bandwidth
-- `hashcat_runner.py` – execute hashcat based on task details
-- `results_client.py` – send found hashes or completion reports
-- `watchdog_agent.py` – report GPU metrics and restart stalled tasks
-- `worker_manager.py` – coordinate fetching and running tasks on all GPUs
-- `setup_agent.py` – interactive setup and worker registration
-- `simple_worker.py` – spawn mask-only workers for GPUs with four or fewer PCIe lanes
-- `advanced_worker.py` – spawn workers for GPUs with x8/x16 links for dictionary and hybrid tasks
+## Components
 
-## Requirements
+- `hashmancer_worker/worker_agent.py` – registers the worker and spawns GPU sidecars
+- `hashmancer_worker/gpu_sidecar.py` – reads jobs from a Redis stream and simulates GPU work
 
-See [REQUIREMENTS.md](REQUIREMENTS.md) for a list of required packages. The
-`setup_agent.py` script will attempt to install them automatically.
+The worker expects a running Redis instance which can be configured through the environment
+variables `REDIS_HOST`, `REDIS_PORT` and `JOBS_STREAM`.
 
-The scripts rely on environment variables for server URL, API keys, and Redis connection details, making deployment flexible across various systems.
+Start a worker with:
+
+```bash
+python -m hashmancer_worker.worker_agent
+```
+
+The example implementation only simulates work but demonstrates how GPU registration and
+stream consumption operate in the new architecture.
