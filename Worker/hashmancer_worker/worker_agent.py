@@ -31,6 +31,7 @@ r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 def detect_gpus() -> list[dict]:
     """Return a list of GPUs with uuid, model, pci_bus, memory_mb, pci_link_width."""
+    # NVIDIA detection via nvidia-smi
     try:
         output = subprocess.check_output(
             [
@@ -43,7 +44,6 @@ def detect_gpus() -> list[dict]:
         gpus = []
         for line in output.strip().splitlines():
             idx, uuid_str, name, bus, mem, width = [x.strip() for x in line.split(',')]
-
             gpus.append(
                 {
                     "index": int(idx),
@@ -57,18 +57,80 @@ def detect_gpus() -> list[dict]:
             )
         return gpus
     except Exception:
-        # fallback single fake gpu so worker still runs
-        return [
-            {
-                "index": 0,
-                "uuid": str(uuid.uuid4()),
-                "model": "CPU",  # placeholder
-                "pci_bus": "0000:00:00.0",
-                "pci_width": 16,
-                "memory_mb": 0,
-                "pci_link_width": 0,
-            }
-        ]
+        pass
+
+    # AMD detection via rocm-smi
+    try:
+        output = subprocess.check_output(
+            ["rocm-smi", "--showproductname", "--showbus", "--showuniqueid", "--showmeminfo", "vram"],
+            text=True,
+        )
+        gpus = []
+        current = {}
+        for line in output.splitlines():
+            if line.startswith("GPU") and "Unique ID" in line:
+                if current:
+                    gpus.append(current)
+                    current = {}
+                parts = line.split()
+                idx = int(parts[0].split("[")[1].split("]")[0])
+                uuid_str = parts[-1]
+                current = {
+                    "index": idx,
+                    "uuid": uuid_str,
+                    "model": "AMD GPU",
+                    "pci_bus": "",
+                    "pci_width": 16,
+                    "memory_mb": 0,
+                    "pci_link_width": 16,
+                }
+            elif line.startswith("GPU") and "PCI Bus" in line:
+                current["pci_bus"] = line.split()[-1]
+            elif line.startswith("GPU") and "VRAM Total" in line:
+                current["memory_mb"] = int(line.split()[-2])
+        if current:
+            gpus.append(current)
+        if gpus:
+            return gpus
+    except Exception:
+        pass
+
+    # Generic detection via lspci for Intel or unknown GPUs
+    try:
+        output = subprocess.check_output(["lspci"], text=True)
+        gpus = []
+        for line in output.splitlines():
+            if "VGA compatible controller" in line or "3D controller" in line:
+                bus = line.split()[0]
+                model = line.split(":", 2)[-1].strip()
+                gpus.append(
+                    {
+                        "index": len(gpus),
+                        "uuid": bus,
+                        "model": model,
+                        "pci_bus": bus,
+                        "pci_width": 16,
+                        "memory_mb": 0,
+                        "pci_link_width": 0,
+                    }
+                )
+        if gpus:
+            return gpus
+    except Exception:
+        pass
+
+    # fallback single fake gpu so worker still runs
+    return [
+        {
+            "index": 0,
+            "uuid": str(uuid.uuid4()),
+            "model": "CPU",  # placeholder
+            "pci_bus": "0000:00:00.0",
+            "pci_width": 16,
+            "memory_mb": 0,
+            "pci_link_width": 0,
+        }
+    ]
 
 
 def register_worker(worker_id: str, gpus: list[dict]):
