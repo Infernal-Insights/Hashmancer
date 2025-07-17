@@ -1,42 +1,46 @@
 import os
 import json
-import socket
 import subprocess
 import time
 import uuid
-import threading
 import redis
+import requests
 
 from .gpu_sidecar import GPUSidecar
+from .crypto_utils import load_public_key_pem
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
-STREAM = os.getenv("JOBS_STREAM", "jobs")
+SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
+STATUS_INTERVAL = int(os.getenv("STATUS_INTERVAL", "30"))
 
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 
 def detect_gpus() -> list[dict]:
-    """Return a list of GPUs with uuid, model, pci_bus, memory_mb."""
+    """Return a list of GPUs with uuid, model, pci_bus, memory_mb, pci_link_width."""
     try:
         output = subprocess.check_output(
             [
                 "nvidia-smi",
-                "--query-gpu=index,uuid,name,pci.bus_id,memory.total",
+                "--query-gpu=index,uuid,name,pci.bus_id,memory.total,pci.link.width.current",
                 "--format=csv,noheader",
             ],
             text=True,
         )
         gpus = []
         for line in output.strip().splitlines():
-            idx, uuid_str, name, bus, mem = [x.strip() for x in line.split(',')]
+            idx, uuid_str, name, bus, mem, width = [x.strip() for x in line.split(',')]
+
             gpus.append(
                 {
                     "index": int(idx),
                     "uuid": uuid_str,
                     "model": name,
                     "pci_bus": bus,
+                    "pci_width": int(width),
                     "memory_mb": int(mem.split()[0]),
+                    "pci_link_width": int(width),
                 }
             )
         return gpus
@@ -48,7 +52,9 @@ def detect_gpus() -> list[dict]:
                 "uuid": str(uuid.uuid4()),
                 "model": "CPU",  # placeholder
                 "pci_bus": "0000:00:00.0",
+                "pci_width": 16,
                 "memory_mb": 0,
+                "pci_link_width": 0,
             }
         ]
 
@@ -68,6 +74,7 @@ def register_worker(worker_id: str, gpus: list[dict]):
                 "model": g["model"],
                 "pci_bus": g["pci_bus"],
                 "memory_mb": g["memory_mb"],
+                "pci_link_width": g.get("pci_link_width", 0),
                 "worker": worker_id,
             },
         )
@@ -77,20 +84,19 @@ def register_worker(worker_id: str, gpus: list[dict]):
 def main():
     worker_id = os.getenv("WORKER_ID", str(uuid.uuid4()))
     gpus = detect_gpus()
-    register_worker(worker_id, gpus)
-    try:
-        r.xgroup_create(STREAM, worker_id, id='$', mkstream=True)
-    except redis.exceptions.ResponseError as e:
-        if "BUSYGROUP" not in str(e):
-            raise
-    threads = [GPUSidecar(worker_id, gpu) for gpu in gpus]
+    name = register_worker(worker_id, gpus)
+    threads = [GPUSidecar(name, gpu, SERVER_URL) for gpu in gpus]
     for t in threads:
         t.start()
-    print(f"Worker {worker_id} started with {len(gpus)} GPUs")
+    print(f"Worker {name} started with {len(gpus)} GPUs")
     try:
         while True:
-            r.hset(f"worker:{worker_id}", "last_seen", int(time.time()))
-            time.sleep(10)
+            requests.post(
+                f"{SERVER_URL}/worker_status",
+                json={"name": name, "status": "online"},
+                timeout=5,
+            )
+            time.sleep(STATUS_INTERVAL)
     except KeyboardInterrupt:
         print("Stopping worker...")
         for t in threads:

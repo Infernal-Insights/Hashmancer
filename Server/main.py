@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import subprocess
 from datetime import datetime
+import os
 import redis
 import json
 import uuid
@@ -18,6 +19,9 @@ from auth_utils import verify_signature
 app = FastAPI()
 
 r = redis.Redis(host="localhost", port=6379, decode_responses=True)
+
+JOB_STREAM = os.getenv("JOB_STREAM", "jobs")
+HTTP_GROUP = os.getenv("HTTP_GROUP", "http-workers")
 
 CONFIG_FILE = Path.home() / ".hashmancer" / "server_config.json"
 try:
@@ -106,17 +110,36 @@ async def get_batch(worker_id: str, signature: str):
     try:
         if not verify_signature(worker_id, worker_id, signature):
             return {"status": "unauthorized"}
+        try:
+            r.xgroup_create(JOB_STREAM, HTTP_GROUP, id="0", mkstream=True)
+        except redis.exceptions.ResponseError as e:
+            if "BUSYGROUP" not in str(e):
+                raise
 
-        batch_id = r.rpop("batch:queue")
-        if not batch_id:
+        messages = r.xreadgroup(HTTP_GROUP, worker_id, {JOB_STREAM: ">"}, count=1, block=1000)
+        if not messages:
             return {"status": "none"}
 
-        batch = r.hgetall(f"batch:{batch_id}")
-        batch["batch_id"] = batch_id
+        msg_id = None
+        job_id = None
+        for _stream, entries in messages:
+            for mid, data in entries:
+                msg_id = mid
+                job_id = data.get("job_id")
+                break
+
+        if not job_id:
+            if msg_id:
+                r.xack(JOB_STREAM, HTTP_GROUP, msg_id)
+            return {"status": "none"}
+
+        batch = r.hgetall(f"job:{job_id}")
+        batch["job_id"] = job_id
+        r.xack(JOB_STREAM, HTTP_GROUP, msg_id)
         r.hset(
             f"worker:{worker_id}",
             mapping={
-                "last_batch": batch_id,
+                "last_batch": job_id,
                 "last_seen": int(datetime.utcnow().timestamp()),
                 "status": "processing",
             },

@@ -72,6 +72,9 @@ def configure():
     print("🔧 Hashmancer Server Setup")
 
     api_key = prompt("Enter your hashes.com API key", secret=True)
+    if not api_key:
+        print("❌ Hashes.com API key is required for registration. Aborting.")
+        return
     public_url = prompt(
         "Public URL for cloud workers (leave blank for private/local only)", ""
     )

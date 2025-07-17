@@ -17,6 +17,7 @@ Hashmancer is a high-performance, distributed hash cracking orchestration system
 - Worker and GPU agent code moved to [Hashmancer-Agent](https://github.com/infernal-Insights/hashmancer-agent)
 - Agents handle PCIe-aware mask, dictionary, and hybrid attacks
 - GPU specs are stored in Redis for tuning
+- Each GPU spec includes a `pci_link_width` field used to route work
 - Redis-based orchestrator balances batches between high- and low-bandwidth queues
 - Optional UDP broadcast so workers on the local network can auto-discover the server
 
@@ -59,7 +60,7 @@ python3 setup.py
 ```
 
 This will:
-- Prompt for base directories for wordlists, masks, and rules along with your API key
+- Prompt for base directories for wordlists, masks, and rules. A Hashes.com API key is required for registration
 - Configure Redis and logging
 - Install a systemd service
 - Optionally enable a UDP broadcast so workers can auto-discover the server
