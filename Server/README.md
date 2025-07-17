@@ -106,7 +106,7 @@ specific worker so you can keep an eye on performance over time.
 | Method | Path                | Description                         |
 |--------|---------------------|-------------------------------------|
 | POST   | `/register_worker`  | Register a new worker               |
-| GET    | `/get_batch`        | Worker requests a batch             |
+| GET    | `/get_batch`        | Fetch a job from the Redis stream   |
 | POST   | `/submit_founds`    | Submit cracked hashes               |
 | POST   | `/submit_no_founds` | Report a finished batch with none   |
 | GET    | `/wordlists`        | List available wordlists            |
