@@ -17,19 +17,19 @@ r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 
 def detect_gpus() -> list[dict]:
-    """Return a list of GPUs with uuid, model, pci_bus, memory_mb."""
+    """Return a list of GPUs with uuid, model, pci_bus, memory_mb, pci_link_width."""
     try:
         output = subprocess.check_output(
             [
                 "nvidia-smi",
-                "--query-gpu=index,uuid,name,pci.bus_id,memory.total",
+                "--query-gpu=index,uuid,name,pci.bus_id,memory.total,pci.link.width.current",
                 "--format=csv,noheader",
             ],
             text=True,
         )
         gpus = []
         for line in output.strip().splitlines():
-            idx, uuid_str, name, bus, mem = [x.strip() for x in line.split(',')]
+            idx, uuid_str, name, bus, mem, width = [x.strip() for x in line.split(',')]
             gpus.append(
                 {
                     "index": int(idx),
@@ -37,6 +37,7 @@ def detect_gpus() -> list[dict]:
                     "model": name,
                     "pci_bus": bus,
                     "memory_mb": int(mem.split()[0]),
+                    "pci_link_width": int(width),
                 }
             )
         return gpus
@@ -49,6 +50,7 @@ def detect_gpus() -> list[dict]:
                 "model": "CPU",  # placeholder
                 "pci_bus": "0000:00:00.0",
                 "memory_mb": 0,
+                "pci_link_width": 0,
             }
         ]
 
@@ -68,6 +70,7 @@ def register_worker(worker_id: str, gpus: list[dict]):
                 "model": g["model"],
                 "pci_bus": g["pci_bus"],
                 "memory_mb": g["memory_mb"],
+                "pci_link_width": g.get("pci_link_width", 0),
                 "worker": worker_id,
             },
         )
