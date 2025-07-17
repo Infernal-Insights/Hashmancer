@@ -1,11 +1,12 @@
 import base64
 import redis
+from redis_utils import get_redis
 import logging
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.exceptions import InvalidSignature
 
-r = redis.Redis(host="localhost", port=6379, decode_responses=True)
+r = get_redis()
 
 
 def get_worker_pubkey(worker_id):
