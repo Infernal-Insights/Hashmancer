@@ -53,10 +53,10 @@ git clone https://github.com/infernal-Insights/hashmancer-server.git
 cd hashmancer-server
 ```
 
-2. Run the interactive setup script:
+2. Run the interactive setup script from the repository root:
 
 ```bash
-python3 setup.py
+python3 ../setup.py --server
 ```
 
 This will:
