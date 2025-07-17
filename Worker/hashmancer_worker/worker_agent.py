@@ -5,6 +5,7 @@ import time
 import uuid
 import redis
 import requests
+from pathlib import Path
 
 from .gpu_sidecar import GPUSidecar
 from .crypto_utils import load_public_key_pem
@@ -13,6 +14,17 @@ REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
 STATUS_INTERVAL = int(os.getenv("STATUS_INTERVAL", "30"))
+
+CONFIG_FILE = Path.home() / ".hashmancer" / "worker_config.json"
+if CONFIG_FILE.exists():
+    try:
+        with open(CONFIG_FILE) as f:
+            cfg = json.load(f)
+        SERVER_URL = os.getenv("SERVER_URL", cfg.get("server_url", SERVER_URL))
+        REDIS_HOST = os.getenv("REDIS_HOST", cfg.get("redis_host", REDIS_HOST))
+        REDIS_PORT = int(os.getenv("REDIS_PORT", cfg.get("redis_port", REDIS_PORT)))
+    except Exception:
+        pass
 
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 

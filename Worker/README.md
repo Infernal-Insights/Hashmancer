@@ -15,6 +15,10 @@ The worker expects a local Redis instance for caching. Configure `REDIS_HOST` an
 `PRIVATE_KEY_PATH` and `PUBLIC_KEY_PATH`. The status heartbeat interval can be
 customized with `STATUS_INTERVAL` (seconds).
 
+Run `python3 ../setup.py --worker` from the repository root to install
+dependencies and configure the worker.  Passing `--server-ip` skips broadcast
+discovery.
+
 Start a worker with:
 
 ```bash

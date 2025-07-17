@@ -9,3 +9,7 @@ GPU specs include a `pci_link_width` field for bandwidth-aware scheduling.
 
 * `Server/` – FastAPI server and orchestration tools
 * `Worker/` – HTTP-based worker with GPU sidecar threads
+
+Run `python3 setup.py` from the repository root to configure either a server or
+worker.  Use `--server` or `--worker` flags to skip the prompt.  A worker can
+also supply `--server-ip` to skip auto-discovery.
