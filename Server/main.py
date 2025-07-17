@@ -72,6 +72,10 @@ async def start_broadcast():
 async def register_worker(info: dict):
     try:
         worker_id = info.get("worker_id", str(uuid.uuid4()))
+        signature = info.get("signature")
+        if signature and not verify_signature(worker_id, worker_id, signature):
+            return {"status": "unauthorized"}
+
         specs = {
             "mode": info.get("mode", "eco"),
             "provider": info.get("provider", "on-prem"),
@@ -254,8 +258,11 @@ async def set_worker_status(data: dict):
     """Update a worker's status string."""
     name = data.get("name")
     status = data.get("status")
+    signature = data.get("signature")
     if not name or status is None:
         return {"status": "error", "message": "name and status required"}
+    if signature and not verify_signature(name, name, signature):
+        return {"status": "unauthorized"}
     try:
         r.hset(f"worker:{name}", "status", status)
         return {"status": "ok"}
