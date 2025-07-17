@@ -24,6 +24,29 @@ python -m hashmancer_worker.worker_agent
 The example implementation only simulates work but demonstrates how GPU registration and
 stream consumption operate in the new architecture.
 
-Each GPU dictionary now includes a `pci_link_width` field so orchestrators can
-distinguish high and low bandwidth devices.  The worker stores this value when
-registering GPUs in Redis.
+## Generating signing keys
+
+To sign requests sent to the server you need an RSA key pair.  Create the keys
+and store them under `~/.hashmancer` so the worker can load them automatically.
+
+Using `ssh-keygen`:
+
+```bash
+ssh-keygen -t rsa -b 4096 -m PEM -f ~/.hashmancer/worker_private.pem
+```
+
+This writes the private key to `~/.hashmancer/worker_private.pem` and the
+matching public key to `~/.hashmancer/worker_private.pem.pub`.  Alternatively
+you can generate the pair with `openssl`:
+
+```bash
+openssl genpkey -algorithm RSA -out ~/.hashmancer/worker_private.pem \
+    -pkeyopt rsa_keygen_bits:4096
+openssl rsa -in ~/.hashmancer/worker_private.pem -pubout \
+    -out ~/.hashmancer/worker_public.pem
+```
+
+Keep the private key secure and supply the public key when registering the
+worker.  The worker reads `~/.hashmancer/worker_private.pem` when signing API
+requests.
+
