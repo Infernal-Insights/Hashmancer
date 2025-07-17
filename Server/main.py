@@ -10,6 +10,7 @@ import uuid
 import socket
 import threading
 import time
+import glob
 from event_logger import log_error
 from pathlib import Path
 
@@ -213,7 +214,7 @@ async def list_rules():
 
 
 def get_gpu_temps():
-    """Return a list of GPU temperatures using nvidia-smi if available."""
+    """Return a list of GPU temperatures across vendors if available."""
     try:
         output = subprocess.check_output(
             [
@@ -225,7 +226,17 @@ def get_gpu_temps():
         )
         return [int(t.strip()) for t in output.strip().splitlines()]
     except Exception:
-        return []
+        pass
+
+    temps = []
+    for path in glob.glob("/sys/class/drm/card*/device/hwmon/hwmon*/temp*_input"):
+        try:
+            with open(path) as f:
+                val = int(f.read().strip())
+                temps.append(val // 1000)
+        except Exception:
+            continue
+    return temps
 
 
 @app.get("/server_status")

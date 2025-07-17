@@ -5,7 +5,8 @@ The agent requires several system and Python packages.
 System packages:
 - `redis-server`
 - `hashcat`
-- NVIDIA drivers providing `nvidia-smi`
+- NVIDIA drivers providing `nvidia-smi` or AMD's `rocm-smi`
+- Intel GPUs work with standard `intel-gpu-tools`
 
 Python packages are listed in `requirements.txt` and include:
 - `redis`

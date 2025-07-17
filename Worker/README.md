@@ -4,6 +4,7 @@ This directory contains a lightweight worker that communicates with the server
 over its HTTP API. Jobs are cached in a local Redis instance and for GPUs on
 x1/x4 PCIe links a copy of the payload is stored in VRAM so hashcat loads data
 faster.
+Both NVIDIA, AMD, and Intel GPUs are supported.
 
 ## Components
 
