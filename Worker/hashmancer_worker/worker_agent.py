@@ -18,19 +18,20 @@ r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 
 def detect_gpus() -> list[dict]:
-    """Return a list of GPUs with basic specs."""
+    """Return a list of GPUs with uuid, model, pci_bus, memory_mb, pci_link_width."""
     try:
         output = subprocess.check_output(
             [
                 "nvidia-smi",
-                "--query-gpu=index,uuid,name,pci.bus_id,pci.link.width.max,memory.total",
+                "--query-gpu=index,uuid,name,pci.bus_id,memory.total,pci.link.width.current",
                 "--format=csv,noheader",
             ],
             text=True,
         )
         gpus = []
         for line in output.strip().splitlines():
-            idx, uuid_str, name, bus, width, mem = [x.strip() for x in line.split(',')]
+            idx, uuid_str, name, bus, mem, width = [x.strip() for x in line.split(',')]
+
             gpus.append(
                 {
                     "index": int(idx),
@@ -39,6 +40,7 @@ def detect_gpus() -> list[dict]:
                     "pci_bus": bus,
                     "pci_width": int(width),
                     "memory_mb": int(mem.split()[0]),
+                    "pci_link_width": int(width),
                 }
             )
         return gpus
@@ -52,25 +54,31 @@ def detect_gpus() -> list[dict]:
                 "pci_bus": "0000:00:00.0",
                 "pci_width": 16,
                 "memory_mb": 0,
+                "pci_link_width": 0,
             }
         ]
 
 
-def register_worker(worker_id: str, gpus: list[dict]) -> str:
-    """Register with the server and return the assigned name."""
-    payload = {
-        "worker_id": worker_id,
-        "hardware": {"gpus": gpus},
-    }
-    try:
-        payload["pubkey"] = load_public_key_pem()
-    except FileNotFoundError:
-        payload["pubkey"] = ""
-    resp = requests.post(f"{SERVER_URL}/register_worker", json=payload, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-    name = data.get("waifu", worker_id)
-    return name
+def register_worker(worker_id: str, gpus: list[dict]):
+    ip = socket.gethostbyname(socket.gethostname())
+    ts = int(time.time())
+    r.hset(
+        f"worker:{worker_id}",
+        mapping={"ip": ip, "status": "idle", "last_seen": ts},
+    )
+    r.sadd("workers", worker_id)
+    for g in gpus:
+        r.hset(
+            f"gpu:{g['uuid']}",
+            mapping={
+                "model": g["model"],
+                "pci_bus": g["pci_bus"],
+                "memory_mb": g["memory_mb"],
+                "pci_link_width": g.get("pci_link_width", 0),
+                "worker": worker_id,
+            },
+        )
+        r.sadd(f"worker:{worker_id}:gpus", g["uuid"])
 
 
 def main():

@@ -21,5 +21,9 @@ Start a worker with:
 python -m hashmancer_worker.worker_agent
 ```
 
-The example implementation only simulates work but demonstrates how GPU registration,
-HTTP batch retrieval and result submission operate in the new architecture.
+The example implementation only simulates work but demonstrates how GPU registration and
+stream consumption operate in the new architecture.
+
+Each GPU dictionary now includes a `pci_link_width` field so orchestrators can
+distinguish high and low bandwidth devices.  The worker stores this value when
+registering GPUs in Redis.
