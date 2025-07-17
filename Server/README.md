@@ -106,8 +106,8 @@ specific worker so you can keep an eye on performance over time.
 
 | Method | Path                | Description                         |
 |--------|---------------------|-------------------------------------|
-| POST   | `/register_worker`  | Register a new worker               |
-| GET    | `/get_batch`        | Fetch a job from the Redis stream   |
+| POST   | `/register_worker`  | Register a new worker (optional signature) |
+| GET    | `/get_batch`        | Worker requests a batch             |
 | POST   | `/submit_founds`    | Submit cracked hashes               |
 | POST   | `/submit_no_founds` | Report a finished batch with none   |
 | GET    | `/wordlists`        | List available wordlists            |
@@ -115,6 +115,7 @@ specific worker so you can keep an eye on performance over time.
 | GET    | `/rules`            | List available hashcat rules        |
 | GET    | `/workers`          | List registered workers             |
 | GET    | `/hashrate`         | Aggregate hashrate of all workers   |
+| POST   | `/worker_status`    | Update a worker's status (optional signature) |
 
 ---
 
