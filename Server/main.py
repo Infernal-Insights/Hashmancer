@@ -5,6 +5,7 @@ import subprocess
 from datetime import datetime
 import os
 import redis
+from redis_utils import get_redis
 import json
 import uuid
 import socket
@@ -19,7 +20,7 @@ from auth_utils import verify_signature
 
 app = FastAPI()
 
-r = redis.Redis(host="localhost", port=6379, decode_responses=True)
+r = get_redis()
 
 JOB_STREAM = os.getenv("JOB_STREAM", "jobs")
 HTTP_GROUP = os.getenv("HTTP_GROUP", "http-workers")
@@ -101,6 +102,9 @@ async def register_worker(info: dict):
             },
         )
         return {"status": "ok", "waifu": waifu_name}
+    except redis.exceptions.RedisError as e:
+        log_error("server", "unassigned", "SRED", "Redis unavailable", e)
+        return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error("server", "unassigned", "S700", "Worker registration failed", e)
         return {"status": "error", "message": str(e)}
@@ -146,6 +150,9 @@ async def get_batch(worker_id: str, signature: str):
             },
         )
         return batch
+    except redis.exceptions.RedisError as e:
+        log_error("server", worker_id, "SRED", "Redis unavailable", e)
+        return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error("server", worker_id, "S002", "Failed to assign batch", e)
         return {"status": "error"}
@@ -163,6 +170,9 @@ async def submit_founds(payload: dict):
             r.rpush("found:results", f"{payload['batch_id']}:{line}")
         r.hset(f"worker:{payload['worker_id']}", "status", "idle")
         return {"status": "ok", "received": len(payload["founds"])}
+    except redis.exceptions.RedisError as e:
+        log_error("server", payload.get("worker_id", "system"), "SRED", "Redis unavailable", e)
+        return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error("server", payload["worker_id"], "S003", "Failed to accept founds", e)
         return {"status": "error"}
@@ -179,6 +189,9 @@ async def submit_no_founds(payload: dict):
         r.rpush("found:none", payload["batch_id"])
         r.hset(f"worker:{payload['worker_id']}", "status", "idle")
         return {"status": "ok"}
+    except redis.exceptions.RedisError as e:
+        log_error("server", payload.get("worker_id", "system"), "SRED", "Redis unavailable", e)
+        return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error(
             "server", payload["worker_id"], "S004", "Failed to record empty result", e
@@ -250,6 +263,9 @@ async def server_status():
             "gpu_temps": get_gpu_temps(),
         }
         return status
+    except redis.exceptions.RedisError as e:
+        log_error("server", "system", "SRED", "Redis unavailable", e)
+        return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error("server", "system", "S710", "Failed to fetch status", e)
         return {"error": str(e)}
@@ -282,6 +298,9 @@ async def list_workers():
                 }
             )
         return workers
+    except redis.exceptions.RedisError as e:
+        log_error("server", "system", "SRED", "Redis unavailable", e)
+        return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error("server", "system", "S712", "Failed to list workers", e)
         return []
@@ -300,6 +319,9 @@ async def set_worker_status(data: dict):
     try:
         r.hset(f"worker:{name}", "status", status)
         return {"status": "ok"}
+    except redis.exceptions.RedisError as e:
+        log_error("server", name or "system", "SRED", "Redis unavailable", e)
+        return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error("server", name, "S713", "Failed to set status", e)
         return {"status": "error", "message": str(e)}
@@ -334,6 +356,9 @@ async def submit_hashrate(payload: dict):
         r.rpush("hashrate_history:total", json.dumps({"ts": ts, "rate": total}))
         r.ltrim("hashrate_history:total", -50, -1)
         return {"status": "ok"}
+    except redis.exceptions.RedisError as e:
+        log_error("server", worker or "system", "SRED", "Redis unavailable", e)
+        return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error("server", worker, "S714", "Failed to record hashrate", e)
         return {"status": "error", "message": str(e)}
@@ -346,6 +371,9 @@ async def get_hashrate(worker: str | None = None):
     try:
         data = [json.loads(x) for x in r.lrange(key, 0, -1)]
         return data
+    except redis.exceptions.RedisError as e:
+        log_error("server", worker or "system", "SRED", "Redis unavailable", e)
+        return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error("server", worker or "system", "S715", "Failed to get hashrate", e)
         return []

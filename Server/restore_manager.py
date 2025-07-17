@@ -3,12 +3,13 @@ import glob
 import shutil
 import logging
 import redis
+from redis_utils import get_redis
 from event_logger import log_error
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s"
 )
-r = redis.Redis(host="localhost", port=6379, decode_responses=True)
+r = get_redis()
 
 RESTORE_DIR = "./"
 BACKUP_DIR = "./restore_backups"
@@ -35,6 +36,14 @@ def requeue_from_restore(file_path):
         r.lpush("batch:queue", batch_id)
         logging.info(f"Requeued batch {batch_id}")
         move_to_backup(file_path)
+    except redis.exceptions.RedisError as e:
+        log_error(
+            "restore_manager",
+            "server",
+            "RRED",
+            "Redis unavailable",
+            e,
+        )
     except Exception as e:
         log_error(
             "restore_manager", "server", "R001", "Failed to requeue restore file", e
