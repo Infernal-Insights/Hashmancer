@@ -60,7 +60,7 @@ python3 setup.py
 ```
 
 This will:
-- Prompt for base directories for wordlists, masks, and rules along with your API key
+- Prompt for base directories for wordlists, masks, and rules. A Hashes.com API key is required for registration
 - Configure Redis and logging
 - Install a systemd service
 - Optionally enable a UDP broadcast so workers can auto-discover the server
@@ -107,7 +107,7 @@ specific worker so you can keep an eye on performance over time.
 | Method | Path                | Description                         |
 |--------|---------------------|-------------------------------------|
 | POST   | `/register_worker`  | Register a new worker               |
-| GET    | `/get_batch`        | Worker requests a batch             |
+| GET    | `/get_batch`        | Fetch a job from the Redis stream   |
 | POST   | `/submit_founds`    | Submit cracked hashes               |
 | POST   | `/submit_no_founds` | Report a finished batch with none   |
 | GET    | `/wordlists`        | List available wordlists            |
