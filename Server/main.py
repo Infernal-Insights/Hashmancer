@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import subprocess
@@ -377,3 +377,113 @@ async def get_hashrate(worker: str | None = None):
     except Exception as e:
         log_error("server", worker or "system", "S715", "Failed to get hashrate", e)
         return []
+
+
+@app.post("/upload_wordlist")
+async def upload_wordlist(file: UploadFile = File(...)):
+    """Upload a new dictionary file to WORDLISTS_DIR."""
+    try:
+        dest = WORDLISTS_DIR / file.filename
+        with dest.open("wb") as f:
+            while True:
+                chunk = await file.read(4096)
+                if not chunk:
+                    break
+                f.write(chunk)
+        return {"status": "ok"}
+    except Exception as e:
+        log_error("server", "system", "S720", "Failed to upload wordlist", e)
+        raise HTTPException(status_code=500, detail="upload failed")
+
+
+@app.delete("/wordlist/{name}")
+async def delete_wordlist(name: str):
+    """Delete a dictionary by filename."""
+    try:
+        path = WORDLISTS_DIR / name
+        if path.is_file():
+            path.unlink()
+            return {"status": "ok"}
+        raise HTTPException(status_code=404, detail="not found")
+    except Exception as e:
+        log_error("server", "system", "S721", "Failed to delete wordlist", e)
+        raise HTTPException(status_code=500, detail="delete failed")
+
+
+@app.post("/create_mask")
+async def create_mask(name: str, content: str):
+    """Create a mask file with provided content."""
+    try:
+        dest = MASKS_DIR / name
+        dest.write_text(content)
+        return {"status": "ok"}
+    except Exception as e:
+        log_error("server", "system", "S722", "Failed to create mask", e)
+        raise HTTPException(status_code=500, detail="mask creation failed")
+
+
+@app.delete("/mask/{name}")
+async def delete_mask(name: str):
+    """Delete a mask file."""
+    try:
+        path = MASKS_DIR / name
+        if path.is_file():
+            path.unlink()
+            return {"status": "ok"}
+        raise HTTPException(status_code=404, detail="not found")
+    except Exception as e:
+        log_error("server", "system", "S723", "Failed to delete mask", e)
+        raise HTTPException(status_code=500, detail="delete failed")
+
+
+@app.get("/logs")
+async def get_logs(worker: str | None = None):
+    """Return log entries, optionally filtered by worker."""
+    try:
+        entries: list[dict] = []
+        if worker:
+            entries = [json.loads(x) for x in r.lrange(f"error_logs:{worker}", 0, -1)]
+        else:
+            for key in r.scan_iter("error_logs:*"):
+                entries.extend(json.loads(x) for x in r.lrange(key, 0, -1))
+            entries.sort(key=lambda d: d.get("datetime", ""), reverse=True)
+        return entries
+    except redis.exceptions.RedisError as e:
+        log_error("server", worker or "system", "SRED", "Redis unavailable", e)
+        return []
+
+
+@app.get("/jobs")
+async def list_jobs():
+    """Return information about current jobs."""
+    jobs = []
+    try:
+        for key in r.scan_iter("job:*"):
+            info = r.hgetall(key)
+            info["job_id"] = key.split(":", 1)[1]
+            jobs.append(info)
+        return jobs
+    except redis.exceptions.RedisError as e:
+        log_error("server", "system", "SRED", "Redis unavailable", e)
+        return []
+
+
+@app.get("/found_results")
+async def list_found_results(limit: int = 100):
+    """Return recent found results."""
+    try:
+        return r.lrange("found:results", -limit, -1)
+    except redis.exceptions.RedisError as e:
+        log_error("server", "system", "SRED", "Redis unavailable", e)
+        return []
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page():
+    """Serve the admin interface."""
+    try:
+        html_path = Path(__file__).parent / "admin.html"
+        return html_path.read_text()
+    except Exception as e:
+        log_error("server", "system", "S724", "Failed to load admin page", e)
+        return HTMLResponse("<h1>Admin page not available</h1>", status_code=500)
