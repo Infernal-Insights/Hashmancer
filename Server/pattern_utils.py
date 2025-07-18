@@ -25,7 +25,7 @@ def word_to_pattern(word: str) -> str:
     return "".join(pattern)
 
 
-MASK_RE = re.compile(r"\$(?:U|l|d|s)+")
+MASK_RE = re.compile(r"(?:\$[Ulds])+")
 
 
 def is_valid_pattern(mask: str) -> bool:
