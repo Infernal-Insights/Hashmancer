@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hashmancer Admin</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 10px; background:#111; color:#eee; }
+h1 { color:#ffcc00; text-align:center; }
+section { margin-bottom:1.2em; }
+table { width:100%; border-collapse:collapse; margin-top:0.5em; }
+th,td { border:1px solid #555; padding:4px; text-align:center; }
+input, textarea, select { background:#222; color:#eee; border:1px solid #555; }
+button { margin-top:4px; }
+pre { background:#222; padding:5px; overflow:auto; max-height:200px; }
+</style>
+</head>
+<body>
+<h1>Hashmancer Admin</h1>
+
+<section id="dicts">
+<h2>Dictionaries</h2>
+<ul id="dict-list"></ul>
+<input type="file" id="dict-upload">
+<button onclick="uploadDict()">Upload</button>
+</section>
+
+<section id="masks">
+<h2>Masks</h2>
+<ul id="mask-list"></ul>
+<input type="text" id="mask-name" placeholder="mask name">
+<textarea id="mask-content" rows="2" placeholder="mask content"></textarea>
+<button onclick="createMask()">Create</button>
+</section>
+
+<section id="workers">
+<h2>Workers</h2>
+<table><thead><tr><th>Worker</th><th>Status</th><th>Change</th></tr></thead>
+<tbody id="worker-body"></tbody></table>
+</section>
+
+<section id="logs">
+<h2>Logs</h2>
+<select id="log-worker" onchange="loadLogs()"></select>
+<pre id="log-output"></pre>
+</section>
+
+<section id="jobs">
+<h2>Jobs</h2>
+<table><thead><tr><th>ID</th><th>Status</th><th>Attack</th></tr></thead>
+<tbody id="job-body"></tbody></table>
+</section>
+
+<script>
+async function loadDicts() {
+  const res = await fetch('/wordlists');
+  const data = await res.json();
+  const list = document.getElementById('dict-list');
+  list.innerHTML = '';
+  for (const name of data) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.textContent = 'Delete';
+    btn.onclick = async () => {
+      await fetch(`/wordlist/${encodeURIComponent(name)}`, {method:'DELETE'});
+      loadDicts();
+    };
+    li.textContent = name + ' ';
+    li.appendChild(btn);
+    list.appendChild(li);
+  }
+}
+async function uploadDict() {
+  const file = document.getElementById('dict-upload').files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  await fetch('/upload_wordlist', {method:'POST', body:fd});
+  document.getElementById('dict-upload').value='';
+  loadDicts();
+}
+async function loadMasks() {
+  const res = await fetch('/masks');
+  const data = await res.json();
+  const list = document.getElementById('mask-list');
+  list.innerHTML = '';
+  for (const name of data) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.textContent = 'Delete';
+    btn.onclick = async () => {
+      await fetch(`/mask/${encodeURIComponent(name)}`, {method:'DELETE'});
+      loadMasks();
+    };
+    li.textContent = name + ' ';
+    li.appendChild(btn);
+    list.appendChild(li);
+  }
+}
+async function createMask() {
+  const name = document.getElementById('mask-name').value.trim();
+  const content = document.getElementById('mask-content').value;
+  if (!name) return;
+  await fetch('/create_mask', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, content})});
+  document.getElementById('mask-name').value='';
+  document.getElementById('mask-content').value='';
+  loadMasks();
+}
+
+async function loadWorkers() {
+  const res = await fetch('/workers');
+  const workers = await res.json();
+  const tbody = document.getElementById('worker-body');
+  const sel = document.getElementById('log-worker');
+  tbody.innerHTML=''; sel.innerHTML='<option value="">All</option>';
+  for(const w of workers){
+    const tr=document.createElement('tr');
+    const nameTd=document.createElement('td');
+    nameTd.textContent=w.name;
+    const statusTd=document.createElement('td');
+    statusTd.textContent=w.status;
+    const actionTd=document.createElement('td');
+    const select=document.createElement('select');
+    for(const opt of ['idle','maintenance','offline']){
+      const o=document.createElement('option');
+      o.value=opt;o.textContent=opt;
+      if(opt===w.status) o.selected=true;
+      select.appendChild(o);
+    }
+    select.onchange=async()=>{
+      await fetch('/worker_status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:w.name,status:select.value})});
+      statusTd.textContent=select.value;
+    };
+    actionTd.appendChild(select);
+    tr.appendChild(nameTd);tr.appendChild(statusTd);tr.appendChild(actionTd);
+    tbody.appendChild(tr);
+
+    const option=document.createElement('option');
+    option.value=w.name; option.textContent=w.name;
+    sel.appendChild(option);
+  }
+}
+
+async function loadLogs() {
+  const worker = document.getElementById('log-worker').value;
+  const url = worker ? `/logs?worker=${encodeURIComponent(worker)}` : '/logs';
+  const res = await fetch(url);
+  const data = await res.json();
+  const pre=document.getElementById('log-output');
+  pre.textContent = data.map(e=>`${e.datetime} [${e.worker_id}] ${e.message}`).join('\n');
+}
+
+async function loadJobs() {
+  const res = await fetch('/jobs');
+  const jobs = await res.json();
+  const tbody=document.getElementById('job-body');
+  tbody.innerHTML='';
+  for(const j of jobs){
+    const tr=document.createElement('tr');
+    const idTd=document.createElement('td');
+    idTd.textContent=j.job_id;
+    const statusTd=document.createElement('td');
+    statusTd.textContent=j.status;
+    const modeTd=document.createElement('td');
+    modeTd.textContent=j.attack_mode||'';
+    tr.appendChild(idTd);tr.appendChild(statusTd);tr.appendChild(modeTd);
+    tbody.appendChild(tr);
+  }
+}
+
+function tick(){
+  loadDicts();
+  loadMasks();
+  loadWorkers();
+  loadJobs();
+  loadLogs();
+}
+
+setInterval(tick,5000);
+tick();
+</script>
+</body>
+</html>
