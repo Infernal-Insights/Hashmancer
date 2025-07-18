@@ -175,6 +175,15 @@ server = discover_server() or prompt("SERVER_URL", SERVER_URL)
 ```
 
 
+## 📈 Learning Password Trends
+
+Run `learn_trends.py <wordlist_dir>` from the `Server` folder to scan every
+wordlist in the directory. Each word is converted to a simplified hashcat-style
+pattern and the frequency is incremented in the `dictionary:patterns` sorted
+set in Redis. These counts can be used to generate smarter masks or analyze
+the prevalence of different password formats.
+
+
 ---
 
 ## 🧪 Tests
