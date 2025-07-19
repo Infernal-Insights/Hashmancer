@@ -2,9 +2,7 @@
 #include <cuda_runtime.h>
 #include <stdio.h>
 
-#define MAX_MASK_LEN 32
-#define MAX_CHARSET_SIZE 128
-#define MAX_HASHES 1024
+#include "darkling_engine.h"
 
 // constant buffers for mask charsets and hashes
 __constant__ char d_charsets[MAX_MASK_LEN][MAX_CHARSET_SIZE];
@@ -124,13 +122,15 @@ __device__ bool check_hash(const uint8_t *digest) {
     return false;
 }
 
-__global__ void crack_kernel(uint64_t total, char *results, int max_results, int *found_count) {
-    uint64_t idx = threadIdx.x + blockIdx.x * (uint64_t)blockDim.x;
+__global__ void crack_kernel(uint64_t start, uint64_t total, char *results,
+                             int max_results, int *found_count) {
+    uint64_t idx = start + threadIdx.x + blockIdx.x * (uint64_t)blockDim.x;
     uint64_t step = gridDim.x * (uint64_t)blockDim.x;
     char pwd[MAX_MASK_LEN];
     uint8_t digest[20];
 
-    while (idx < total) {
+    uint64_t end = start + total;
+    while (idx < end) {
         uint64_t val = idx;
         for (int pos = d_pwd_len - 1; pos >= 0; --pos) {
             int len = d_charset_lens[pos];
@@ -152,7 +152,8 @@ __global__ void crack_kernel(uint64_t total, char *results, int max_results, int
 
 extern "C" void launch_darkling(const char **charsets, const int *lens, int pwd_len,
                                  const uint8_t *hashes, int num_hashes, int hash_len,
-                                 uint64_t total, char *d_results, int max_results, int *d_count,
+                                 uint64_t start, uint64_t end,
+                                 char *d_results, int max_results, int *d_count,
                                  dim3 grid, dim3 block)
 {
     cudaMemcpyToSymbol(d_pwd_len, &pwd_len, sizeof(int));
@@ -163,5 +164,6 @@ extern "C" void launch_darkling(const char **charsets, const int *lens, int pwd_
         cudaMemcpyToSymbol(d_charset_lens[i], &lens[i], sizeof(int));
     }
     cudaMemcpyToSymbol(d_hashes, hashes, num_hashes * hash_len);
-    crack_kernel<<<grid, block>>>(total, d_results, max_results, d_count);
+    uint64_t total = end - start;
+    crack_kernel<<<grid, block>>>(start, total, d_results, max_results, d_count);
 }
