@@ -93,12 +93,17 @@ any device on your network. Start the server with `uvicorn` as shown above and
 open your browser to `http://<server-ip>:8000/glyph`.
 
 The page refreshes every few seconds and displays worker counts, queue length,
-found results, and GPU temperatures. It also lists all connected workers with a
-drop-down to change their status (for example `idle`, `maintenance`, or
-`offline`). The layout is landscape friendly so you can mount an old Android
-phone or tablet on your rack and use it to interact with and monitor the
-server. A simple hashrate chart lets you switch between total rate or a
-specific worker so you can keep an eye on performance over time.
+found results, and GPU temperatures. Recent cracked hashes are shown in a small
+list so you can quickly verify progress. Worker statuses are now color-coded
+(`idle` in green, `maintenance` in orange, `offline` in red) for easier at-a-
+glance monitoring. The footer shows the last update time.
+
+All connected workers are listed with a drop-down to change their status
+(for example `idle`, `maintenance`, or `offline`). The layout is landscape
+friendly so you can mount an old Android phone or tablet on your rack and use
+it to interact with and monitor the server. A simple hashrate chart lets you
+switch between total rate or a specific worker so you can keep an eye on
+performance over time.
 
 ---
 
