@@ -112,6 +112,12 @@ class GPUSidecar(threading.Thread):
         attack = batch.get("attack_mode", "mask")
         cmd = ["hashcat", "-m", batch.get("hash_mode", "0"), str(hash_file)]
 
+        workload = os.getenv("HASHCAT_WORKLOAD")
+        if workload:
+            cmd += ["-w", workload]
+        if os.getenv("HASHCAT_OPTIMIZED", "0") == "1":
+            cmd.append("-O")
+
         wordlist_path = batch.get("wordlist")
         if not wordlist_path and batch.get("wordlist_key"):
             data_b64 = r.get(f"wlcache:{batch['wordlist_key']}")
