@@ -184,6 +184,21 @@ def discover_server(timeout: int = 5, port: int = 50000) -> str | None:
 server = discover_server() or prompt("SERVER_URL", SERVER_URL)
 ```
 
+### Restore directories
+
+The server periodically checks `RESTORE_DIR` for any `.restore` files and moves
+processed files to `BACKUP_DIR`. Both paths can be configured through
+environment variables or `~/.hashmancer/server_config.json`:
+
+```json
+{
+  "restore_dir": "/opt/hashmancer/restores",
+  "backup_dir": "/opt/hashmancer/restore_backups"
+}
+```
+
+If not provided, the defaults are `./` for `RESTORE_DIR` and
+`./restore_backups` for `BACKUP_DIR`.
 
 ## 📈 Learning Password Trends
 

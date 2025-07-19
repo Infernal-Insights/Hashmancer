@@ -2,6 +2,8 @@ import os
 import glob
 import shutil
 import logging
+import json
+from pathlib import Path
 import redis
 from redis_utils import get_redis
 from event_logger import log_error
@@ -11,23 +13,36 @@ logging.basicConfig(
 )
 r = get_redis()
 
-RESTORE_DIR = "./"
-BACKUP_DIR = "./restore_backups"
+CONFIG_FILE = Path.home() / ".hashmancer" / "server_config.json"
+try:
+    with CONFIG_FILE.open() as f:
+        CONFIG = json.load(f)
+except Exception:
+    CONFIG = {}
+
+RESTORE_DIR = Path(os.getenv("RESTORE_DIR", CONFIG.get("restore_dir", "./")))
+BACKUP_DIR = Path(
+    os.getenv("BACKUP_DIR", CONFIG.get("backup_dir", "./restore_backups"))
+)
 
 
 def scan_restore_files():
-    return glob.glob(os.path.join(RESTORE_DIR, "*.restore"))
+    """Return a list of available restore files."""
+    return [str(p) for p in RESTORE_DIR.glob("*.restore")]
 
 
-def move_to_backup(file_path):
-    os.makedirs(BACKUP_DIR, exist_ok=True)
-    shutil.move(file_path, os.path.join(BACKUP_DIR, os.path.basename(file_path)))
+def move_to_backup(file_path: str | Path):
+    """Move a processed restore file to BACKUP_DIR."""
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    src = Path(file_path)
+    shutil.move(str(src), str(BACKUP_DIR / src.name))
 
 
-def requeue_from_restore(file_path):
+def requeue_from_restore(file_path: str | Path):
+    """Push batch from restore file back onto the queue."""
     try:
-        base = os.path.basename(file_path)
-        batch_id = base.replace(".restore", "")
+        src = Path(file_path)
+        batch_id = src.stem
         batch_data = r.hgetall(f"batch:{batch_id}")
         if not batch_data:
             logging.warning(f"No Redis data for {batch_id}")
@@ -35,7 +50,7 @@ def requeue_from_restore(file_path):
 
         r.lpush("batch:queue", batch_id)
         logging.info(f"Requeued batch {batch_id}")
-        move_to_backup(file_path)
+        move_to_backup(src)
     except redis.exceptions.RedisError as e:
         log_error(
             "restore_manager",
