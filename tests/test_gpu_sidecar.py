@@ -118,3 +118,107 @@ def test_darkling_engine_selected(monkeypatch):
 
     assert captured["cmd"][0] == "darkling-engine"
 
+
+def test_power_limit_nvidia(monkeypatch):
+    sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 1}, "http://sv")
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    cmds = {}
+
+    def fake_check_call(cmd, stdout=None, stderr=None):
+        cmds["cmd"] = cmd
+
+    def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
+        return DummyProc(["{}"], "/tmp/job3.out")
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda x: "sig")
+
+    batch = {
+        "batch_id": "job3",
+        "hashes": json.dumps(["h"]),
+        "mask": "?a",
+        "attack_mode": "mask",
+        "hash_mode": "0",
+    }
+
+    monkeypatch.setenv("GPU_POWER_LIMIT", "120")
+    sidecar.run_hashcat(batch)
+
+    assert cmds["cmd"][0] == "nvidia-smi"
+    assert "120" in cmds["cmd"]
+
+
+def test_power_limit_rocm(monkeypatch):
+    sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 1}, "http://sv")
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    cmds = {}
+
+    call_order = []
+
+    def fake_check_call(cmd, stdout=None, stderr=None):
+        call_order.append(cmd[0])
+        if cmd[0] == "nvidia-smi":
+            raise FileNotFoundError()
+        cmds["cmd"] = cmd
+
+    def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
+        return DummyProc(["{}"], "/tmp/job4.out")
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda x: "sig")
+
+    batch = {
+        "batch_id": "job4",
+        "hashes": json.dumps(["h"]),
+        "mask": "?a",
+        "attack_mode": "mask",
+        "hash_mode": "0",
+    }
+
+    monkeypatch.setenv("GPU_POWER_LIMIT", "130")
+    sidecar.run_hashcat(batch)
+
+    assert call_order[0] == "nvidia-smi"
+    assert cmds["cmd"][0] == "rocm-smi"
+    assert "130" in cmds["cmd"]
+
+
+def test_power_limit_intel(monkeypatch):
+    sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 1}, "http://sv")
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    cmds = {}
+
+    def fake_check_call(cmd, stdout=None, stderr=None):
+        if cmd[0] in ("nvidia-smi", "rocm-smi"):
+            raise FileNotFoundError()
+        cmds["cmd"] = cmd
+
+    def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
+        return DummyProc(["{}"], "/tmp/job5.out")
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda x: "sig")
+
+    batch = {
+        "batch_id": "job5",
+        "hashes": json.dumps(["h"]),
+        "mask": "?a",
+        "attack_mode": "mask",
+        "hash_mode": "0",
+    }
+
+    monkeypatch.setenv("GPU_POWER_LIMIT", "140")
+    sidecar.run_hashcat(batch)
+
+    assert cmds["cmd"][0] == "intel_gpu_frequency"
+    assert "140" in cmds["cmd"]
+
