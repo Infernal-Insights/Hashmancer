@@ -38,6 +38,39 @@ class GPUSidecar(threading.Thread):
         except Exception:
             pass
 
+    def _apply_power_limit(self):
+        """Set GPU power limit if configured via environment variable."""
+        limit = os.getenv("GPU_POWER_LIMIT")
+        if not limit:
+            return
+
+        index = str(self.gpu.get("index", 0))
+        commands = [
+            ["nvidia-smi", "-i", index, "-pl", str(limit)],
+            ["rocm-smi", "-d", index, "--setpowerlimit", str(limit)],
+            [
+                "intel_gpu_frequency",
+                "--min",
+                str(limit),
+                "--max",
+                str(limit),
+            ],
+        ]
+
+        for cmd in commands:
+            try:
+                subprocess.check_call(
+                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+                return
+            except FileNotFoundError:
+                continue
+            except Exception as e:
+                print(
+                    f"Failed to set power limit using {' '.join(cmd)} on {self.gpu.get('uuid')}: {e}"
+                )
+                return
+
     def run(self):
         while self.running:
             try:
@@ -165,6 +198,7 @@ class GPUSidecar(threading.Thread):
         ]
 
         env = os.environ.copy()
+        self._apply_power_limit()
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
