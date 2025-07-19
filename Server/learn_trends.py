@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from redis_utils import get_redis
-from pattern_utils import word_to_pattern
+from pattern_utils import word_to_pattern, is_valid_word
 
 
 def process_wordlists(directory: Path) -> None:
@@ -18,7 +18,7 @@ def process_wordlists(directory: Path) -> None:
         with path.open("r", errors="ignore") as f:
             for line in f:
                 word = line.strip()
-                if not word:
+                if not is_valid_word(word):
                     continue
                 pattern = word_to_pattern(word)
                 r.zincrby("dictionary:patterns", 1, pattern)
