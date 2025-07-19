@@ -18,6 +18,7 @@ Hashmancer is a high-performance, distributed hash cracking orchestration system
 - Agents handle PCIe-aware mask, dictionary, and hybrid attacks
 - GPU specs are stored in Redis for tuning
 - Each GPU spec includes a `pci_link_width` field used to route work
+- `hashescom_client.upload_founds` returns `True` when the API confirms receipt
 - Redis-based orchestrator balances batches between high- and low-bandwidth queues
 - Optional UDP broadcast so workers on the local network can auto-discover the server
 
