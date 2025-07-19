@@ -30,3 +30,20 @@ def verify_signature(worker_id, payload, signature_b64):
     except Exception as e:
         logging.error(f"Verification error: {e}")
         return False
+
+
+def verify_signature_with_key(pubkey_pem: str, payload: str, signature_b64: str) -> bool:
+    """Verify a signature using a provided public key."""
+    try:
+        public_key = serialization.load_pem_public_key(pubkey_pem.encode())
+        signature = base64.b64decode(signature_b64)
+        public_key.verify(
+            signature, payload.encode(), padding.PKCS1v15(), hashes.SHA256()
+        )
+        return True
+    except InvalidSignature:
+        logging.warning("Signature invalid for provided key")
+        return False
+    except Exception as e:
+        logging.error(f"Verification error: {e}")
+        return False

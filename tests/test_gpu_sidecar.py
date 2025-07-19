@@ -56,6 +56,7 @@ def test_run_hashcat(monkeypatch):
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda x: "sig")
 
     batch = {
         "batch_id": "job1",

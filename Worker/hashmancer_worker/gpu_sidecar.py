@@ -172,6 +172,7 @@ class GPUSidecar(threading.Thread):
                                 "worker_id": self.worker_id,
                                 "gpu_uuid": self.gpu.get("uuid"),
                                 "hashrate": self.hashrate,
+                                "signature": sign_message(self.worker_id),
                             },
                             timeout=5,
                         )
