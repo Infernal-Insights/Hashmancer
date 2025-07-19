@@ -128,6 +128,7 @@ async def register_worker(info: RegisterWorkerRequest):
                 "pubkey": pubkey,
                 "last_seen": int(datetime.utcnow().timestamp()),
                 "status": "idle",
+                "low_bw_engine": LOW_BW_ENGINE,
             },
         )
         return {"status": "ok", "waifu": waifu_name}
