@@ -183,6 +183,30 @@ def register_worker(worker_id: str, gpus: list[dict]):
         )
         r.sadd(f"worker:{worker_id}:gpus", g["uuid"])
 
+    payload = {
+        "worker_id": worker_id,
+        "hardware": {"gpus": gpus},
+        "pubkey": load_public_key_pem(),
+    }
+
+    name = None
+    try:
+        resp = requests.post(
+            f"{SERVER_URL}/register_worker", json=payload, timeout=5
+        )
+        data = resp.json()
+        if data.get("status") == "ok":
+            name = data.get("waifu")
+        else:
+            name = data.get("message")
+    except Exception:
+        name = None
+
+    if name:
+        r.set("worker_name", name)
+
+    return name
+
 
 def main():
     print_logo()
