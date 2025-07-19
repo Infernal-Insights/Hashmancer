@@ -5,8 +5,10 @@
 #include "darkling_engine.h"
 
 // constant buffers for mask charsets and hashes
-__constant__ char d_charsets[MAX_MASK_LEN][MAX_CHARSET_SIZE];
-__constant__ int  d_charset_lens[MAX_MASK_LEN];
+__constant__ uint8_t d_charset_bytes[MAX_CUSTOM_SETS][MAX_CHARSET_CHARS][MAX_UTF8_BYTES];
+__constant__ uint8_t d_charset_charlen[MAX_CUSTOM_SETS][MAX_CHARSET_CHARS];
+__constant__ int  d_charset_lens[MAX_CUSTOM_SETS];
+__constant__ uint8_t d_pos_charset[MAX_MASK_LEN];
 __constant__ uint8_t d_hashes[MAX_HASHES][20];   // supports up to SHA1
 __constant__ int d_num_hashes;
 __constant__ int d_hash_len;  // digest length (16 for MD5, 20 for SHA1)
@@ -126,31 +128,44 @@ __global__ void crack_kernel(uint64_t start, uint64_t total, char *results,
                              int max_results, int *found_count) {
     uint64_t idx = start + threadIdx.x + blockIdx.x * (uint64_t)blockDim.x;
     uint64_t step = gridDim.x * (uint64_t)blockDim.x;
-    char pwd[MAX_MASK_LEN];
+    uint8_t pwd[MAX_PWD_BYTES];
+    uint8_t idx_buf[MAX_MASK_LEN];
     uint8_t digest[20];
 
     uint64_t end = start + total;
     while (idx < end) {
         uint64_t val = idx;
         for (int pos = d_pwd_len - 1; pos >= 0; --pos) {
-            int len = d_charset_lens[pos];
-            int c = val % len;
-            pwd[pos] = d_charsets[pos][c];
+            int set = d_pos_charset[pos];
+            int len = d_charset_lens[set];
+            idx_buf[pos] = val % len;
             val /= len;
         }
-        compute_hash(pwd, d_pwd_len, digest);
+        int out_len = 0;
+        for (int pos = 0; pos < d_pwd_len; ++pos) {
+            int set = d_pos_charset[pos];
+            int ci = idx_buf[pos];
+            int clen = d_charset_charlen[set][ci];
+            for (int j=0; j<clen; ++j)
+                pwd[out_len++] = d_charset_bytes[set][ci][j];
+        }
+        compute_hash((char*)pwd, out_len, digest);
         if (check_hash(digest)) {
             int slot = atomicAdd(found_count, 1);
             if (slot < max_results) {
-                for(int i=0;i<d_pwd_len;i++) results[slot*MAX_MASK_LEN + i] = pwd[i];
-                results[slot*MAX_MASK_LEN + d_pwd_len] = '\0';
+                int off = slot*MAX_PWD_BYTES;
+                for(int i=0;i<out_len;i++) results[off+i] = pwd[i];
+                results[off+out_len] = '\0';
             }
         }
         idx += step;
     }
 }
 
-extern "C" void launch_darkling(const char **charsets, const int *lens, int pwd_len,
+extern "C" void launch_darkling(const uint8_t **charset_bytes,
+                                 const uint8_t **charset_lens,
+                                 const int *charset_sizes,
+                                 const uint8_t *pos_map, int pwd_len,
                                  const uint8_t *hashes, int num_hashes, int hash_len,
                                  uint64_t start, uint64_t end,
                                  char *d_results, int max_results, int *d_count,
@@ -159,9 +174,15 @@ extern "C" void launch_darkling(const char **charsets, const int *lens, int pwd_
     cudaMemcpyToSymbol(d_pwd_len, &pwd_len, sizeof(int));
     cudaMemcpyToSymbol(d_hash_len, &hash_len, sizeof(int));
     cudaMemcpyToSymbol(d_num_hashes, &num_hashes, sizeof(int));
-    for(int i=0;i<pwd_len;i++) {
-        cudaMemcpyToSymbol(d_charsets[i], charsets[i], lens[i], 0);
-        cudaMemcpyToSymbol(d_charset_lens[i], &lens[i], sizeof(int));
+    cudaMemcpyToSymbol(d_pos_charset, pos_map, pwd_len);
+    for(int i=0;i<MAX_CUSTOM_SETS; i++) {
+        cudaMemcpyToSymbol(d_charset_lens, &charset_sizes[i], sizeof(int), i*sizeof(int));
+        if(charset_sizes[i] > 0) {
+            cudaMemcpyToSymbol(d_charset_bytes, charset_bytes[i], charset_sizes[i]*MAX_UTF8_BYTES,
+                               i*MAX_CHARSET_CHARS*MAX_UTF8_BYTES);
+            cudaMemcpyToSymbol(d_charset_charlen, charset_lens[i], charset_sizes[i],
+                               i*MAX_CHARSET_CHARS);
+        }
     }
     cudaMemcpyToSymbol(d_hashes, hashes, num_hashes * hash_len);
     uint64_t total = end - start;
