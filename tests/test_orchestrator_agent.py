@@ -27,7 +27,7 @@ class FakeRedis:
 
 def test_compute_backlog_target(monkeypatch):
     monkeypatch.setattr(orchestrator_agent, "gpu_metrics", lambda: [(16, 10.0), (4, 0.0)])
-    assert orchestrator_agent.compute_backlog_target() == 7
+    assert orchestrator_agent.compute_backlog_target() == 9
 
 
 def test_pending_count_dict(monkeypatch):

@@ -63,13 +63,13 @@ def compute_backlog_target() -> int:
     backlog = 2  # base
     for width, rate in gpu_metrics():
         if width >= 8:
-            backlog += 3
-            if rate > 0:
-                backlog += 1
+            backlog += 4
+        elif width >= 4:
+            backlog += 2
         else:
             backlog += 1
-            if rate > 0:
-                backlog += 1
+        if rate > 0:
+            backlog += 1
     return backlog
 
 

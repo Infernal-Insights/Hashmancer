@@ -15,7 +15,7 @@ def process_wordlists(directory: Path) -> None:
     for path in directory.iterdir():
         if not path.is_file():
             continue
-        with path.open("r", errors="ignore") as f:
+        with path.open("r", encoding="utf-8", errors="ignore") as f:
             for line in f:
                 word = line.strip()
                 if not is_valid_word(word):
