@@ -10,7 +10,7 @@ from typing import Dict
 import redis
 
 from redis_utils import get_redis
-from pattern_utils import word_to_pattern
+from pattern_utils import word_to_pattern, is_valid_word
 
 # pattern tokens are produced by word_to_pattern as "$U", "$l", "$d", "$s"
 TOKEN_RE = re.compile(r"\$[Ulds]")
@@ -25,7 +25,7 @@ def update_stats(directory: Path) -> None:
         with path.open("r", errors="ignore") as f:
             for line in f:
                 word = line.strip()
-                if not word:
+                if not is_valid_word(word):
                     continue
                 tokens = TOKEN_RE.findall(word_to_pattern(word))
                 if not tokens:
