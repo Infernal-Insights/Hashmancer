@@ -7,6 +7,8 @@ jobs from a Redis stream.  Sidecars now invoke `hashcat` directly and report
 per-GPU hashrates and progress back to the server. Wordlists can be served
 from a Redis cache for faster startup on remote nodes.
 GPU specs include a `pci_link_width` field for bandwidth-aware scheduling. The worker automatically detects NVIDIA, AMD, and Intel GPUs.
+Each worker record now stores the configured engine for low-bandwidth GPUs so the
+orchestrator knows whether to dispatch the special `darkling` engine.
 
 
 * `Server/` – FastAPI server and orchestration tools
