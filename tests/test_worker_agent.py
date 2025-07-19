@@ -29,6 +29,7 @@ def test_register_worker_success(monkeypatch):
 
     monkeypatch.setattr(worker_agent.requests, "post", mock_post)
     monkeypatch.setattr(worker_agent, "load_public_key_pem", lambda: "PUB")
+    monkeypatch.setattr(worker_agent, "sign_message", lambda x: "sig")
 
     gpus = [{"uuid": "gpu1", "model": "GPU", "pci_bus": "0", "memory_mb": 0, "pci_link_width": 16}]
     name = worker_agent.register_worker("id123", gpus)

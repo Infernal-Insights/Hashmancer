@@ -10,7 +10,7 @@ import glob
 import socket
 
 from .gpu_sidecar import GPUSidecar
-from .crypto_utils import load_public_key_pem
+from .crypto_utils import load_public_key_pem, sign_message
 from ascii_logo import print_logo
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
@@ -187,6 +187,7 @@ def register_worker(worker_id: str, gpus: list[dict]):
         "worker_id": worker_id,
         "hardware": {"gpus": gpus},
         "pubkey": load_public_key_pem(),
+        "signature": sign_message(worker_id),
     }
 
     name = None
@@ -231,6 +232,7 @@ def main():
                         "status": "online",
                         "temps": temps,
                         "progress": progress,
+                        "signature": sign_message(name),
                     },
                     timeout=5,
                 )

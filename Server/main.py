@@ -9,14 +9,14 @@ from redis_utils import get_redis
 import json
 import uuid
 import socket
-import threading
-import time
+import asyncio
 import glob
 from event_logger import log_error, log_info
 from pathlib import Path
 
 from waifus import assign_waifu
-from auth_utils import verify_signature
+from auth_utils import verify_signature, verify_signature_with_key
+from pydantic import BaseModel
 from ascii_logo import print_logo
 
 app = FastAPI()
@@ -53,7 +53,31 @@ app.add_middleware(
 )
 
 
-def broadcast_presence():
+class RegisterWorkerRequest(BaseModel):
+    worker_id: str
+    signature: str
+    pubkey: str
+    mode: str = "eco"
+    provider: str = "on-prem"
+    hardware: dict = {}
+
+
+class WorkerStatusRequest(BaseModel):
+    name: str
+    status: str
+    signature: str
+    temps: list[int] | None = None
+    progress: dict | None = None
+
+
+class SubmitHashrateRequest(BaseModel):
+    worker_id: str
+    gpu_uuid: str | None = None
+    hashrate: float
+    signature: str
+
+
+async def broadcast_presence():
     """Periodically broadcast the server URL over UDP."""
     base = CONFIG.get("server_url", "http://localhost")
     port = CONFIG.get("server_port", 8000)
@@ -66,31 +90,29 @@ def broadcast_presence():
                 s.sendto(payload, ("255.255.255.255", BROADCAST_PORT))
         except Exception as e:
             log_error("server", "system", "S716", "Broadcast failed", e)
-        time.sleep(BROADCAST_INTERVAL)
+        await asyncio.sleep(BROADCAST_INTERVAL)
 
 
 @app.on_event("startup")
 async def start_broadcast():
     print_logo()
     if BROADCAST_ENABLED:
-        thread = threading.Thread(target=broadcast_presence, daemon=True)
-        thread.start()
+        asyncio.create_task(broadcast_presence())
 
 
 @app.post("/register_worker")
-async def register_worker(info: dict):
+async def register_worker(info: RegisterWorkerRequest):
     try:
-        worker_id = info.get("worker_id", str(uuid.uuid4()))
-        signature = info.get("signature")
-        if signature and not verify_signature(worker_id, worker_id, signature):
-            return {"status": "unauthorized"}
+        worker_id = info.worker_id
+        if not verify_signature_with_key(info.pubkey, worker_id, info.signature):
+            raise HTTPException(status_code=401, detail="unauthorized")
 
         specs = {
-            "mode": info.get("mode", "eco"),
-            "provider": info.get("provider", "on-prem"),
-            "hardware": info.get("hardware", {}),
+            "mode": info.mode,
+            "provider": info.provider,
+            "hardware": info.hardware,
         }
-        pubkey = info.get("pubkey")
+        pubkey = info.pubkey
         waifu_name = assign_waifu(r.smembers("waifu:names"))
 
         r.sadd("waifu:names", waifu_name)
@@ -107,10 +129,10 @@ async def register_worker(info: dict):
         return {"status": "ok", "waifu": waifu_name}
     except redis.exceptions.RedisError as e:
         log_error("server", "unassigned", "SRED", "Redis unavailable", e)
-        return {"status": "error", "message": "redis unavailable"}
+        raise HTTPException(status_code=500, detail="redis unavailable")
     except Exception as e:
         log_error("server", "unassigned", "S700", "Worker registration failed", e)
-        return {"status": "error", "message": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/get_batch")
@@ -310,38 +332,40 @@ async def list_workers():
 
 
 @app.post("/worker_status")
-async def set_worker_status(data: dict):
+async def set_worker_status(data: WorkerStatusRequest):
     """Update a worker's status string."""
-    name = data.get("name")
-    status = data.get("status")
-    signature = data.get("signature")
+    name = data.name
+    status = data.status
+    signature = data.signature
     if not name or status is None:
-        return {"status": "error", "message": "name and status required"}
-    if signature and not verify_signature(name, name, signature):
-        return {"status": "unauthorized"}
+        raise HTTPException(status_code=400, detail="name and status required")
+    if not verify_signature(name, name, signature):
+        raise HTTPException(status_code=401, detail="unauthorized")
     try:
         r.hset(f"worker:{name}", "status", status)
         return {"status": "ok"}
     except redis.exceptions.RedisError as e:
         log_error("server", name or "system", "SRED", "Redis unavailable", e)
-        return {"status": "error", "message": "redis unavailable"}
+        raise HTTPException(status_code=500, detail="redis unavailable")
     except Exception as e:
         log_error("server", name, "S713", "Failed to set status", e)
-        return {"status": "error", "message": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/submit_hashrate")
-async def submit_hashrate(payload: dict):
+async def submit_hashrate(payload: SubmitHashrateRequest):
     """Store the latest hashrate for a worker and update total history."""
-    worker = payload.get("worker_id")
-    gpu = payload.get("gpu_uuid")
-    rate = payload.get("hashrate")
-    if not worker or rate is None:
-        return {"status": "error", "message": "worker_id and hashrate required"}
+    worker = payload.worker_id
+    gpu = payload.gpu_uuid
+    rate = payload.hashrate
+    if not verify_signature(worker, worker, payload.signature):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    if rate is None:
+        raise HTTPException(status_code=400, detail="worker_id and hashrate required")
     try:
         rate = float(rate)
     except (TypeError, ValueError):
-        return {"status": "error", "message": "invalid rate"}
+        raise HTTPException(status_code=400, detail="invalid rate")
     try:
         ts = int(datetime.utcnow().timestamp())
         r.hset(f"worker:{worker}", "hashrate", rate)
@@ -364,10 +388,10 @@ async def submit_hashrate(payload: dict):
         return {"status": "ok"}
     except redis.exceptions.RedisError as e:
         log_error("server", worker or "system", "SRED", "Redis unavailable", e)
-        return {"status": "error", "message": "redis unavailable"}
+        raise HTTPException(status_code=500, detail="redis unavailable")
     except Exception as e:
         log_error("server", worker, "S714", "Failed to record hashrate", e)
-        return {"status": "error", "message": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/hashrate")
