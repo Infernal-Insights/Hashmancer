@@ -17,6 +17,7 @@ from pathlib import Path
 
 from waifus import assign_waifu
 from auth_utils import verify_signature
+from ascii_logo import print_logo
 
 app = FastAPI()
 
@@ -69,6 +70,7 @@ def broadcast_presence():
 
 @app.on_event("startup")
 async def start_broadcast():
+    print_logo()
     if BROADCAST_ENABLED:
         thread = threading.Thread(target=broadcast_presence, daemon=True)
         thread.start()
