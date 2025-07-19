@@ -5,9 +5,11 @@ It performs mask-based password generation and hashing entirely on the GPU with 
 PCIe traffic.
 
 The `darkling_engine.cu` file exposes a `launch_darkling` function that accepts a
-start and end counter. Charsets and target hashes are copied into constant memory
-only once and remain resident between launches. A small host helper `darkling_host.cpp`
-demonstrates how to preload this data and reuse result buffers across batches.
+start and end counter. Up to sixteen custom charsets can be defined and mapped
+to individual mask positions (e.g. `?1?2?2?3`). The kernel stores UTF‑8 encoded
+characters in constant memory for fast lookup and supports non‑ASCII inputs.
+A small host helper `darkling_host.cpp` demonstrates how to preload this data
+and reuse result buffers across batches.
 
 Compile the kernel with a command similar to:
 
