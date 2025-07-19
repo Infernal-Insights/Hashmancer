@@ -6,6 +6,8 @@ import requests
 import json
 import random
 import subprocess
+import base64
+import gzip
 from pathlib import Path
 
 from .crypto_utils import sign_message
@@ -110,12 +112,22 @@ class GPUSidecar(threading.Thread):
         attack = batch.get("attack_mode", "mask")
         cmd = ["hashcat", "-m", batch.get("hash_mode", "0"), str(hash_file)]
 
+        wordlist_path = batch.get("wordlist")
+        if not wordlist_path and batch.get("wordlist_key"):
+            data_b64 = r.get(f"wlcache:{batch['wordlist_key']}")
+            if data_b64:
+                tmp = Path(f"/tmp/{job_id}.wl")
+                tmp.write_bytes(
+                    gzip.decompress(base64.b64decode(data_b64.encode()))
+                )
+                wordlist_path = str(tmp)
+
         if attack == "mask" and batch.get("mask"):
             cmd += ["-a", "3", batch["mask"]]
-        elif attack == "dict" and batch.get("wordlist"):
-            cmd += ["-a", "0", batch["wordlist"]]
-        elif attack == "hybrid" and batch.get("wordlist") and batch.get("mask"):
-            cmd += ["-a", "6", batch["wordlist"], batch["mask"]]
+        elif attack == "dict" and wordlist_path:
+            cmd += ["-a", "0", wordlist_path]
+        elif attack == "hybrid" and wordlist_path and batch.get("mask"):
+            cmd += ["-a", "6", wordlist_path, batch["mask"]]
 
         cmd += [
             "--quiet",
@@ -156,7 +168,11 @@ class GPUSidecar(threading.Thread):
                     try:
                         requests.post(
                             f"{self.server_url}/submit_hashrate",
-                            json={"worker_id": self.worker_id, "hashrate": self.hashrate},
+                            json={
+                                "worker_id": self.worker_id,
+                                "gpu_uuid": self.gpu.get("uuid"),
+                                "hashrate": self.hashrate,
+                            },
                             timeout=5,
                         )
                     except Exception:
@@ -183,6 +199,8 @@ class GPUSidecar(threading.Thread):
             hash_file.unlink(missing_ok=True)
             outfile.unlink(missing_ok=True)
             restore.unlink(missing_ok=True)
+            if wordlist_path and wordlist_path.startswith("/tmp/") and wordlist_path.endswith(".wl"):
+                Path(wordlist_path).unlink(missing_ok=True)
         except Exception:
             pass
 

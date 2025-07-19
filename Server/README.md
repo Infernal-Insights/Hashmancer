@@ -11,6 +11,9 @@ Hashmancer is a high-performance, distributed hash cracking orchestration system
 - Automated worker registration with unique anime-style naming
 - Support for hybrid, mask, and dictionary attack types
 - Intelligent batch dispatching with N+2 prefetch
+- Larger backlog for high-bandwidth GPUs
+- Wordlists cached in Redis for quick distribution
+- Backlog scales with reported GPU load
 - Orchestration tools for AWS, Vast.ai, and on-prem deployments
 - Self-healing logic with watchdog and error reporting
 - Systemd service setup and optional cloud-init support

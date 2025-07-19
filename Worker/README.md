@@ -26,10 +26,11 @@ Start a worker with:
 python -m hashmancer_worker.worker_agent
 ```
 
-Each sidecar now launches `hashcat` for incoming batches and streams hashrate
-statistics back to the server.  Restore files are uploaded if a job is
+Each sidecar launches `hashcat` for incoming batches and streams per-GPU
+hashrate statistics back to the server.  Restore files are uploaded if a job is
 interrupted so the server can requeue work.  Wordlists are cached in VRAM on
-low-bandwidth GPUs for faster execution.
+low-bandwidth GPUs and can also be pulled from the server's Redis cache so
+workers start faster.
 
 ## Generating signing keys
 
