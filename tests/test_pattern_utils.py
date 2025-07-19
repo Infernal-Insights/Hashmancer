@@ -25,7 +25,7 @@ def test_is_valid_pattern():
         ("Password123", True),
         ("toolongwordthatexceedstwentyfivechars", False),
         ("spa ce", False),
-        ("nönascii", False),
+        ("nönascii", True),
         ("", False),
     ],
 )

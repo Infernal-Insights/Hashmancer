@@ -35,12 +35,10 @@ def is_valid_pattern(mask: str) -> bool:
 
 
 def is_valid_word(word: str) -> bool:
-    """Return ``True`` if *word* is ASCII, <= 25 chars and contains no spaces."""
+    """Return ``True`` if *word* is <= 25 chars and contains no spaces."""
     if not word:
         return False
     if len(word) > 25:
-        return False
-    if not word.isascii():
         return False
     if any(ch.isspace() for ch in word):
         return False
