@@ -41,6 +41,13 @@ Two optional environment variables allow you to tweak how `hashcat` runs:
 - `GPU_POWER_LIMIT` – if set, attempts to cap GPU power in watts using
   vendor tools (`nvidia-smi`, `rocm-smi`, or `intel_gpu_frequency`) before
   launching the cracking engine.
+- `DARKLING_GPU_POWER_LIMIT` – similar to `GPU_POWER_LIMIT` but only applied
+  when the darkling engine is used. This allows independent tuning of
+  experimental kernels.
+
+Each detected GPU is assigned its own sidecar thread so multiple devices run in
+parallel.  Logging and watchdog tasks now execute in dedicated threads inside
+the sidecars to avoid blocking GPU kernels.
 
 Example:
 
