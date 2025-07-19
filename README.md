@@ -15,3 +15,9 @@ GPU specs include a `pci_link_width` field for bandwidth-aware scheduling. The w
 Run `python3 setup.py` from the repository root to configure either a server or
 worker.  Use `--server` or `--worker` flags to skip the prompt.  A worker can
 also supply `--server-ip` to skip auto-discovery.
+
+## Thread Safety
+
+Both the server and worker load their private signing keys once at module import
+time.  The `cryptography` library returns immutable key objects, so concurrent
+threads can safely call the signing helpers without additional locking.
