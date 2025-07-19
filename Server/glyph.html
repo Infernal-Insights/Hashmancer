@@ -28,6 +28,9 @@ th, td {
     padding: 4px;
     text-align: center;
 }
+td.status-idle { color: #0f0; }
+td.status-maintenance { color: #ff8800; }
+td.status-offline { color: #f00; }
 select {
     background: #222;
     color: #eee;
@@ -46,6 +49,10 @@ canvas {
 <div class="section">Queue Length: <span id="queue">0</span></div>
 <div class="section">Found Results: <span id="results">0</span></div>
 <div class="section">GPU Temps: <span id="gpu">N/A</span></div>
+<div class="section">Recent Cracks:
+  <ul id="found-list"></ul>
+</div>
+<div class="section" id="updated">Updated: never</div>
 <div class="section">
   Hashrate Target:
   <select id="hashrate-target" onchange="loadHashrate()">
@@ -69,6 +76,19 @@ async function updateMetrics() {
     document.getElementById('queue').textContent = data.queue_length;
     document.getElementById('results').textContent = data.found_results;
     document.getElementById('gpu').textContent = (data.gpu_temps || []).join(', ');
+    document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+}
+
+async function loadFoundResults() {
+    const res = await fetch('/found_results?limit=5');
+    const list = await res.json();
+    const ul = document.getElementById('found-list');
+    ul.innerHTML = '';
+    for (const line of list) {
+        const li = document.createElement('li');
+        li.textContent = line;
+        ul.appendChild(li);
+    }
 }
 
 async function loadWorkers() {
@@ -82,6 +102,7 @@ async function loadWorkers() {
         nameTd.textContent = w.name;
         const statusTd = document.createElement('td');
         statusTd.textContent = w.status;
+        statusTd.className = 'status-' + w.status;
         const actionTd = document.createElement('td');
         const select = document.createElement('select');
         for (const opt of ['idle', 'maintenance', 'offline']) {
@@ -98,6 +119,7 @@ async function loadWorkers() {
                 body: JSON.stringify({ name: w.name, status: select.value })
             });
             statusTd.textContent = select.value;
+            statusTd.className = 'status-' + select.value;
         };
         actionTd.appendChild(select);
         tr.appendChild(nameTd);
@@ -110,6 +132,7 @@ async function loadWorkers() {
 function tick() {
     updateMetrics();
     loadWorkers();
+    loadFoundResults();
     loadHashrate();
 }
 setInterval(tick, 5000);
