@@ -4,6 +4,7 @@ import subprocess
 import socket
 import os
 from pathlib import Path
+from ascii_logo import print_logo
 
 CONFIG_DIR = Path.home() / ".hashmancer"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -63,6 +64,7 @@ def run_worker_setup(server_ip: str | None):
 
 
 def main():
+    print_logo()
     parser = argparse.ArgumentParser(description="Hashmancer setup")
     parser.add_argument("--server", action="store_true", help="setup a server")
     parser.add_argument("--worker", action="store_true", help="setup a worker")

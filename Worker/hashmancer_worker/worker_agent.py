@@ -11,6 +11,7 @@ import socket
 
 from .gpu_sidecar import GPUSidecar
 from .crypto_utils import load_public_key_pem
+from ascii_logo import print_logo
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
@@ -184,6 +185,7 @@ def register_worker(worker_id: str, gpus: list[dict]):
 
 
 def main():
+    print_logo()
     worker_id = os.getenv("WORKER_ID", str(uuid.uuid4()))
     gpus = detect_gpus()
     name = register_worker(worker_id, gpus)
