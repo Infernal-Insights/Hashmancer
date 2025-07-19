@@ -4,6 +4,9 @@ import logging
 import time
 import uuid
 import redis
+import base64
+import gzip
+import hashlib
 from redis_utils import get_redis
 from event_logger import log_error
 
@@ -38,6 +41,52 @@ def worker_counts():
     return high, low
 
 
+def gpu_metrics() -> list[tuple[int, float]]:
+    """Return a list of (pci_width, hashrate) tuples for each GPU."""
+    metrics: list[tuple[int, float]] = []
+    try:
+        for key in r.scan_iter("gpu:*"):
+            info = r.hgetall(key)
+            width = int(info.get("pci_link_width", 0))
+            try:
+                rate = float(info.get("hashrate", 0))
+            except (TypeError, ValueError):
+                rate = 0.0
+            metrics.append((width, rate))
+    except redis.exceptions.RedisError as e:
+        log_error("orchestrator", "system", "SRED", "Redis unavailable", e)
+    return metrics
+
+
+def compute_backlog_target() -> int:
+    """Return desired backlog depth based on GPU count and load."""
+    backlog = 2  # base
+    for width, rate in gpu_metrics():
+        if width >= 8:
+            backlog += 3
+            if rate > 0:
+                backlog += 1
+        else:
+            backlog += 1
+            if rate > 0:
+                backlog += 1
+    return backlog
+
+
+def cache_wordlist(path: str) -> str:
+    """Store a compressed copy of the wordlist in Redis and return its key."""
+    key = hashlib.sha1(path.encode()).hexdigest()
+    redis_key = f"wlcache:{key}"
+    try:
+        if not r.exists(redis_key):
+            with open(path, "rb") as f:
+                data = gzip.compress(f.read())
+            r.set(redis_key, base64.b64encode(data).decode())
+    except Exception as e:
+        log_error("orchestrator", "system", "SCACHE", "Failed to cache wordlist", e)
+    return key
+
+
 def pending_count() -> int:
     """Return number of unacknowledged jobs in the stream for HTTP_GROUP."""
     try:
@@ -58,8 +107,7 @@ def pending_count() -> int:
 def dispatch_batches():
     """Prefetch batches from batch:queue into the job stream."""
     try:
-        high, low = worker_counts()
-        backlog_target = high + low + 2
+        backlog_target = compute_backlog_target()
         pending = pending_count()
         while pending < backlog_target:
             batch_id = r.rpop("batch:queue")
@@ -76,12 +124,16 @@ def dispatch_batches():
                 attack = "dict"
 
             task_id = str(uuid.uuid4())
+            wordlist_key = ""
+            if batch.get("wordlist"):
+                wordlist_key = cache_wordlist(batch["wordlist"])
             r.hset(
                 f"job:{task_id}",
                 mapping={
                     "hashes": batch.get("hashes", "[]"),
                     "mask": batch.get("mask", ""),
                     "wordlist": batch.get("wordlist", ""),
+                    "wordlist_key": wordlist_key,
                     "attack_mode": attack,
                     "status": "queued",
                 },

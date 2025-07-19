@@ -4,7 +4,8 @@ This project hosts the server side code as well as a lightweight worker
 implementation.  The server exposes a FastAPI application and uses Redis to
 queue hash cracking jobs.  Workers register their GPUs with Redis and consume
 jobs from a Redis stream.  Sidecars now invoke `hashcat` directly and report
-hashrates and progress back to the server.
+per-GPU hashrates and progress back to the server. Wordlists can be served
+from a Redis cache for faster startup on remote nodes.
 GPU specs include a `pci_link_width` field for bandwidth-aware scheduling. The worker automatically detects NVIDIA, AMD, and Intel GPUs.
 
 

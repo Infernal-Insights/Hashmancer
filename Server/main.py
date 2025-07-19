@@ -331,6 +331,7 @@ async def set_worker_status(data: dict):
 async def submit_hashrate(payload: dict):
     """Store the latest hashrate for a worker and update total history."""
     worker = payload.get("worker_id")
+    gpu = payload.get("gpu_uuid")
     rate = payload.get("hashrate")
     if not worker or rate is None:
         return {"status": "error", "message": "worker_id and hashrate required"}
@@ -341,6 +342,8 @@ async def submit_hashrate(payload: dict):
     try:
         ts = int(datetime.utcnow().timestamp())
         r.hset(f"worker:{worker}", "hashrate", rate)
+        if gpu:
+            r.hset(f"gpu:{gpu}", "hashrate", rate)
         r.rpush(
             f"hashrate_history:{worker}",
             json.dumps({"ts": ts, "rate": rate}),
