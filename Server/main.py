@@ -38,6 +38,10 @@ MASKS_DIR = Path(CONFIG.get("masks_dir", "/opt/hashmancer/masks"))
 RULES_DIR = Path(CONFIG.get("rules_dir", "/opt/hashmancer/rules"))
 RESTORE_DIR = Path(CONFIG.get("restore_dir", "/opt/hashmancer/restores"))
 
+# select which cracking engine low bandwidth workers should use. The
+# specialized option is called "darkling".
+LOW_BW_ENGINE = CONFIG.get("low_bw_engine", "hashcat")
+
 # broadcast settings
 BROADCAST_ENABLED = bool(CONFIG.get("broadcast_enabled", True))
 BROADCAST_PORT = int(CONFIG.get("broadcast_port", 50000))
@@ -286,6 +290,7 @@ async def server_status():
             "queue_length": r.llen("batch:queue"),
             "found_results": r.llen("found:results"),
             "gpu_temps": get_gpu_temps(),
+            "low_bw_engine": LOW_BW_ENGINE,
         }
         return status
     except redis.exceptions.RedisError as e:

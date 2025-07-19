@@ -30,6 +30,13 @@ class GPUSidecar(threading.Thread):
         self.current_job = None
         self.hashrate = 0.0
         self.progress = 0.0
+        self.low_bw_engine = "hashcat"
+        try:
+            resp = requests.get(f"{self.server_url}/server_status", timeout=5)
+            data = resp.json()
+            self.low_bw_engine = data.get("low_bw_engine", "hashcat")
+        except Exception:
+            pass
 
     def run(self):
         while self.running:
@@ -72,7 +79,13 @@ class GPUSidecar(threading.Thread):
                     pass
 
         print(f"GPU {self.gpu['uuid']} processing {job_id}")
-        founds = self.run_hashcat(batch)
+        if (
+            self.gpu.get("pci_link_width", self.gpu.get("pci_width", 16)) <= 4
+            and self.low_bw_engine == "darkling"
+        ):
+            founds = self.run_darkling_engine(batch)
+        else:
+            founds = self.run_hashcat(batch)
 
         if founds:
             payload = {
@@ -99,8 +112,8 @@ class GPUSidecar(threading.Thread):
 
         self.current_job = None
 
-    def run_hashcat(self, batch: dict) -> list[str]:
-        """Execute hashcat according to the batch parameters."""
+    def _run_engine(self, engine: str, batch: dict) -> list[str]:
+        """Execute the given cracking engine according to the batch parameters."""
         job_id = batch["batch_id"]
         hashes = json.loads(batch.get("hashes", "[]"))
         hash_file = Path(f"/tmp/{job_id}.hashes")
@@ -110,7 +123,7 @@ class GPUSidecar(threading.Thread):
         restore = Path(f"/tmp/{job_id}.restore")
 
         attack = batch.get("attack_mode", "mask")
-        cmd = ["hashcat", "-m", batch.get("hash_mode", "0"), str(hash_file)]
+        cmd = [engine, "-m", batch.get("hash_mode", "0"), str(hash_file)]
 
         workload = os.getenv("HASHCAT_WORKLOAD")
         if workload:
@@ -212,4 +225,17 @@ class GPUSidecar(threading.Thread):
             pass
 
         return founds
+
+    def run_hashcat(self, batch: dict) -> list[str]:
+        """Execute hashcat with the given batch."""
+        return self._run_engine("hashcat", batch)
+
+    def run_darkling_engine(self, batch: dict) -> list[str]:
+        """Placeholder for the specialized darkling engine.
+
+        This requires an external executable named ``darkling-engine`` to be
+        installed separately. It accepts the same arguments as hashcat so the
+        batch formatting is identical.
+        """
+        return self._run_engine("darkling-engine", batch)
 
