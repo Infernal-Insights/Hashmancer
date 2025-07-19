@@ -12,7 +12,7 @@ import socket
 import threading
 import time
 import glob
-from event_logger import log_error
+from event_logger import log_error, log_info
 from pathlib import Path
 
 from waifus import assign_waifu
@@ -36,6 +36,7 @@ except Exception:
 WORDLISTS_DIR = Path(CONFIG.get("wordlists_dir", "/opt/hashmancer/wordlists"))
 MASKS_DIR = Path(CONFIG.get("masks_dir", "/opt/hashmancer/masks"))
 RULES_DIR = Path(CONFIG.get("rules_dir", "/opt/hashmancer/rules"))
+RESTORE_DIR = Path(CONFIG.get("restore_dir", "/opt/hashmancer/restores"))
 
 # broadcast settings
 BROADCAST_ENABLED = bool(CONFIG.get("broadcast_enabled", True))
@@ -398,6 +399,25 @@ async def upload_wordlist(file: UploadFile = File(...)):
         return {"status": "ok"}
     except Exception as e:
         log_error("server", "system", "S720", "Failed to upload wordlist", e)
+        raise HTTPException(status_code=500, detail="upload failed")
+
+
+@app.post("/upload_restore")
+async def upload_restore(file: UploadFile = File(...)):
+    """Receive a hashcat restore file and store it in RESTORE_DIR."""
+    try:
+        RESTORE_DIR.mkdir(parents=True, exist_ok=True)
+        dest = RESTORE_DIR / file.filename
+        with dest.open("wb") as f:
+            while True:
+                chunk = await file.read(4096)
+                if not chunk:
+                    break
+                f.write(chunk)
+        log_info("server", "system", f"restore uploaded: {file.filename}")
+        return {"status": "ok"}
+    except Exception as e:
+        log_error("server", "system", "S725", "Failed to upload restore file", e)
         raise HTTPException(status_code=500, detail="upload failed")
 
 

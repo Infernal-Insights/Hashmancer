@@ -119,6 +119,7 @@ performance over time.
 | GET    | `/get_batch`        | Worker requests a batch             |
 | POST   | `/submit_founds`    | Submit cracked hashes               |
 | POST   | `/submit_no_founds` | Report a finished batch with none   |
+| POST   | `/upload_restore`   | Upload a `.restore` file from a worker |
 | GET    | `/wordlists`        | List available wordlists            |
 | GET    | `/masks`            | List available masks                |
 | GET    | `/rules`            | List available hashcat rules        |
