@@ -42,3 +42,14 @@ Optional environment variables control power limits and autotuning:
 
 These variables can be used in combination with the worker's per-GPU sidecars to
 balance performance across multiple devices.
+
+## Multi-Vendor Backends
+
+Darkling now exposes an abstract GPU interface in `gpu_backend.h` with concrete
+implementations for CUDA, HIP and OpenCL devices. The dispatcher
+`backend_dispatcher.cpp` selects the appropriate backend at runtime or via the
+`DARKLING_GPU_BACKEND` environment variable (`cuda`, `hip`, `opencl`).
+Each backend follows the same workflow of `initialize`, `load_data`,
+`launch_crack_batch` and result polling. Only the CUDA version contains a
+working kernel at the moment; the other backends provide build stubs for future
+expansion.
