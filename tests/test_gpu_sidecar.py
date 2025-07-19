@@ -51,7 +51,9 @@ def test_run_hashcat(monkeypatch):
     sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 0}, "http://sv")
     monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
 
+    captured = {}
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
+        captured['cmd'] = cmd
         return DummyProc(['{"speed": [50], "progress": 10}'], "/tmp/job1.out")
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
@@ -66,8 +68,13 @@ def test_run_hashcat(monkeypatch):
         "hash_mode": "0",
     }
 
+    monkeypatch.setenv("HASHCAT_WORKLOAD", "4")
+    monkeypatch.setenv("HASHCAT_OPTIMIZED", "1")
     founds = sidecar.run_hashcat(batch)
     assert founds == ["hash:pass"]
     assert sidecar.hashrate == 50.0
     assert sidecar.progress == 10
+    # verify options were added to the hashcat command
+    assert "-w" in captured['cmd'] and "4" in captured['cmd']
+    assert "-O" in captured['cmd']
 

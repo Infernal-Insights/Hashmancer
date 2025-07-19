@@ -32,6 +32,20 @@ interrupted so the server can requeue work.  Wordlists are cached in VRAM on
 low-bandwidth GPUs and can also be pulled from the server's Redis cache so
 workers start faster.
 
+## Performance tuning
+
+Two optional environment variables allow you to tweak how `hashcat` runs:
+
+- `HASHCAT_WORKLOAD` – passed to `hashcat` as `-w`. Set `4` for maximum GPU load.
+- `HASHCAT_OPTIMIZED` – when `1`, adds `-O` to enable optimized kernels.
+
+Example:
+
+```bash
+HASHCAT_WORKLOAD=4 HASHCAT_OPTIMIZED=1 python -m hashmancer_worker.worker_agent
+```
+
+
 ## Generating signing keys
 
 To sign requests sent to the server you need an RSA key pair.  Create the keys
