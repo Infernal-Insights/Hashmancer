@@ -6,6 +6,8 @@ import uuid
 import redis
 import requests
 from pathlib import Path
+import glob
+import socket
 
 from .gpu_sidecar import GPUSidecar
 from .crypto_utils import load_public_key_pem
@@ -133,6 +135,32 @@ def detect_gpus() -> list[dict]:
     ]
 
 
+def get_gpu_temps() -> list[int]:
+    """Return GPU temperatures if available."""
+    try:
+        output = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=temperature.gpu",
+                "--format=csv,noheader",
+            ],
+            text=True,
+        )
+        return [int(t.strip()) for t in output.strip().splitlines()]
+    except Exception:
+        pass
+
+    temps = []
+    for path in glob.glob("/sys/class/drm/card*/device/hwmon/hwmon*/temp*_input"):
+        try:
+            with open(path) as f:
+                val = int(f.read().strip())
+                temps.append(val // 1000)
+        except Exception:
+            continue
+    return temps
+
+
 def register_worker(worker_id: str, gpus: list[dict]):
     ip = socket.gethostbyname(socket.gethostname())
     ts = int(time.time())
@@ -165,11 +193,23 @@ def main():
     print(f"Worker {name} started with {len(gpus)} GPUs")
     try:
         while True:
-            requests.post(
-                f"{SERVER_URL}/worker_status",
-                json={"name": name, "status": "online"},
-                timeout=5,
-            )
+            temps = get_gpu_temps()
+            progress = {
+                t.gpu.get("uuid"): t.progress for t in threads if t.current_job
+            }
+            try:
+                requests.post(
+                    f"{SERVER_URL}/worker_status",
+                    json={
+                        "name": name,
+                        "status": "online",
+                        "temps": temps,
+                        "progress": progress,
+                    },
+                    timeout=5,
+                )
+            except Exception:
+                pass
             time.sleep(STATUS_INTERVAL)
     except KeyboardInterrupt:
         print("Stopping worker...")

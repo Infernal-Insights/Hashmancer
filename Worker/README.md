@@ -26,8 +26,10 @@ Start a worker with:
 python -m hashmancer_worker.worker_agent
 ```
 
-The example implementation only simulates work but demonstrates how GPU registration and
-stream consumption operate in the new architecture.
+Each sidecar now launches `hashcat` for incoming batches and streams hashrate
+statistics back to the server.  Restore files are uploaded if a job is
+interrupted so the server can requeue work.  Wordlists are cached in VRAM on
+low-bandwidth GPUs for faster execution.
 
 ## Generating signing keys
 
