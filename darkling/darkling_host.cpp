@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <cstring>
+#include <cstdlib>
 #include <iostream>
 
 struct DarklingContext {
@@ -26,6 +27,47 @@ struct DarklingContext {
 
     dim3 grid{128};
     dim3 block{256};
+
+    bool tuned = false;
+
+    static void apply_power_limit(int device) {
+        const char* lim = std::getenv("DARKLING_GPU_POWER_LIMIT");
+        if(!lim) return;
+        std::string cmd = "nvidia-smi -i " + std::to_string(device) + " -pl " + lim + " > /dev/null 2>&1";
+        if (std::system(cmd.c_str()) != 0) {
+            cmd = "rocm-smi -d " + std::to_string(device) + " --setpowerlimit " + lim + " > /dev/null 2>&1";
+            std::system(cmd.c_str());
+        }
+    }
+
+    void autotune(uint64_t sample_start, uint64_t sample_end) {
+        const char* env = std::getenv("DARKLING_AUTOTUNE");
+        if(env && std::string(env)=="0") return;
+        int device = 0;
+        cudaGetDevice(&device);
+        cudaDeviceProp prop{};
+        cudaGetDeviceProperties(&prop, device);
+
+        int maxThreads = prop.maxThreadsPerBlock;
+        int active = 0;
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&active, crack_kernel, maxThreads, 0);
+        grid.x = active * prop.multiProcessorCount;
+        block.x = maxThreads;
+
+        apply_power_limit(device);
+
+        cudaEvent_t s,e; cudaEventCreate(&s); cudaEventCreate(&e);
+        cudaMemset(d_count, 0, sizeof(int));
+        cudaEventRecord(s);
+        launch_darkling(charset_byte_ptrs.data(), charset_len_ptrs.data(), charset_sizes.data(),
+                        pos_map.data(), pwd_len, hashes.data(), num_hashes, hash_len,
+                        sample_start, sample_end, d_results, max_results, d_count, grid, block);
+        cudaEventRecord(e); cudaEventSynchronize(e);
+        float ms=0; cudaEventElapsedTime(&ms, s, e);
+        float rate = (float)(sample_end - sample_start)/(ms/1000.0f);
+        std::cerr << "[darkling] initial speed " << rate << " H/s\n";
+        tuned = true;
+    }
 
     void allocate_buffers(int max_res) {
         max_results = max_res;
@@ -79,6 +121,10 @@ struct DarklingContext {
     }
 
     std::vector<std::string> run(uint64_t start, uint64_t end) {
+        if(!tuned) {
+            uint64_t sample_end = start + std::min<uint64_t>(1000, end-start);
+            autotune(start, sample_end);
+        }
         cudaMemset(d_count, 0, sizeof(int));
         launch_darkling(charset_byte_ptrs.data(), charset_len_ptrs.data(),
                         charset_sizes.data(), pos_map.data(), pwd_len,

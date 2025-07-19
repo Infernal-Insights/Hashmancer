@@ -26,3 +26,19 @@ g++ darkling_host.cpp -o darkling-host -lcuda -lcudart
 
 It preloads the kernel data into GPU memory and invokes `launch_darkling` across
 multiple counter ranges without re-allocating buffers.
+
+## Tuning
+
+When run as part of the worker each GPU receives its own darkling instance.
+Optional environment variables control power limits and autotuning:
+
+- `DARKLING_GPU_POWER_LIMIT` – apply a static power cap before launching the
+  kernel.
+- `DARKLING_TARGET_POWER_LIMIT` – attempt to reduce grid size if power draw
+  exceeds this threshold.
+- `DARKLING_AUTOTUNE` – when set, grid and block sizes are chosen based on
+  device properties using `cudaOccupancyMaxActiveBlocksPerMultiprocessor`. The
+  first batch measures hash/s and the configuration is adjusted automatically.
+
+These variables can be used in combination with the worker's per-GPU sidecars to
+balance performance across multiple devices.

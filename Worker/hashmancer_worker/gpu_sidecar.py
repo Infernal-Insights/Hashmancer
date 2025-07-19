@@ -38,9 +38,14 @@ class GPUSidecar(threading.Thread):
         except Exception:
             pass
 
-    def _apply_power_limit(self):
-        """Set GPU power limit if configured via environment variable."""
-        limit = os.getenv("GPU_POWER_LIMIT")
+    def _apply_power_limit(self, engine: str):
+        """Set GPU power limit if configured via environment variables."""
+        limit = None
+        # allow a dedicated value when running the darkling engine
+        if engine == "darkling-engine":
+            limit = os.getenv("DARKLING_GPU_POWER_LIMIT")
+        if not limit:
+            limit = os.getenv("GPU_POWER_LIMIT")
         if not limit:
             return
 
@@ -198,7 +203,7 @@ class GPUSidecar(threading.Thread):
         ]
 
         env = os.environ.copy()
-        self._apply_power_limit()
+        self._apply_power_limit(engine)
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -207,32 +212,39 @@ class GPUSidecar(threading.Thread):
             env=env,
         )
 
+        def monitor():
+            while proc.poll() is None:
+                line = proc.stdout.readline()
+                if not line:
+                    time.sleep(1)
+                    continue
+                try:
+                    status = json.loads(line.strip())
+                    if isinstance(status, dict):
+                        speeds = status.get("speed", [0])
+                        self.hashrate = float(speeds[0]) if speeds else 0.0
+                        self.progress = status.get("progress", 0.0)
+                        try:
+                            requests.post(
+                                f"{self.server_url}/submit_hashrate",
+                                json={
+                                    "worker_id": self.worker_id,
+                                    "gpu_uuid": self.gpu.get("uuid"),
+                                    "hashrate": self.hashrate,
+                                    "signature": sign_message(self.worker_id),
+                                },
+                                timeout=5,
+                            )
+                        except Exception:
+                            pass
+                except json.JSONDecodeError:
+                    continue
+
+        t = threading.Thread(target=monitor, daemon=True)
+        t.start()
         while proc.poll() is None:
-            line = proc.stdout.readline()
-            if not line:
-                time.sleep(1)
-                continue
-            try:
-                status = json.loads(line.strip())
-                if isinstance(status, dict):
-                    speeds = status.get("speed", [0])
-                    self.hashrate = float(speeds[0]) if speeds else 0.0
-                    self.progress = status.get("progress", 0.0)
-                    try:
-                        requests.post(
-                            f"{self.server_url}/submit_hashrate",
-                            json={
-                                "worker_id": self.worker_id,
-                                "gpu_uuid": self.gpu.get("uuid"),
-                                "hashrate": self.hashrate,
-                                "signature": sign_message(self.worker_id),
-                            },
-                            timeout=5,
-                        )
-                    except Exception:
-                        pass
-            except json.JSONDecodeError:
-                continue
+            time.sleep(0.1)
+        t.join()
 
         founds = []
         if outfile.is_file():
