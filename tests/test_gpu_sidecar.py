@@ -78,3 +78,43 @@ def test_run_hashcat(monkeypatch):
     assert "-w" in captured['cmd'] and "4" in captured['cmd']
     assert "-O" in captured['cmd']
 
+
+def test_darkling_engine_selected(monkeypatch):
+    def fake_get(url, timeout=None):
+        class Resp:
+            def json(self_inner):
+                return {"low_bw_engine": "darkling"}
+
+        return Resp()
+
+    monkeypatch.setattr(gpu_sidecar.requests, "get", fake_get)
+    sidecar = gpu_sidecar.GPUSidecar(
+        "worker",
+        {"uuid": "gpu", "index": 0, "pci_link_width": 4},
+        "http://sv",
+    )
+
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    captured = {}
+
+    def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
+        captured["cmd"] = cmd
+        return DummyProc(["{}"], "/tmp/job2.out")
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda x: "sig")
+
+    batch = {
+        "batch_id": "job2",
+        "hashes": json.dumps(["hash"]),
+        "mask": "?a",
+        "attack_mode": "mask",
+        "hash_mode": "0",
+    }
+
+    sidecar.execute_job(batch)
+
+    assert captured["cmd"][0] == "darkling-engine"
+
