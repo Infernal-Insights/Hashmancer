@@ -566,3 +566,14 @@ async def admin_page():
     except Exception as e:
         log_error("server", "system", "S724", "Failed to load admin page", e)
         return HTMLResponse("<h1>Admin page not available</h1>", status_code=500)
+
+
+@app.get("/portal", response_class=HTMLResponse)
+async def portal_page():
+    """Serve the combined portal interface."""
+    try:
+        html_path = Path(__file__).parent / "portal.html"
+        return html_path.read_text()
+    except Exception as e:
+        log_error("server", "system", "S730", "Failed to load portal page", e)
+        return HTMLResponse("<h1>Portal page not available</h1>", status_code=500)
