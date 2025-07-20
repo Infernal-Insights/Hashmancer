@@ -40,6 +40,10 @@ MASKS_DIR = Path(CONFIG.get("masks_dir", "/opt/hashmancer/masks"))
 RULES_DIR = Path(CONFIG.get("rules_dir", "/opt/hashmancer/rules"))
 RESTORE_DIR = Path(CONFIG.get("restore_dir", "/opt/hashmancer/restores"))
 
+# API key used to protect the portal and legacy dashboard pages. When not set
+# these routes remain publicly accessible.
+PORTAL_KEY = CONFIG.get("portal_key")
+
 # select which cracking engine low bandwidth workers should use. The
 # specialized option is called "darkling".
 LOW_BW_ENGINE = CONFIG.get("low_bw_engine", "hashcat")
@@ -57,6 +61,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class PortalAuthMiddleware:
+    """Simple ASGI middleware enforcing an API key for portal routes."""
+
+    def __init__(self, app, key: str | None):
+        self.app = app
+        self.key = key
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and self.key:
+            path = scope.get("path", "")
+            if path.startswith("/portal") or path.startswith("/glyph") or path.startswith("/admin"):
+                headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
+                if headers.get("x-api-key") != self.key:
+                    response = HTMLResponse("Unauthorized", status_code=401)
+                    await response(scope, receive, send)
+                    return
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(PortalAuthMiddleware, key=PORTAL_KEY)
 
 
 class RegisterWorkerRequest(BaseModel):

@@ -196,9 +196,14 @@ environment variables or `~/.hashmancer/server_config.json`:
   "backup_dir": "/opt/hashmancer/restore_backups"
 }
 ```
-
 If not provided, the defaults are `./` for `RESTORE_DIR` and
 `./restore_backups` for `BACKUP_DIR`.
+
+### Portal API key
+
+To restrict access to the web dashboard set `"portal_key"` in
+`~/.hashmancer/server_config.json`. Requests to `/portal`, `/glyph` and
+`/admin` must then include an `X-API-Key` header with the same value.
 
 ## 📈 Learning Password Trends
 
