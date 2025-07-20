@@ -189,6 +189,16 @@ class GPUSidecar(threading.Thread):
                 )
                 wordlist_path = str(tmp)
 
+        mask_charsets = batch.get("mask_charsets")
+        if mask_charsets:
+            try:
+                cs_map = json.loads(mask_charsets)
+            except Exception:
+                cs_map = {}
+            for key, charset in sorted(cs_map.items()):
+                if key.startswith("?") and len(key) == 2 and key[1].isdigit():
+                    cmd += [f"-{key[1]}", charset]
+
         if attack == "mask" and batch.get("mask"):
             cmd += ["-a", "3", batch["mask"]]
         elif attack == "dict" and wordlist_path:
