@@ -9,7 +9,11 @@ from pathlib import Path
 import glob
 import socket
 
-from .gpu_sidecar import GPUSidecar, run_hashcat_benchmark
+from .gpu_sidecar import (
+    GPUSidecar,
+    run_hashcat_benchmark,
+    run_darkling_benchmark,
+)
 from .bios_flasher import GPUFlashManager
 from .crypto_utils import load_public_key_pem, sign_message
 from ascii_logo import print_logo
@@ -232,7 +236,9 @@ def main():
         engine = "hashcat"
         if gpu.get("pci_link_width", gpu.get("pci_width", 16)) <= 4 and low_bw_engine == "darkling":
             engine = "darkling-engine"
-        rates = run_hashcat_benchmark(gpu, engine)
+            rates = run_darkling_benchmark(gpu)
+        else:
+            rates = run_hashcat_benchmark(gpu, engine)
         payload = {
             "worker_id": name,
             "gpu_uuid": gpu.get("uuid"),

@@ -380,3 +380,19 @@ def test_run_hashcat_benchmark(monkeypatch):
     rates = gpu_sidecar.run_hashcat_benchmark(gpu)
     assert rates == {"MD5": 10.0e6, "SHA1": 20.0e6, "NTLM": 30.0e6}
 
+
+def test_run_darkling_benchmark(monkeypatch):
+    def fake_popen(cmd, stdout=None, stderr=None, text=None):
+        mode = int(cmd[cmd.index("-m") + 1])
+        if mode == 0:
+            return DummyProc(["{\"speed\": [10]}"], "/tmp/db1.out")
+        if mode == 100:
+            return DummyProc(["{\"speed\": [20]}"], "/tmp/db2.out")
+        raise Exception("unsupported")
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
+
+    gpu = {"uuid": "gpu", "index": 0}
+    rates = gpu_sidecar.run_darkling_benchmark(gpu)
+    assert rates == {"MD5": 10.0, "SHA1": 20.0, "NTLM": 0.0}
+
