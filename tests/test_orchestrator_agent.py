@@ -44,6 +44,13 @@ def test_pending_count_create_group(monkeypatch):
     assert fake.group_created
 
 
+def test_token_id_mapping():
+    assert orchestrator_agent.TOKEN_TO_ID["$c"] == "?5"
+    assert orchestrator_agent.TOKEN_TO_ID["$e"] == "?6"
+    assert orchestrator_agent.ID_TO_CHARSET["?5"] == orchestrator_agent.charsets.COMMON_SYMBOLS
+    assert orchestrator_agent.ID_TO_CHARSET["?6"] == orchestrator_agent.charsets.EMOJI
+
+
 def test_darkling_transformed_mask(monkeypatch, tmp_path):
     wl = tmp_path / "wl.txt"
     wl.write_text("Abc\n1234\n")
@@ -81,7 +88,7 @@ def test_darkling_transformed_mask(monkeypatch, tmp_path):
     monkeypatch.setattr(orchestrator_agent, "pending_count", lambda *a, **k: 0)
     monkeypatch.setattr(orchestrator_agent, "any_darkling_workers", lambda: True)
     monkeypatch.setattr(orchestrator_agent, "cache_wordlist", lambda p: "key")
-    monkeypatch.setattr(orchestrator_agent, "generate_mask", lambda length: "$U$l$d$s")
+    monkeypatch.setattr(orchestrator_agent, "generate_mask", lambda length: "$U$l$d$s$c$e")
 
     orchestrator_agent.dispatch_batches()
 
@@ -90,9 +97,9 @@ def test_darkling_transformed_mask(monkeypatch, tmp_path):
 
     assert stream == orchestrator_agent.LOW_BW_JOB_STREAM
     assert job["attack_mode"] == "mask"
-    assert job["mask"] == "?1?2?3?4"
+    assert job["mask"] == "?1?2?3?4?5?6"
     cs = json.loads(job["mask_charsets"])
-    assert "?1" in cs and "?2" in cs and "?3" in cs and "?4" in cs
+    assert all(k in cs for k in ["?1", "?2", "?3", "?4", "?5", "?6"])
     assert job["start"] == 0
     assert job["end"] == 1000
 

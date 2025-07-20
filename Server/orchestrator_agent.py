@@ -22,7 +22,14 @@ r = get_redis()
 
 # Mapping between pattern tokens produced by pattern_stats and mask charset
 # identifiers used by the darkling engine.
-TOKEN_TO_ID = {"$U": "?1", "$l": "?2", "$d": "?3", "$s": "?4"}
+TOKEN_TO_ID = {
+    "$U": "?1",
+    "$l": "?2",
+    "$d": "?3",
+    "$s": "?4",
+    "$c": "?5",
+    "$e": "?6",
+}
 
 # Charsets referenced by those identifiers. These are serialized into the job
 # so low-bandwidth workers can load the correct lookup tables.
@@ -31,7 +38,22 @@ ID_TO_CHARSET = {
     "?2": charsets.ENGLISH_LOWER,
     "?3": "0123456789",
     "?4": charsets.COMMON_SYMBOLS,
+    "?5": charsets.COMMON_SYMBOLS,
+    "?6": charsets.EMOJI,
 }
+
+
+def build_mask_charsets(lang: str | None = None) -> dict[str, str]:
+    """Return a mask charset map for the given language."""
+    if not lang:
+        lang = "English"
+    lang_key = lang.replace("-", "_").upper()
+    upper = getattr(charsets, f"{lang_key}_UPPER", charsets.ENGLISH_UPPER)
+    lower = getattr(charsets, f"{lang_key}_LOWER", charsets.ENGLISH_LOWER)
+    mapping = ID_TO_CHARSET.copy()
+    mapping["?1"] = upper
+    mapping["?2"] = lower
+    return mapping
 
 
 def worker_counts():
@@ -133,7 +155,7 @@ def pending_count(stream: str = JOB_STREAM, group: str = HTTP_GROUP) -> int:
         return 0
 
 
-def dispatch_batches():
+def dispatch_batches(lang: str = "English"):
     """Prefetch batches from batch:queue into one of the job streams."""
     try:
         backlog_target = compute_backlog_target()
@@ -216,7 +238,7 @@ def dispatch_batches():
                     "wordlist": "",
                     "wordlist_key": "",
                     "attack_mode": "mask",
-                    "mask_charsets": json.dumps(ID_TO_CHARSET),
+                    "mask_charsets": json.dumps(build_mask_charsets(lang)),
                     "start": 0,
                     "end": 1000,
                 })
@@ -229,7 +251,13 @@ def dispatch_batches():
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Dispatch batches to workers")
+    parser.add_argument("--lang", default="English", help="language for alphabet charsets")
+    args = parser.parse_args()
+
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
     while True:
-        dispatch_batches()
+        dispatch_batches(args.lang)
         time.sleep(1)
