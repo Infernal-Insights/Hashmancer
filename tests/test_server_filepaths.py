@@ -35,6 +35,7 @@ sys.modules.setdefault("fastapi.middleware.cors", cors_stub)
 
 resp_stub = types.ModuleType("fastapi.responses")
 resp_stub.HTMLResponse = object
+resp_stub.FileResponse = object
 sys.modules.setdefault("fastapi.responses", resp_stub)
 
 pydantic_stub = types.ModuleType("pydantic")

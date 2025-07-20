@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 import subprocess
 from datetime import datetime
 import os
@@ -581,6 +581,52 @@ async def list_found_results(limit: int = 100):
     except redis.exceptions.RedisError as e:
         log_error("server", "system", "SRED", "Redis unavailable", e)
         return []
+
+
+@app.get("/restores")
+async def list_restore_files():
+    """Return available `.restore` files."""
+    try:
+        RESTORE_DIR.mkdir(parents=True, exist_ok=True)
+        return [p.name for p in RESTORE_DIR.glob("*.restore")]
+    except Exception as e:
+        log_error("server", "system", "S732", "Failed to list restore files", e)
+        return []
+
+
+@app.delete("/restore/{name}")
+async def delete_restore_file(name: str):
+    """Delete a restore file by filename."""
+    try:
+        filename = Path(name).name
+        path = (RESTORE_DIR / filename).resolve()
+        if path.parent != RESTORE_DIR.resolve():
+            raise HTTPException(status_code=400, detail="invalid filename")
+        if path.is_file():
+            path.unlink()
+            return {"status": "ok"}
+        raise HTTPException(status_code=404, detail="not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("server", "system", "S733", "Failed to delete restore", e)
+        raise HTTPException(status_code=500, detail="delete failed")
+
+
+@app.get("/download_restore/{name}")
+async def download_restore_file(name: str):
+    """Download a restore file."""
+    try:
+        filename = Path(name).name
+        path = (RESTORE_DIR / filename).resolve()
+        if path.parent != RESTORE_DIR.resolve() or not path.is_file():
+            raise HTTPException(status_code=404, detail="not found")
+        return FileResponse(path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("server", "system", "S734", "Failed to download restore", e)
+        raise HTTPException(status_code=500, detail="download failed")
 
 
 @app.get("/admin", response_class=HTMLResponse)
