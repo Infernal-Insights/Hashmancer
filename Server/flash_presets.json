@@ -1,0 +1,25 @@
+{
+    "nvidia": {
+        "rtx 3080": {"power_limit": 220, "core_clock": 1350, "mem_clock": 4500},
+        "rtx 3070": {"power_limit": 180, "core_clock": 1200, "mem_clock": 4000},
+        "gtx 1050": {"power_limit": 60, "core_clock": 1350, "mem_clock": 3500},
+        "gtx 1050 ti": {"power_limit": 70, "core_clock": 1400, "mem_clock": 3500},
+        "gtx 1060": {"power_limit": 90, "core_clock": 1500, "mem_clock": 4000},
+        "gtx 1070": {"power_limit": 110, "core_clock": 1600, "mem_clock": 4200},
+        "gtx 1080": {"power_limit": 140, "core_clock": 1700, "mem_clock": 4800},
+        "gtx 1080 ti": {"power_limit": 180, "core_clock": 1700, "mem_clock": 5000},
+        "gtx 2080": {"power_limit": 170, "core_clock": 1800, "mem_clock": 6500},
+        "gtx 2080 ti": {"power_limit": 200, "core_clock": 1800, "mem_clock": 7000},
+        "default": {"power_limit": 150, "core_clock": 1100, "mem_clock": 3000}
+    },
+    "amd": {
+        "rx 6800": {"power_limit": 170, "core_clock": 1200, "mem_clock": 2100},
+        "rx 6700": {"power_limit": 150, "core_clock": 1100, "mem_clock": 1900},
+        "rx 470": {"power_limit": 110, "core_clock": 1200, "mem_clock": 1750},
+        "rx 480": {"power_limit": 120, "core_clock": 1250, "mem_clock": 1750},
+        "rx 570": {"power_limit": 110, "core_clock": 1200, "mem_clock": 1750},
+        "rx 580": {"power_limit": 125, "core_clock": 1250, "mem_clock": 2000},
+        "default": {"power_limit": 120, "core_clock": 1000, "mem_clock": 1800}
+    }
+}
+
