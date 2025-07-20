@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstdint>
 #include <string>
+#include "gpu_shared_types.h"
 
 namespace darkling {
 
@@ -14,20 +15,13 @@ enum class GpuBackend {
     INTEL_OPENCL
 };
 
-struct JobConfig {
-    int hash_len = 0;
-    int pwd_len = 0;
-};
-
 struct GpuCracker {
     virtual ~GpuCracker() = default;
-    virtual bool initialize(const JobConfig &config) = 0;
-    virtual bool load_data(const std::vector<std::string> &charsets,
-                           const std::vector<uint8_t> &position_map,
-                           const std::vector<uint8_t> &hashes) = 0;
-    virtual bool launch_crack_batch(uint64_t start, uint64_t end) = 0;
-    virtual std::vector<std::string> read_results() = 0;
-    virtual std::string get_status() = 0;
+    virtual bool initialize() = 0;
+    virtual bool load_job(const MaskJob &job) = 0;
+    virtual bool run_batch() = 0;
+    virtual std::vector<CrackResult> read_results() = 0;
+    virtual GpuStatus get_status() = 0;
 };
 
 std::unique_ptr<GpuCracker> create_backend(GpuBackend type);
