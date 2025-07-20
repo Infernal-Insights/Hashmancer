@@ -362,3 +362,62 @@ class GPUSidecar(threading.Thread):
             skip_charsets=not reload_cs,
         )
 
+
+def run_hashcat_benchmark(gpu: dict, engine: str = "hashcat") -> dict[str, float]:
+    """Run a short benchmark for the given GPU and return hashrates.
+
+    Parameters
+    ----------
+    gpu : dict
+        GPU descriptor with at least an ``index`` key.
+    engine : str, optional
+        Executable to run, defaults to ``hashcat``. ``darkling-engine`` can be
+        used if available.
+
+    Returns
+    -------
+    dict[str, float]
+        Mapping of algorithm name (MD5, SHA1, NTLM) to hashrate in H/s.
+    """
+
+    modes = [(0, "MD5"), (100, "SHA1"), (1000, "NTLM")]
+    index = str(gpu.get("index", 0))
+    results: dict[str, float] = {}
+
+    unit_map = {
+        "H/s": 1,
+        "kH/s": 1e3,
+        "KH/s": 1e3,
+        "MH/s": 1e6,
+        "GH/s": 1e9,
+        "TH/s": 1e12,
+        "PH/s": 1e15,
+    }
+
+    for mode, name in modes:
+        cmd = [engine, "--benchmark", "-m", str(mode), "-d", index]
+        try:
+            output = subprocess.check_output(
+                cmd, stderr=subprocess.STDOUT, text=True
+            )
+        except Exception as e:
+            print(f"Benchmark failed for {gpu.get('uuid')} mode {mode}: {e}")
+            results[name] = 0.0
+            continue
+
+        rate = 0.0
+        for line in output.splitlines():
+            if line.strip().startswith("Speed.#"):
+                try:
+                    parts = line.split(":", 1)[1].strip().split()
+                    value = float(parts[0])
+                    unit = parts[1] if len(parts) > 1 else "H/s"
+                    rate = value * unit_map.get(unit, 1)
+                except Exception:
+                    rate = 0.0
+                break
+
+        results[name] = rate
+
+    return results
+
