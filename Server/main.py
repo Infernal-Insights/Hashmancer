@@ -153,6 +153,14 @@ class SubmitHashrateRequest(BaseModel):
     signature: str
 
 
+class SubmitBenchmarkRequest(BaseModel):
+    worker_id: str
+    gpu_uuid: str
+    engine: str
+    hashrates: dict[str, float]
+    signature: str
+
+
 async def broadcast_presence():
     """Periodically broadcast the server URL over UDP."""
     base = CONFIG.get("server_url", "http://localhost")
@@ -498,6 +506,56 @@ async def submit_hashrate(payload: SubmitHashrateRequest):
     except Exception as e:
         log_error("server", worker, "S714", "Failed to record hashrate", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/submit_benchmark")
+async def submit_benchmark(data: SubmitBenchmarkRequest):
+    """Record benchmark results for a GPU and aggregate per-worker speed."""
+    worker = data.worker_id
+    gpu = data.gpu_uuid
+    if not verify_signature(worker, worker, data.signature):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    try:
+        rates = {alg: float(val) for alg, val in data.hashrates.items()}
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="invalid hashrates")
+    try:
+        r.hset(
+            f"benchmark:{gpu}",
+            mapping={"engine": data.engine, **rates},
+        )
+
+        totals = {"MD5": 0.0, "SHA1": 0.0, "NTLM": 0.0}
+        specs_raw = r.hget(f"worker:{worker}", "specs")
+        gpu_list = []
+        if specs_raw:
+            try:
+                info = json.loads(specs_raw)
+                gpu_list = (
+                    info.get("hardware", {}).get("gpus", [])
+                    if isinstance(info.get("hardware"), dict)
+                    else []
+                )
+            except Exception:
+                gpu_list = []
+        if not gpu_list:
+            gpu_list = [{"uuid": gpu}]
+
+        for g in gpu_list:
+            bench = r.hgetall(f"benchmark:{g.get('uuid')}")
+            for alg in totals:
+                try:
+                    totals[alg] += float(bench.get(alg) or 0)
+                except (TypeError, ValueError):
+                    pass
+        r.hset(f"benchmark_total:{worker}", mapping=totals)
+        return {"status": "ok"}
+    except redis.exceptions.RedisError as e:
+        log_error("server", worker or "system", "SRED", "Redis unavailable", e)
+        raise HTTPException(status_code=500, detail="redis unavailable")
+    except Exception as e:
+        log_error("server", worker, "S742", "Failed to record benchmark", e)
+        raise HTTPException(status_code=500, detail="error")
 
 
 @app.get("/hashrate")

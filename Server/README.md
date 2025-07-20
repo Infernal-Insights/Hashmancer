@@ -126,8 +126,26 @@ performance over time.
 | GET    | `/workers`          | List registered workers             |
 | GET    | `/hashrate`         | Aggregate hashrate of all workers   |
 | POST   | `/worker_status`    | Update a worker's status (optional signature) |
+| POST   | `/submit_benchmark` | Submit benchmark results            |
 
 ---
+
+### Benchmark submission
+
+Workers can post benchmark results to `/submit_benchmark`:
+
+```json
+{
+  "worker_id": "worker1",
+  "gpu_uuid": "GPU-UUID",
+  "engine": "hashcat",
+  "hashrates": {"MD5": 1000, "SHA1": 2000, "NTLM": 3000},
+  "signature": "<signature>"
+}
+```
+
+Results are stored under `benchmark:<gpu_uuid>` and aggregated totals are kept in `benchmark_total:<worker_id>`.
+
 
 ## 📁 File Tree (Core)
 
