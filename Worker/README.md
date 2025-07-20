@@ -82,3 +82,12 @@ Keep the private key secure and supply the public key when registering the
 worker.  The worker reads `~/.hashmancer/worker_private.pem` when signing API
 requests.
 
+## BIOS flashing
+
+When flash tasks are queued the worker will attempt to apply vendor specific
+settings with `nvidia-smi` or `rocm-smi`.  If a `bios_rom` field is supplied in
+the settings the worker first uses `nvflash_linux` (for NVIDIA) or `amdvbflash`
+for AMD GPUs to dump the existing ROM.  Should flashing fail the backup ROM is
+flashed back automatically.  PCI addresses are detected with `lspci` or vendor
+utilities so the correct adapter is selected.
+
