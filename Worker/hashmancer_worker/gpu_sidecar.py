@@ -421,3 +421,55 @@ def run_hashcat_benchmark(gpu: dict, engine: str = "hashcat") -> dict[str, float
 
     return results
 
+
+def run_darkling_benchmark(gpu: dict) -> dict[str, float]:
+    """Run a short benchmark using the darkling engine."""
+    modes = [(0, "MD5"), (100, "SHA1"), (1000, "NTLM")]
+    index = str(gpu.get("index", 0))
+    mask = "?a?a?a?a?a?a?a?a"
+    results: dict[str, float] = {}
+    for mode, name in modes:
+        cmd = [
+            "darkling-engine",
+            "-m",
+            str(mode),
+            "-a",
+            "3",
+            mask,
+            "--start",
+            "0",
+            "--end",
+            "10000",
+            "--quiet",
+            "--status",
+            "--status-json",
+            "--status-timer",
+            "1",
+            "-d",
+            index,
+        ]
+        rate = 0.0
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            while proc.poll() is None:
+                line = proc.stdout.readline()
+                if not line:
+                    time.sleep(0.1)
+                    continue
+                try:
+                    status = json.loads(line.strip())
+                    speeds = status.get("speed", [])
+                    if speeds:
+                        rate = float(speeds[0])
+                except json.JSONDecodeError:
+                    continue
+        except Exception as e:
+            print(f"Benchmark failed for {gpu.get('uuid')} mode {mode}: {e}")
+            rate = 0.0
+        results[name] = rate
+    return results
