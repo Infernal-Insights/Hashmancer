@@ -153,6 +153,39 @@ def test_custom_mask_charsets(monkeypatch):
     assert "-3" in captured["cmd"] and "123" in captured["cmd"]
 
 
+def test_reuse_preloaded_charsets(monkeypatch):
+    sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 0}, "http://sv")
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    cmds = []
+
+    def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
+        cmds.append(cmd)
+        return DummyProc(["{}"], f"/tmp/job8{len(cmds)}.out")
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda x: "sig")
+
+    batch = {
+        "batch_id": "job8",
+        "hashes": json.dumps(["h"]),
+        "mask": "?1",
+        "attack_mode": "mask",
+        "hash_mode": "0",
+        "mask_charsets": json.dumps({"?1": "ABC"}),
+        "start": 0,
+        "end": 10,
+    }
+
+    sidecar.run_darkling_engine(batch)
+    sidecar.run_darkling_engine(batch)
+
+    # first call should include charset options, second should not
+    assert any("-1" in c for c in cmds[0])
+    assert not any("-1" in c for c in cmds[1])
+
+
 def test_power_limit_nvidia(monkeypatch):
     sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 1}, "http://sv")
     monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
@@ -322,7 +355,10 @@ def test_sidecar_run_executes_job(monkeypatch):
     monkeypatch.setattr(gpu_sidecar.GPUSidecar, "execute_job", fake_execute)
 
     sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 0}, "http://sv")
+    cleaned = []
+    sidecar.darkling_ctx.cleanup = lambda: cleaned.append(True)
     sidecar.run()
 
     assert executed["batch"]["batch_id"] == "job6"
+    assert cleaned == [True]
 
