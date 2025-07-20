@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import subprocess
@@ -603,3 +603,31 @@ async def portal_page():
     except Exception as e:
         log_error("server", "system", "S730", "Failed to load portal page", e)
         return HTMLResponse("<h1>Portal page not available</h1>", status_code=500)
+
+
+@app.websocket("/ws/portal")
+async def portal_ws(ws: WebSocket):
+    """Push periodic metrics and found hashes over a WebSocket."""
+    await ws.accept()
+    last_count = 0
+    try:
+        while True:
+            metrics = await server_status()
+            workers = await list_workers()
+            total = r.llen("found:results")
+            founds: list[str] = []
+            if total > last_count:
+                founds = r.lrange("found:results", last_count, total - 1)
+                last_count = total
+            await ws.send_text(
+                json.dumps({
+                    "metrics": metrics,
+                    "workers": workers,
+                    "founds": founds,
+                })
+            )
+            await asyncio.sleep(5)
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        log_error("server", "system", "S731", "Portal WS error", e)

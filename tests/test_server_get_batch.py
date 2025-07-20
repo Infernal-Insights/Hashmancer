@@ -23,10 +23,15 @@ class FakeApp:
     def delete(self, *a, **kw):
         return lambda f: f
 
+    def websocket(self, *a, **kw):
+        return lambda f: f
+
 
 fastapi_stub.FastAPI = lambda: FakeApp()
 fastapi_stub.UploadFile = object
 fastapi_stub.File = lambda *a, **kw: None
+fastapi_stub.WebSocket = object
+fastapi_stub.WebSocketDisconnect = type("WebSocketDisconnect", (), {})
 
 
 class HTTPException(Exception):
