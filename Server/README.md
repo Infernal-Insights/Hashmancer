@@ -213,6 +213,18 @@ pattern and the frequency is incremented in the `dictionary:patterns` sorted
 set in Redis. These counts can be used to generate smarter masks or analyze
 the prevalence of different password formats.
 
+### Converting existing pattern counts
+
+If your statistics were generated before the ``$c`` and ``$e`` tokens were
+introduced you can migrate the data with ``convert_patterns.py``:
+
+```bash
+python3 convert_patterns.py --src dictionary:patterns --dest dictionary:patterns:v2
+```
+
+This reads each stored pattern, reclassifies characters using the current
+token rules and writes the results to the destination key.
+
 
 ---
 
