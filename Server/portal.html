@@ -64,6 +64,19 @@ body::before {
 <pre id="found-output"></pre>
 </section>
 
+<section id="all-founds">
+<h2>All Found Results</h2>
+<button onclick="loadAllFounds()">Refresh</button>
+<pre id="all-found-output"></pre>
+</section>
+
+<section id="restores">
+<h2>Restore Files</h2>
+<ul id="restore-list"></ul>
+<input type="file" id="restore-upload">
+<button onclick="uploadRestore()">Upload</button>
+</section>
+
 <section id="dicts">
 <h2>Dictionaries</h2>
 <ul id="dict-list"></ul>
@@ -135,6 +148,44 @@ async function uploadDict(){
   await fetch('/upload_wordlist',{method:'POST',body:fd});
   document.getElementById('dict-upload').value='';
   loadDicts();
+}
+
+async function loadRestores(){
+  const res=await fetch('/restores');
+  const data=await res.json();
+  const list=document.getElementById('restore-list');
+  list.innerHTML='';
+  for(const name of data){
+    const li=document.createElement('li');
+    const del=document.createElement('button');
+    del.textContent='Delete';
+    del.onclick=async()=>{ await fetch(`/restore/${encodeURIComponent(name)}`,{method:'DELETE'}); loadRestores(); };
+    const dl=document.createElement('a');
+    dl.textContent='Download';
+    dl.href=`/download_restore/${encodeURIComponent(name)}`;
+    dl.style.color='#0f0';
+    li.textContent=name+' ';
+    li.appendChild(del);
+    li.appendChild(document.createTextNode(' '));
+    li.appendChild(dl);
+    list.appendChild(li);
+  }
+}
+
+async function uploadRestore(){
+  const file=document.getElementById('restore-upload').files[0];
+  if(!file) return;
+  const fd=new FormData();
+  fd.append('file',file);
+  await fetch('/upload_restore',{method:'POST',body:fd});
+  document.getElementById('restore-upload').value='';
+  loadRestores();
+}
+
+async function loadAllFounds(){
+  const res=await fetch('/found_results?limit=1000');
+  const data=await res.json();
+  document.getElementById('all-found-output').textContent=data.join('\n');
 }
 
 async function loadMasks(){
@@ -227,6 +278,7 @@ async function loadJobs(){
 function tick(){
   loadDicts();
   loadMasks();
+  loadRestores();
   loadWorkers();
   loadJobs();
   loadLogs();
