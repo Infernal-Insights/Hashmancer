@@ -1,7 +1,23 @@
 import requests
 import os
+import json
+from pathlib import Path
 
-HASHES_API = os.environ.get("HASHES_COM_API_KEY")
+# Prefer an environment variable but fall back to the server config
+CONFIG_FILE = Path.home() / ".hashmancer" / "server_config.json"
+
+def _load_api_key() -> str | None:
+    key = os.environ.get("HASHES_COM_API_KEY")
+    if key:
+        return key
+    try:
+        with CONFIG_FILE.open() as f:
+            cfg = json.load(f)
+        return cfg.get("hashes_api_key")
+    except Exception:
+        return None
+
+HASHES_API = _load_api_key()
 
 
 def fetch_jobs():
