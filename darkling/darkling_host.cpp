@@ -141,14 +141,23 @@ struct DarklingContext {
     }
 };
 
-int main() {
+int main(int argc, char** argv) {
+    uint64_t start = 0;
+    uint64_t end = 1000;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--start") == 0 && i + 1 < argc) {
+            start = std::strtoull(argv[++i], nullptr, 10);
+        } else if (std::strcmp(argv[i], "--end") == 0 && i + 1 < argc) {
+            end = std::strtoull(argv[++i], nullptr, 10);
+        }
+    }
     DarklingContext ctx;
     ctx.allocate_buffers(10);
     std::vector<std::string> charsets = {"abc", "123"};
     std::vector<uint8_t> pos_map = {0,1};
     std::vector<uint8_t> hashes(16); // placeholder
     ctx.preload(charsets, pos_map, hashes, 2, 16);
-    auto res = ctx.run(0, 1000);
+    auto res = ctx.run(start, end);
     for (auto& s : res) std::cout << s << "\n";
     return 0;
 }

@@ -172,6 +172,8 @@ def dispatch_batches():
             # route job depending on attack type
             if attack == "mask" and darkling and pending_low < backlog_target:
                 task_id = str(uuid.uuid4())
+                job_data["start"] = 0
+                job_data["end"] = 1000
                 r.hset(f"job:{task_id}", mapping=job_data)
                 r.expire(f"job:{task_id}", 3600)
                 r.xadd(LOW_BW_JOB_STREAM, {"job_id": task_id})
@@ -215,6 +217,8 @@ def dispatch_batches():
                     "wordlist_key": "",
                     "attack_mode": "mask",
                     "mask_charsets": json.dumps(ID_TO_CHARSET),
+                    "start": 0,
+                    "end": 1000,
                 })
                 r.hset(f"job:{d_id}", mapping=transformed)
                 r.expire(f"job:{d_id}", 3600)
