@@ -1,4 +1,11 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    UploadFile,
+    File,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
 import subprocess
@@ -53,6 +60,37 @@ BROADCAST_ENABLED = bool(CONFIG.get("broadcast_enabled", True))
 BROADCAST_PORT = int(CONFIG.get("broadcast_port", 50000))
 BROADCAST_INTERVAL = int(CONFIG.get("broadcast_interval", 30))
 
+# baseline undervolt/flash settings per GPU model
+FLASH_PRESETS = {
+    "nvidia": {
+        "rtx 3080": {"power_limit": 220, "core_clock": 1350, "mem_clock": 4500},
+        "rtx 3070": {"power_limit": 180, "core_clock": 1200, "mem_clock": 4000},
+        "default": {"power_limit": 150, "core_clock": 1100, "mem_clock": 3000},
+    },
+    "amd": {
+        "rx 6800": {"power_limit": 170, "core_clock": 1200, "mem_clock": 2100},
+        "rx 6700": {"power_limit": 150, "core_clock": 1100, "mem_clock": 1900},
+        "default": {"power_limit": 120, "core_clock": 1000, "mem_clock": 1800},
+    },
+}
+
+
+def get_flash_settings(model: str) -> dict:
+    name = model.lower()
+    vendor = "nvidia"
+    if "amd" in name or "radeon" in name or "rx" in name:
+        vendor = "amd"
+    presets = FLASH_PRESETS[vendor]
+    for key, val in presets.items():
+        if key != "default" and key in name:
+            data = dict(val)
+            data["vendor"] = vendor
+            return data
+    data = dict(presets["default"])
+    data["vendor"] = vendor
+    return data
+
+
 origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -73,8 +111,14 @@ class PortalAuthMiddleware:
     async def __call__(self, scope, receive, send):
         if scope.get("type") == "http" and self.key:
             path = scope.get("path", "")
-            if path.startswith("/portal") or path.startswith("/glyph") or path.startswith("/admin"):
-                headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
+            if (
+                path.startswith("/portal")
+                or path.startswith("/glyph")
+                or path.startswith("/admin")
+            ):
+                headers = {
+                    k.decode().lower(): v.decode() for k, v in scope.get("headers", [])
+                }
                 if headers.get("x-api-key") != self.key:
                     response = HTMLResponse("Unauthorized", status_code=401)
                     await response(scope, receive, send)
@@ -159,6 +203,20 @@ async def register_worker(info: RegisterWorkerRequest):
                 "low_bw_engine": LOW_BW_ENGINE,
             },
         )
+        # queue GPUs for flashing
+        gpus = info.hardware.get("gpus", []) if isinstance(info.hardware, dict) else []
+        for g in gpus:
+            settings = get_flash_settings(g.get("model", ""))
+            data = json.dumps(
+                {
+                    "gpu_uuid": g.get("uuid"),
+                    "index": g.get("index", 0),
+                    "settings": settings,
+                }
+            )
+            r.rpush(f"flash:{waifu_name}", data)
+            r.hset(f"flash:settings:{g.get('uuid')}", mapping=settings)
+            r.hset(f"gpu:{g.get('uuid')}", mapping={"crashes": 0})
         return {"status": "ok", "waifu": waifu_name}
     except redis.exceptions.RedisError as e:
         log_error("server", "unassigned", "SRED", "Redis unavailable", e)
@@ -239,7 +297,9 @@ async def submit_founds(payload: dict):
         r.hset(f"worker:{payload['worker_id']}", "status", "idle")
         return {"status": "ok", "received": len(payload["founds"])}
     except redis.exceptions.RedisError as e:
-        log_error("server", payload.get("worker_id", "system"), "SRED", "Redis unavailable", e)
+        log_error(
+            "server", payload.get("worker_id", "system"), "SRED", "Redis unavailable", e
+        )
         return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error("server", payload["worker_id"], "S003", "Failed to accept founds", e)
@@ -258,7 +318,9 @@ async def submit_no_founds(payload: dict):
         r.hset(f"worker:{payload['worker_id']}", "status", "idle")
         return {"status": "ok"}
     except redis.exceptions.RedisError as e:
-        log_error("server", payload.get("worker_id", "system"), "SRED", "Redis unavailable", e)
+        log_error(
+            "server", payload.get("worker_id", "system"), "SRED", "Redis unavailable", e
+        )
         return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error(
@@ -451,6 +513,74 @@ async def get_hashrate(worker: str | None = None):
     except Exception as e:
         log_error("server", worker or "system", "S715", "Failed to get hashrate", e)
         return []
+
+
+@app.get("/get_flash_task")
+async def get_flash_task(worker_id: str, signature: str):
+    """Pop the next flash task for a worker."""
+    if not verify_signature(worker_id, worker_id, signature):
+        return {"status": "unauthorized"}
+    try:
+        data = r.lpop(f"flash:{worker_id}")
+        if not data:
+            return {"status": "none"}
+        task = json.loads(data)
+        return {
+            "status": "ok",
+            "gpu_uuid": task.get("gpu_uuid"),
+            "settings": task.get("settings", {}),
+        }
+    except redis.exceptions.RedisError as e:
+        log_error("server", worker_id, "SRED", "Redis unavailable", e)
+        return {"status": "error", "message": "redis unavailable"}
+    except Exception as e:
+        log_error("server", worker_id, "S740", "Failed to get flash task", e)
+        return {"status": "error"}
+
+
+class FlashResult(BaseModel):
+    worker_id: str
+    gpu_uuid: str
+    success: bool
+    signature: str
+
+
+@app.post("/flash_result")
+async def flash_result(res: FlashResult):
+    """Record result of a flash attempt."""
+    if not verify_signature(res.worker_id, res.worker_id, res.signature):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    try:
+        if not res.success:
+            crashes = r.hincrby(f"gpu:{res.gpu_uuid}", "crashes", 1)
+            if crashes >= 3:
+                # increase power limit slightly and retry
+                settings = r.hgetall(f"flash:settings:{res.gpu_uuid}")
+                if settings.get("power_limit"):
+                    try:
+                        val = int(settings["power_limit"]) + 10
+                        settings["power_limit"] = val
+                    except ValueError:
+                        pass
+                r.hset(f"flash:settings:{res.gpu_uuid}", mapping=settings)
+            r.rpush(
+                f"flash:{res.worker_id}",
+                json.dumps(
+                    {
+                        "gpu_uuid": res.gpu_uuid,
+                        "settings": r.hgetall(f"flash:settings:{res.gpu_uuid}") or {},
+                    }
+                ),
+            )
+        else:
+            r.hset(f"gpu:{res.gpu_uuid}", "flashed", 1)
+        return {"status": "ok"}
+    except redis.exceptions.RedisError as e:
+        log_error("server", res.worker_id, "SRED", "Redis unavailable", e)
+        raise HTTPException(status_code=500, detail="redis unavailable")
+    except Exception as e:
+        log_error("server", res.worker_id, "S741", "Failed to record flash result", e)
+        raise HTTPException(status_code=500, detail="error")
 
 
 @app.post("/upload_wordlist")
@@ -666,11 +796,13 @@ async def portal_ws(ws: WebSocket):
                 founds = r.lrange("found:results", last_count, total - 1)
                 last_count = total
             await ws.send_text(
-                json.dumps({
-                    "metrics": metrics,
-                    "workers": workers,
-                    "founds": founds,
-                })
+                json.dumps(
+                    {
+                        "metrics": metrics,
+                        "workers": workers,
+                        "founds": founds,
+                    }
+                )
             )
             await asyncio.sleep(5)
     except WebSocketDisconnect:

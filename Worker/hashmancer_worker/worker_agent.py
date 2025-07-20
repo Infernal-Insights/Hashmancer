@@ -10,6 +10,7 @@ import glob
 import socket
 
 from .gpu_sidecar import GPUSidecar
+from .bios_flasher import GPUFlashManager
 from .crypto_utils import load_public_key_pem, sign_message
 from ascii_logo import print_logo
 
@@ -46,7 +47,7 @@ def detect_gpus() -> list[dict]:
         )
         gpus = []
         for line in output.strip().splitlines():
-            idx, uuid_str, name, bus, mem, width = [x.strip() for x in line.split(',')]
+            idx, uuid_str, name, bus, mem, width = [x.strip() for x in line.split(",")]
             gpus.append(
                 {
                     "index": int(idx),
@@ -65,7 +66,14 @@ def detect_gpus() -> list[dict]:
     # AMD detection via rocm-smi
     try:
         output = subprocess.check_output(
-            ["rocm-smi", "--showproductname", "--showbus", "--showuniqueid", "--showmeminfo", "vram"],
+            [
+                "rocm-smi",
+                "--showproductname",
+                "--showbus",
+                "--showuniqueid",
+                "--showmeminfo",
+                "vram",
+            ],
             text=True,
         )
         gpus = []
@@ -192,9 +200,7 @@ def register_worker(worker_id: str, gpus: list[dict]):
 
     name = None
     try:
-        resp = requests.post(
-            f"{SERVER_URL}/register_worker", json=payload, timeout=5
-        )
+        resp = requests.post(f"{SERVER_URL}/register_worker", json=payload, timeout=5)
         data = resp.json()
         if data.get("status") == "ok":
             name = data.get("waifu")
@@ -217,13 +223,13 @@ def main():
     threads = [GPUSidecar(name, gpu, SERVER_URL) for gpu in gpus]
     for t in threads:
         t.start()
+    flash_mgr = GPUFlashManager(name, SERVER_URL, gpus)
+    flash_mgr.start()
     print(f"Worker {name} started with {len(gpus)} GPUs")
     try:
         while True:
             temps = get_gpu_temps()
-            progress = {
-                t.gpu.get("uuid"): t.progress for t in threads if t.current_job
-            }
+            progress = {t.gpu.get("uuid"): t.progress for t in threads if t.current_job}
             try:
                 requests.post(
                     f"{SERVER_URL}/worker_status",
@@ -243,8 +249,10 @@ def main():
         print("Stopping worker...")
         for t in threads:
             t.running = False
+        flash_mgr.running = False
         for t in threads:
             t.join()
+        flash_mgr.join()
 
 
 if __name__ == "__main__":
