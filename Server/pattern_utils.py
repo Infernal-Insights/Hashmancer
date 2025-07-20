@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import re
 
+from darkling import charsets
+
 
 def word_to_pattern(word: str) -> str:
     """Return a simplified hashcat-style pattern for *word*.
 
-    Each character is mapped to one of four symbols:
+    Each character is mapped to one of six symbols:
     ``$U`` for uppercase letters, ``$l`` for lowercase letters,
-    ``$d`` for digits and ``$s`` for symbols/other characters.
+    ``$d`` for digits, ``$c`` for common symbols,
+    ``$e`` for emoji and ``$s`` for other characters.
     """
     pattern = []
     for ch in word:
@@ -20,12 +23,16 @@ def word_to_pattern(word: str) -> str:
             pattern.append("$l")
         elif ch.isdigit():
             pattern.append("$d")
+        elif ch in charsets.COMMON_SYMBOLS:
+            pattern.append("$c")
+        elif ch in charsets.EMOJI:
+            pattern.append("$e")
         else:
             pattern.append("$s")
     return "".join(pattern)
 
 
-MASK_RE = re.compile(r"(?:\$[Ulds])+")
+MASK_RE = re.compile(r"(?:\$[Uldsce])+")
 
 
 def is_valid_pattern(mask: str) -> bool:
