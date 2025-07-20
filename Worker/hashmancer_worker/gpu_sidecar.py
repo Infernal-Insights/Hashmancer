@@ -165,6 +165,8 @@ class GPUSidecar(threading.Thread):
             payload = {
                 "worker_id": self.worker_id,
                 "batch_id": batch_id,
+                "job_id": job_id,
+                "msg_id": batch.get("msg_id"),
                 "founds": founds,
                 "signature": sign_message(json.dumps(founds)),
             }
@@ -173,6 +175,8 @@ class GPUSidecar(threading.Thread):
             payload = {
                 "worker_id": self.worker_id,
                 "batch_id": batch_id,
+                "job_id": job_id,
+                "msg_id": batch.get("msg_id"),
                 "signature": sign_message(batch_id),
             }
             endpoint = "submit_no_founds"

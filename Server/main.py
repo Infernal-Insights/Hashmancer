@@ -385,7 +385,9 @@ async def get_batch(worker_id: str, signature: str):
         batch_id = batch.get("batch_id", job_id)
         batch["batch_id"] = batch_id
         batch["job_id"] = job_id
-        r.xack(stream, group, msg_id)
+        batch["msg_id"] = msg_id
+        batch["stream"] = stream
+        r.hset(f"job:{job_id}", mapping={"msg_id": msg_id, "stream": stream})
         r.hset(
             f"worker:{worker_id}",
             mapping={
@@ -413,6 +415,15 @@ async def submit_founds(payload: dict):
 
         for line in payload["founds"]:
             r.rpush("found:results", f"{payload['batch_id']}:{line}")
+
+        job_id = payload.get("job_id", payload.get("batch_id"))
+        info = r.hgetall(f"job:{job_id}")
+        msg_id = payload.get("msg_id") or info.get("msg_id")
+        stream = info.get("stream", JOB_STREAM)
+        group = HTTP_GROUP if stream == JOB_STREAM else LOW_BW_GROUP
+        if msg_id:
+            r.xack(stream, group, msg_id)
+
         r.hset(f"worker:{payload['worker_id']}", "status", "idle")
         return {"status": "ok", "received": len(payload["founds"])}
     except redis.exceptions.RedisError as e:
@@ -434,6 +445,15 @@ async def submit_no_founds(payload: dict):
             return {"status": "unauthorized"}
 
         r.rpush("found:none", payload["batch_id"])
+
+        job_id = payload.get("job_id", payload.get("batch_id"))
+        info = r.hgetall(f"job:{job_id}")
+        msg_id = payload.get("msg_id") or info.get("msg_id")
+        stream = info.get("stream", JOB_STREAM)
+        group = HTTP_GROUP if stream == JOB_STREAM else LOW_BW_GROUP
+        if msg_id:
+            r.xack(stream, group, msg_id)
+
         r.hset(f"worker:{payload['worker_id']}", "status", "idle")
         return {"status": "ok"}
     except redis.exceptions.RedisError as e:
