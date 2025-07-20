@@ -40,7 +40,8 @@ Two optional environment variables allow you to tweak how `hashcat` runs:
 - `HASHCAT_OPTIMIZED` – when `1`, adds `-O` to enable optimized kernels.
 - `GPU_POWER_LIMIT` – if set, attempts to cap GPU power in watts using
   vendor tools (`nvidia-smi`, `rocm-smi`, or `intel_gpu_frequency`) before
-  launching the cracking engine.
+  launching the cracking engine. Values ending in `%` apply AMD power
+  overdrive using `rocm-smi`.
 - `DARKLING_GPU_POWER_LIMIT` – similar to `GPU_POWER_LIMIT` but only applied
   when the darkling engine is used. This allows independent tuning of
   experimental kernels.
