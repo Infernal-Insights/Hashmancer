@@ -112,11 +112,15 @@ def test_darkling_engine_selected(monkeypatch):
         "mask": "?a",
         "attack_mode": "mask",
         "hash_mode": "0",
+        "start": 0,
+        "end": 1000,
     }
 
     sidecar.execute_job(batch)
 
     assert captured["cmd"][0] == "darkling-engine"
+    assert "--start" in captured["cmd"] and "0" in captured["cmd"]
+    assert "--end" in captured["cmd"] and "1000" in captured["cmd"]
 
 
 def test_custom_mask_charsets(monkeypatch):

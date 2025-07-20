@@ -160,7 +160,9 @@ class GPUSidecar(threading.Thread):
 
         self.current_job = None
 
-    def _run_engine(self, engine: str, batch: dict) -> list[str]:
+    def _run_engine(
+        self, engine: str, batch: dict, range_start: int | None = None, range_end: int | None = None
+    ) -> list[str]:
         """Execute the given cracking engine according to the batch parameters."""
         batch_id = batch["batch_id"]
         hashes = json.loads(batch.get("hashes", "[]"))
@@ -205,6 +207,12 @@ class GPUSidecar(threading.Thread):
             cmd += ["-a", "0", wordlist_path]
         elif attack == "hybrid" and wordlist_path and batch.get("mask"):
             cmd += ["-a", "6", wordlist_path, batch["mask"]]
+
+        if engine == "darkling-engine":
+            if range_start is not None:
+                cmd += ["--start", str(range_start)]
+            if range_end is not None:
+                cmd += ["--end", str(range_end)]
 
         cmd += [
             "--quiet",
@@ -303,5 +311,10 @@ class GPUSidecar(threading.Thread):
         installed separately. It accepts the same arguments as hashcat so the
         batch formatting is identical.
         """
-        return self._run_engine("darkling-engine", batch)
+        return self._run_engine(
+            "darkling-engine",
+            batch,
+            range_start=batch.get("start"),
+            range_end=batch.get("end"),
+        )
 

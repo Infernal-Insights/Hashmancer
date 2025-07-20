@@ -93,4 +93,6 @@ def test_darkling_transformed_mask(monkeypatch, tmp_path):
     assert job["mask"] == "?1?2?3?4"
     cs = json.loads(job["mask_charsets"])
     assert "?1" in cs and "?2" in cs and "?3" in cs and "?4" in cs
+    assert job["start"] == 0
+    assert job["end"] == 1000
 
