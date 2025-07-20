@@ -14,6 +14,8 @@ separate Redis streams:
 
 - `jobs` – normal queue for hashcat-based workers
 - `darkling-jobs` – mask tasks for workers running the `darkling` engine
+- Benchmark results are posted via `/submit_benchmark` so batch sizes scale
+  with GPU speed
 
 Dictionary or hybrid batches are duplicated for `darkling-jobs` as simple mask
 attacks so low-bandwidth nodes can contribute work.

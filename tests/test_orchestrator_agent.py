@@ -104,3 +104,11 @@ def test_darkling_transformed_mask(monkeypatch, tmp_path):
     assert job["start"] == 0
     assert job["end"] == 500
 
+
+def test_compute_batch_range_scales():
+    small = orchestrator_agent.compute_batch_range(5.0, 10000)[1]
+    large = orchestrator_agent.compute_batch_range(20.0, 10000)[1]
+    assert large > small
+    capped = orchestrator_agent.compute_batch_range(100.0, 500)[1]
+    assert capped == 500
+
