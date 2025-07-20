@@ -12,6 +12,8 @@ from event_logger import log_error
 
 JOB_STREAM = os.getenv("JOB_STREAM", "jobs")
 HTTP_GROUP = os.getenv("HTTP_GROUP", "http-workers")
+LOW_BW_JOB_STREAM = os.getenv("LOW_BW_JOB_STREAM", "darkling-jobs")
+LOW_BW_GROUP = os.getenv("LOW_BW_GROUP", "darkling-workers")
 
 r = get_redis()
 
@@ -73,6 +75,17 @@ def compute_backlog_target() -> int:
     return backlog
 
 
+def any_darkling_workers() -> bool:
+    """Return True if any worker is configured to use the darkling engine."""
+    try:
+        for key in r.scan_iter("worker:*"):
+            if r.hget(key, "low_bw_engine") == "darkling":
+                return True
+    except redis.exceptions.RedisError as e:
+        log_error("orchestrator", "system", "SRED", "Redis unavailable", e)
+    return False
+
+
 def cache_wordlist(path: str) -> str:
     """Store a compressed copy of the wordlist in Redis and return its key."""
     key = hashlib.sha1(path.encode()).hexdigest()
@@ -87,14 +100,14 @@ def cache_wordlist(path: str) -> str:
     return key
 
 
-def pending_count() -> int:
-    """Return number of unacknowledged jobs in the stream for HTTP_GROUP."""
+def pending_count(stream: str = JOB_STREAM, group: str = HTTP_GROUP) -> int:
+    """Return number of unacknowledged jobs in the given stream."""
     try:
         try:
-            info = r.xpending(JOB_STREAM, HTTP_GROUP)
+            info = r.xpending(stream, group)
         except redis.exceptions.ResponseError:
             # group may not exist yet
-            r.xgroup_create(JOB_STREAM, HTTP_GROUP, id="0", mkstream=True)
+            r.xgroup_create(stream, group, id="0", mkstream=True)
             info = {"pending": 0}
         if isinstance(info, dict):
             return int(info.get("pending", 0))
@@ -105,11 +118,14 @@ def pending_count() -> int:
 
 
 def dispatch_batches():
-    """Prefetch batches from batch:queue into the job stream."""
+    """Prefetch batches from batch:queue into one of the job streams."""
     try:
         backlog_target = compute_backlog_target()
-        pending = pending_count()
-        while pending < backlog_target:
+        pending_high = pending_count(JOB_STREAM, HTTP_GROUP)
+        pending_low = pending_count(LOW_BW_JOB_STREAM, LOW_BW_GROUP)
+        darkling = any_darkling_workers()
+
+        while (pending_high < backlog_target) or (darkling and pending_low < backlog_target):
             batch_id = r.rpop("batch:queue")
             if not batch_id:
                 break
@@ -123,25 +139,49 @@ def dispatch_batches():
             elif batch.get("wordlist"):
                 attack = "dict"
 
-            task_id = str(uuid.uuid4())
             wordlist_key = ""
             if batch.get("wordlist"):
                 wordlist_key = cache_wordlist(batch["wordlist"])
-            r.hset(
-                f"job:{task_id}",
-                mapping={
-                    "batch_id": batch_id,
-                    "hashes": batch.get("hashes", "[]"),
-                    "mask": batch.get("mask", ""),
-                    "wordlist": batch.get("wordlist", ""),
-                    "wordlist_key": wordlist_key,
-                    "attack_mode": attack,
-                    "status": "queued",
-                },
-            )
+
+            job_data = {
+                "batch_id": batch_id,
+                "hashes": batch.get("hashes", "[]"),
+                "mask": batch.get("mask", ""),
+                "wordlist": batch.get("wordlist", ""),
+                "wordlist_key": wordlist_key,
+                "attack_mode": attack,
+                "status": "queued",
+            }
+
+            # route job depending on attack type
+            if attack == "mask" and darkling and pending_low < backlog_target:
+                task_id = str(uuid.uuid4())
+                r.hset(f"job:{task_id}", mapping=job_data)
+                r.expire(f"job:{task_id}", 3600)
+                r.xadd(LOW_BW_JOB_STREAM, {"job_id": task_id})
+                pending_low += 1
+                continue
+
+            task_id = str(uuid.uuid4())
+            r.hset(f"job:{task_id}", mapping=job_data)
             r.expire(f"job:{task_id}", 3600)
             r.xadd(JOB_STREAM, {"job_id": task_id})
-            pending += 1
+            pending_high += 1
+
+            if darkling and attack != "mask" and pending_low < backlog_target:
+                # transform into a basic mask attack for darkling workers
+                d_id = str(uuid.uuid4())
+                transformed = job_data.copy()
+                transformed.update({
+                    "mask": "?a" * 8,
+                    "wordlist": "",
+                    "wordlist_key": "",
+                    "attack_mode": "mask",
+                })
+                r.hset(f"job:{d_id}", mapping=transformed)
+                r.expire(f"job:{d_id}", 3600)
+                r.xadd(LOW_BW_JOB_STREAM, {"job_id": d_id})
+                pending_low += 1
     except redis.exceptions.RedisError as e:
         log_error("orchestrator", "system", "SRED", "Redis unavailable", e)
 

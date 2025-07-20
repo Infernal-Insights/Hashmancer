@@ -88,11 +88,13 @@ class FakeRedis:
         self.store = {}
         self.stream = [("jobs", [("1-0", {"job_id": "job1"})])]
         self.acked = False
+        self.read_args = None
 
     def xgroup_create(self, *a, **kw):
         pass
 
-    def xreadgroup(self, *a, **kw):
+    def xreadgroup(self, group, consumer, streams, count=1, block=0):
+        self.read_args = (group, streams)
         return self.stream
 
     def xack(self, *a, **kw):
@@ -108,6 +110,7 @@ class FakeRedis:
 def test_get_batch_returns_batch_id(monkeypatch):
     fake = FakeRedis()
     fake.store["job:job1"] = {"batch_id": "batch1"}
+    fake.store["worker:worker"] = {"low_bw_engine": "hashcat"}
     monkeypatch.setattr(main, "r", fake)
     monkeypatch.setattr(main, "verify_signature", lambda a, b, c: True)
 
@@ -115,3 +118,6 @@ def test_get_batch_returns_batch_id(monkeypatch):
 
     assert resp["batch_id"] == "batch1"
     assert fake.store["worker:worker"]["last_batch"] == "batch1"
+    # verify correct stream was used
+    assert fake.read_args[0] == main.HTTP_GROUP
+    assert list(fake.read_args[1].keys())[0] == main.JOB_STREAM

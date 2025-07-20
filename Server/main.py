@@ -25,6 +25,8 @@ r = get_redis()
 
 JOB_STREAM = os.getenv("JOB_STREAM", "jobs")
 HTTP_GROUP = os.getenv("HTTP_GROUP", "http-workers")
+LOW_BW_JOB_STREAM = os.getenv("LOW_BW_JOB_STREAM", "darkling-jobs")
+LOW_BW_GROUP = os.getenv("LOW_BW_GROUP", "darkling-workers")
 
 CONFIG_FILE = Path.home() / ".hashmancer" / "server_config.json"
 try:
@@ -145,13 +147,21 @@ async def get_batch(worker_id: str, signature: str):
     try:
         if not verify_signature(worker_id, worker_id, signature):
             return {"status": "unauthorized"}
+
+        info = r.hgetall(f"worker:{worker_id}")
+        stream = JOB_STREAM
+        group = HTTP_GROUP
+        if info.get("low_bw_engine") == "darkling":
+            stream = LOW_BW_JOB_STREAM
+            group = LOW_BW_GROUP
+
         try:
-            r.xgroup_create(JOB_STREAM, HTTP_GROUP, id="0", mkstream=True)
+            r.xgroup_create(stream, group, id="0", mkstream=True)
         except redis.exceptions.ResponseError as e:
             if "BUSYGROUP" not in str(e):
                 raise
 
-        messages = r.xreadgroup(HTTP_GROUP, worker_id, {JOB_STREAM: ">"}, count=1, block=1000)
+        messages = r.xreadgroup(group, worker_id, {stream: ">"}, count=1, block=1000)
         if not messages:
             return {"status": "none"}
 
@@ -165,14 +175,14 @@ async def get_batch(worker_id: str, signature: str):
 
         if not job_id:
             if msg_id:
-                r.xack(JOB_STREAM, HTTP_GROUP, msg_id)
+                r.xack(stream, group, msg_id)
             return {"status": "none"}
 
         batch = r.hgetall(f"job:{job_id}")
         batch_id = batch.get("batch_id", job_id)
         batch["batch_id"] = batch_id
         batch["job_id"] = job_id
-        r.xack(JOB_STREAM, HTTP_GROUP, msg_id)
+        r.xack(stream, group, msg_id)
         r.hset(
             f"worker:{worker_id}",
             mapping={
