@@ -32,6 +32,10 @@ interrupted so the server can requeue work.  Wordlists are cached in VRAM on
 low-bandwidth GPUs and can also be pulled from the server's Redis cache so
 workers start faster.
 
+On startup the worker benchmarks each GPU and submits the results to the
+server's `/submit_benchmark` endpoint. The orchestrator aggregates these
+metrics so batch ranges can scale with device performance.
+
 ## Performance tuning
 
 Two optional environment variables allow you to tweak how `hashcat` runs:

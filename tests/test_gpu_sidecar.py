@@ -396,3 +396,21 @@ def test_run_darkling_benchmark(monkeypatch):
     rates = gpu_sidecar.run_darkling_benchmark(gpu)
     assert rates == {"MD5": 10.0, "SHA1": 20.0, "NTLM": 0.0}
 
+
+def test_parse_benchmark_units(monkeypatch):
+    outputs = {
+        0: "Speed.#1.........: 1.5 GH/s (42.00ms)\n",
+        100: "Speed.#1.........: 500 kH/s (42.00ms)\n",
+        1000: "Speed.#1.........: 2.5 TH/s (42.00ms)\n",
+    }
+
+    def fake_check_output(cmd, stderr=None, text=None):
+        mode = int(cmd[cmd.index("-m") + 1])
+        return outputs[mode]
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "check_output", fake_check_output)
+
+    gpu = {"uuid": "gpu", "index": 0}
+    rates = gpu_sidecar.run_hashcat_benchmark(gpu)
+    assert rates == {"MD5": 1.5e9, "SHA1": 500e3, "NTLM": 2.5e12}
+
