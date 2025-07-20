@@ -9,7 +9,7 @@ from pathlib import Path
 import glob
 import socket
 
-from .gpu_sidecar import GPUSidecar
+from .gpu_sidecar import GPUSidecar, run_hashcat_benchmark
 from .bios_flasher import GPUFlashManager
 from .crypto_utils import load_public_key_pem, sign_message
 from ascii_logo import print_logo
@@ -220,6 +220,33 @@ def main():
     worker_id = os.getenv("WORKER_ID", str(uuid.uuid4()))
     gpus = detect_gpus()
     name = register_worker(worker_id, gpus)
+    # benchmark GPUs once before starting normal job processing
+    low_bw_engine = "hashcat"
+    try:
+        resp = requests.get(f"{SERVER_URL}/server_status", timeout=5)
+        low_bw_engine = resp.json().get("low_bw_engine", "hashcat")
+    except Exception:
+        pass
+
+    for gpu in gpus:
+        engine = "hashcat"
+        if gpu.get("pci_link_width", gpu.get("pci_width", 16)) <= 4 and low_bw_engine == "darkling":
+            engine = "darkling-engine"
+        rates = run_hashcat_benchmark(gpu, engine)
+        payload = {
+            "worker_id": name,
+            "gpu_uuid": gpu.get("uuid"),
+            "engine": engine,
+            "hashrates": rates,
+            "signature": sign_message(name),
+        }
+        try:
+            requests.post(
+                f"{SERVER_URL}/submit_benchmark", json=payload, timeout=10
+            )
+        except Exception as e:
+            print(f"Failed to submit benchmark for {gpu.get('uuid')}: {e}")
+
     threads = [GPUSidecar(name, gpu, SERVER_URL) for gpu in gpus]
     for t in threads:
         t.start()

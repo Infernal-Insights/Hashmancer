@@ -362,3 +362,21 @@ def test_sidecar_run_executes_job(monkeypatch):
     assert executed["batch"]["batch_id"] == "job6"
     assert cleaned == [True]
 
+
+def test_run_hashcat_benchmark(monkeypatch):
+    outputs = {
+        0: "Speed.#1.........: 10.0 MH/s (42.00ms)\n",
+        100: "Speed.#1.........: 20.0 MH/s (42.00ms)\n",
+        1000: "Speed.#1.........: 30.0 MH/s (42.00ms)\n",
+    }
+
+    def fake_check_output(cmd, stderr=None, text=None):
+        mode = int(cmd[cmd.index("-m") + 1])
+        return outputs[mode]
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "check_output", fake_check_output)
+
+    gpu = {"uuid": "gpu", "index": 0}
+    rates = gpu_sidecar.run_hashcat_benchmark(gpu)
+    assert rates == {"MD5": 10.0e6, "SHA1": 20.0e6, "NTLM": 30.0e6}
+
