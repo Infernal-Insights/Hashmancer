@@ -53,3 +53,30 @@ Each backend follows the same workflow of `initialize`, `load_data`,
 `launch_crack_batch` and result polling. Only the CUDA version contains a
 working kernel at the moment; the other backends provide build stubs for future
 expansion.
+
+## Predefined Charsets
+
+Several common alphabets and symbol sets are bundled in `charsets.py`.
+Import the desired constants when preparing mask attacks:
+
+```python
+from darkling.charsets import (
+    GERMAN_UPPER,
+    GERMAN_LOWER,
+    EMOJI,
+    CHINESE,
+    JAPANESE,
+)
+
+mask_charsets = {
+    '?1': GERMAN_UPPER,
+    '?2': GERMAN_LOWER,
+    '?3': EMOJI,
+    '?4': CHINESE,
+    '?5': JAPANESE,
+}
+```
+
+`charsets.py` exposes uppercase and lowercase alphabets for the top 20
+languages along with `COMMON_SYMBOLS`, `EMOJI`, and scripts such as
+`CHINESE` and `JAPANESE` for convenience.
