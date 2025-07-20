@@ -4,6 +4,7 @@ import threading
 import hashlib
 import subprocess
 import requests
+import logging
 
 from .crypto_utils import sign_message
 
@@ -99,6 +100,36 @@ def apply_flash_settings(gpu: dict, settings: dict) -> bool:
     index = str(gpu.get("index", 0))
     vendor = settings.get("vendor", "nvidia").lower()
     bios = settings.get("bios_rom") or settings.get("rom_path")
+    core_offset = settings.get("core_offset")
+    if core_offset is not None:
+        try:
+            co = int(core_offset)
+        except (TypeError, ValueError):
+            logging.warning("Invalid core_offset value: %s", core_offset)
+            return False
+        if co < -200 or co > 200:
+            logging.warning("Invalid core_offset value: %s", core_offset)
+            return False
+    mem_offset = settings.get("mem_offset")
+    if mem_offset is not None:
+        try:
+            mo = int(mem_offset)
+        except (TypeError, ValueError):
+            logging.warning("Invalid mem_offset value: %s", mem_offset)
+            return False
+        if mo < -200 or mo > 200:
+            logging.warning("Invalid mem_offset value: %s", mem_offset)
+            return False
+    voltage = settings.get("voltage")
+    if voltage is not None:
+        try:
+            vol = int(voltage)
+        except (TypeError, ValueError):
+            logging.warning("Invalid voltage value: %s", voltage)
+            return False
+        if vol < 700 or vol > 1100:
+            logging.warning("Invalid voltage value: %s", voltage)
+            return False
     if bios:
         ok = flash_rom(int(index), vendor, bios)
         if not ok:

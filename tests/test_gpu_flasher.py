@@ -1,5 +1,6 @@
 import sys
 import os
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -30,3 +31,23 @@ def test_process_task(monkeypatch):
 
     assert sent["gpu_uuid"] == "u1"
     assert sent["success"]
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("core_offset", 300),
+        ("mem_offset", -300),
+        ("voltage", 1200),
+    ],
+)
+def test_apply_flash_settings_invalid(monkeypatch, key, value):
+    monkeypatch.setattr(bios_flasher.subprocess, "check_call", lambda *a, **k: None)
+    monkeypatch.setattr(bios_flasher, "flash_rom", lambda *a, **k: True)
+    captured = {}
+    monkeypatch.setattr(bios_flasher.logging, "warning", lambda msg, *a: captured.setdefault("msg", msg))
+
+    settings = {"vendor": "nvidia", key: value}
+    ok = bios_flasher.apply_flash_settings({"index": 0}, settings)
+    assert not ok
+    assert key in captured.get("msg", "")
