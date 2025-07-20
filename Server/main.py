@@ -431,7 +431,10 @@ async def get_hashrate(worker: str | None = None):
 async def upload_wordlist(file: UploadFile = File(...)):
     """Upload a new dictionary file to WORDLISTS_DIR."""
     try:
-        dest = WORDLISTS_DIR / file.filename
+        filename = Path(file.filename).name
+        dest = (WORDLISTS_DIR / filename).resolve()
+        if dest.parent != WORDLISTS_DIR.resolve():
+            raise HTTPException(status_code=400, detail="invalid filename")
         with dest.open("wb") as f:
             while True:
                 chunk = await file.read(4096)
@@ -449,7 +452,10 @@ async def upload_restore(file: UploadFile = File(...)):
     """Receive a hashcat restore file and store it in RESTORE_DIR."""
     try:
         RESTORE_DIR.mkdir(parents=True, exist_ok=True)
-        dest = RESTORE_DIR / file.filename
+        filename = Path(file.filename).name
+        dest = (RESTORE_DIR / filename).resolve()
+        if dest.parent != RESTORE_DIR.resolve():
+            raise HTTPException(status_code=400, detail="invalid filename")
         with dest.open("wb") as f:
             while True:
                 chunk = await file.read(4096)
@@ -481,7 +487,10 @@ async def delete_wordlist(name: str):
 async def create_mask(name: str, content: str):
     """Create a mask file with provided content."""
     try:
-        dest = MASKS_DIR / name
+        filename = Path(name).name
+        dest = (MASKS_DIR / filename).resolve()
+        if dest.parent != MASKS_DIR.resolve():
+            raise HTTPException(status_code=400, detail="invalid filename")
         dest.write_text(content)
         return {"status": "ok"}
     except Exception as e:
@@ -493,7 +502,10 @@ async def create_mask(name: str, content: str):
 async def delete_mask(name: str):
     """Delete a mask file."""
     try:
-        path = MASKS_DIR / name
+        filename = Path(name).name
+        path = (MASKS_DIR / filename).resolve()
+        if path.parent != MASKS_DIR.resolve():
+            raise HTTPException(status_code=400, detail="invalid filename")
         if path.is_file():
             path.unlink()
             return {"status": "ok"}
