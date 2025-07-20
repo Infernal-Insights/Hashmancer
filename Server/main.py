@@ -169,12 +169,14 @@ async def get_batch(worker_id: str, signature: str):
             return {"status": "none"}
 
         batch = r.hgetall(f"job:{job_id}")
+        batch_id = batch.get("batch_id", job_id)
+        batch["batch_id"] = batch_id
         batch["job_id"] = job_id
         r.xack(JOB_STREAM, HTTP_GROUP, msg_id)
         r.hset(
             f"worker:{worker_id}",
             mapping={
-                "last_batch": job_id,
+                "last_batch": batch_id,
                 "last_seen": int(datetime.utcnow().timestamp()),
                 "status": "processing",
             },

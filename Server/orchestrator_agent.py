@@ -130,6 +130,7 @@ def dispatch_batches():
             r.hset(
                 f"job:{task_id}",
                 mapping={
+                    "batch_id": batch_id,
                     "hashes": batch.get("hashes", "[]"),
                     "mask": batch.get("mask", ""),
                     "wordlist": batch.get("wordlist", ""),
