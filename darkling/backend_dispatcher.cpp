@@ -20,12 +20,20 @@ static GpuBackend detect_backend() {
 int main(int argc, char** argv) {
     GpuBackend backend = detect_backend();
     auto cracker = create_backend(backend);
-    JobConfig cfg{20, 4};
-    cracker->initialize(cfg);
-    cracker->load_data({}, {}, {});
-    cracker->launch_crack_batch(0, 1000);
+    cracker->initialize();
+    MaskJob job{};
+    job.start_index = 0;
+    job.end_index = 1000;
+    job.mask_length = 0;
+    job.hash_length = 20;
+    job.num_hashes = 0;
+    cracker->load_job(job);
+    cracker->run_batch();
     auto res = cracker->read_results();
-    for (auto& s : res) std::cout << s << "\n";
-    std::cout << cracker->get_status() << std::endl;
+    for (auto& r : res) {
+        std::cout << r.candidate_index << "\n";
+    }
+    auto status = cracker->get_status();
+    std::cout << status.hashes_processed << std::endl;
     return 0;
 }

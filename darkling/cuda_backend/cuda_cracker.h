@@ -11,17 +11,15 @@ public:
     CudaCracker();
     ~CudaCracker() override;
 
-    bool initialize(const JobConfig &config) override;
-    bool load_data(const std::vector<std::string> &charsets,
-                   const std::vector<uint8_t> &position_map,
-                   const std::vector<uint8_t> &hashes) override;
-    bool launch_crack_batch(uint64_t start, uint64_t end) override;
-    std::vector<std::string> read_results() override;
-    std::string get_status() override;
+    bool initialize() override;
+    bool load_job(const MaskJob &job) override;
+    bool run_batch() override;
+    std::vector<CrackResult> read_results() override;
+    GpuStatus get_status() override;
 
 private:
     int device_id_ = 0;
-    JobConfig config_{};
+    MaskJob job_{};
 };
 
 } // namespace darkling
