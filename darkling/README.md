@@ -27,6 +27,13 @@ g++ darkling_host.cpp -o darkling-host -lcuda -lcudart
 It preloads the kernel data into GPU memory and invokes `launch_darkling` across
 multiple counter ranges without re-allocating buffers.
 
+The `launcher.py` script wraps the binary and selects built-in alphabets
+for convenience. Use `--lang` to map `?1`/`?2` to a specific language:
+
+```
+python launcher.py --lang German --start 0 --end 1000
+```
+
 ## Tuning
 
 When run as part of the worker each GPU receives its own darkling instance.

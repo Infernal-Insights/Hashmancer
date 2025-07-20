@@ -144,16 +144,31 @@ struct DarklingContext {
 int main(int argc, char** argv) {
     uint64_t start = 0;
     uint64_t end = 1000;
+    std::string cs_args[16];
+
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--start") == 0 && i + 1 < argc) {
             start = std::strtoull(argv[++i], nullptr, 10);
         } else if (std::strcmp(argv[i], "--end") == 0 && i + 1 < argc) {
             end = std::strtoull(argv[++i], nullptr, 10);
+        } else if (argv[i][0] == '-' && std::isdigit(argv[i][1]) &&
+                   argv[i][2] == '\0' && i + 1 < argc) {
+            int id = argv[i][1] - '1';
+            if (id >= 0 && id < 16) {
+                cs_args[id] = argv[++i];
+            }
         }
     }
+
     DarklingContext ctx;
     ctx.allocate_buffers(10);
-    std::vector<std::string> charsets = {"abc", "123"};
+
+    std::vector<std::string> charsets;
+    if (!cs_args[0].empty()) charsets.push_back(cs_args[0]);
+    else charsets.push_back("abc");
+    if (!cs_args[1].empty()) charsets.push_back(cs_args[1]);
+    else charsets.push_back("123");
+
     std::vector<uint8_t> pos_map = {0,1};
     std::vector<uint8_t> hashes(16); // placeholder
     ctx.preload(charsets, pos_map, hashes, 2, 16);
