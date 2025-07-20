@@ -18,6 +18,7 @@ import uuid
 import socket
 import asyncio
 import glob
+import sys
 from event_logger import log_error, log_info
 from pathlib import Path
 
@@ -59,6 +60,19 @@ LOW_BW_ENGINE = CONFIG.get("low_bw_engine", "hashcat")
 BROADCAST_ENABLED = bool(CONFIG.get("broadcast_enabled", True))
 BROADCAST_PORT = int(CONFIG.get("broadcast_port", 50000))
 BROADCAST_INTERVAL = int(CONFIG.get("broadcast_interval", 30))
+
+# hashes.com integration settings
+HASHES_POLL_INTERVAL = int(CONFIG.get("hashes_poll_interval", 1800))
+HASHES_ALGORITHMS = [a.lower() for a in CONFIG.get("hashes_algorithms", [])]
+
+
+def save_config():
+    """Persist the CONFIG dictionary to disk."""
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(CONFIG, f, indent=2)
+    except Exception as e:
+        log_error("server", "system", "S740", "Failed to save config", e)
 
 # baseline undervolt/flash settings per GPU model
 FLASH_PRESETS = {
@@ -177,11 +191,44 @@ async def broadcast_presence():
         await asyncio.sleep(BROADCAST_INTERVAL)
 
 
+async def fetch_and_store_jobs():
+    """Fetch jobs from hashes.com and store filtered results in Redis."""
+    try:
+        from hashescom_client import fetch_jobs
+
+        jobs = fetch_jobs()
+        for job in jobs:
+            algo = str(job.get("algorithmName", "")).lower()
+            if HASHES_ALGORITHMS and algo not in HASHES_ALGORITHMS:
+                continue
+            if job.get("currency") != "BTC":
+                continue
+            try:
+                price = float(job.get("pricePerHash", 0))
+            except (TypeError, ValueError):
+                price = 0.0
+            if price <= 0:
+                continue
+            job_id = job.get("id")
+            if job_id is not None:
+                r.hset(f"hashes_job:{job_id}", mapping=job)
+    except Exception as e:
+        log_error("server", "system", "S741", "Hashes.com fetch failed", e)
+
+
+async def poll_hashes_jobs():
+    """Background loop to periodically poll hashes.com for jobs."""
+    while True:
+        await fetch_and_store_jobs()
+        await asyncio.sleep(HASHES_POLL_INTERVAL)
+
+
 @app.on_event("startup")
 async def start_broadcast():
     print_logo()
     if BROADCAST_ENABLED:
         asyncio.create_task(broadcast_presence())
+    asyncio.create_task(poll_hashes_jobs())
 
 
 @app.post("/register_worker")
@@ -815,6 +862,52 @@ async def download_restore_file(name: str):
     except Exception as e:
         log_error("server", "system", "S734", "Failed to download restore", e)
         raise HTTPException(status_code=500, detail="download failed")
+
+
+@app.get("/hashes_jobs")
+async def list_hashes_jobs():
+    """Return jobs fetched from hashes.com."""
+    jobs = []
+    try:
+        for key in r.scan_iter("hashes_job:*"):
+            info = r.hgetall(key)
+            info["id"] = key.split(":", 1)[1]
+            jobs.append(info)
+        return jobs
+    except redis.exceptions.RedisError as e:
+        log_error("server", "system", "SRED", "Redis unavailable", e)
+        return []
+
+
+class ApiKeyRequest(BaseModel):
+    api_key: str
+
+
+@app.post("/hashes_api_key")
+async def set_hashes_api_key(req: ApiKeyRequest):
+    """Update the stored hashes.com API key."""
+    CONFIG["hashes_api_key"] = req.api_key
+    save_config()
+    os.environ["HASHES_COM_API_KEY"] = req.api_key
+    # refresh module level variable
+    import importlib
+
+    importlib.reload(sys.modules["Server.hashescom_client"])  # type: ignore
+    return {"status": "ok"}
+
+
+class AlgoRequest(BaseModel):
+    algorithms: list[str]
+
+
+@app.post("/hashes_algorithms")
+async def set_hashes_algorithms(req: AlgoRequest):
+    """Set desired algorithm filters for hashes.com jobs."""
+    CONFIG["hashes_algorithms"] = req.algorithms
+    global HASHES_ALGORITHMS
+    HASHES_ALGORITHMS = [a.lower() for a in req.algorithms]
+    save_config()
+    return {"status": "ok"}
 
 
 @app.get("/admin", response_class=HTMLResponse)

@@ -110,6 +110,18 @@ body::before {
 <tbody id="job-body"></tbody></table>
 </section>
 
+<section id="hashes-settings">
+<h2>Hashes.com Settings</h2>
+<div>API Key: <input type="password" id="hashes-key"><button onclick="saveHashesKey()">Save</button></div>
+<div>Algorithms: <input type="text" id="hashes-algos"><button onclick="saveHashesAlgos()">Save</button></div>
+</section>
+
+<section id="hashes-jobs">
+<h2>Hashes.com Jobs</h2>
+<button onclick="loadHashesJobs()">Refresh</button>
+<pre id="hashes-job-output"></pre>
+</section>
+
 <script>
 function applyMetrics(data){
   document.getElementById('workers').textContent = data.worker_count;
@@ -275,6 +287,23 @@ async function loadJobs(){
   }
 }
 
+async function saveHashesKey(){
+  const key=document.getElementById('hashes-key').value.trim();
+  await fetch('/hashes_api_key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:key})});
+}
+
+async function saveHashesAlgos(){
+  const txt=document.getElementById('hashes-algos').value.trim();
+  const algos=txt?txt.split(',').map(a=>a.trim()):[];
+  await fetch('/hashes_algorithms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({algorithms:algos})});
+}
+
+async function loadHashesJobs(){
+  const res=await fetch('/hashes_jobs');
+  const jobs=await res.json();
+  document.getElementById('hashes-job-output').textContent=JSON.stringify(jobs,null,2);
+}
+
 function tick(){
   loadDicts();
   loadMasks();
@@ -282,6 +311,7 @@ function tick(){
   loadWorkers();
   loadJobs();
   loadLogs();
+  loadHashesJobs();
 }
 
 function startWS(){
