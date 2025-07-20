@@ -47,6 +47,7 @@ sys.modules.setdefault("fastapi.middleware.cors", cors_stub)
 
 resp_stub = types.ModuleType("fastapi.responses")
 resp_stub.HTMLResponse = object
+resp_stub.FileResponse = object
 sys.modules.setdefault("fastapi.responses", resp_stub)
 
 pydantic_stub = types.ModuleType("pydantic")
@@ -93,6 +94,7 @@ class FakeRedis:
         self.store = {}
         self.stream = [("jobs", [("1-0", {"job_id": "job1"})])]
         self.acked = False
+        self.ack_args = None
         self.read_args = None
 
     def xgroup_create(self, *a, **kw):
@@ -104,12 +106,24 @@ class FakeRedis:
 
     def xack(self, *a, **kw):
         self.acked = True
+        self.ack_args = a
 
     def hgetall(self, key):
         return dict(self.store.get(key, {}))
 
-    def hset(self, key, mapping=None, **kwargs):
-        self.store.setdefault(key, {}).update(mapping or {})
+    def hset(self, key, mapping=None, *args, **kwargs):
+        if mapping is not None and not isinstance(mapping, dict):
+            field = mapping
+            value = args[0] if args else None
+            self.store.setdefault(key, {})[field] = value
+        else:
+            self.store.setdefault(key, {}).update(mapping or kwargs)
+
+    def rpush(self, *a, **kw):
+        pass
+
+    def ltrim(self, *a, **kw):
+        pass
 
 
 def test_get_batch_returns_batch_id(monkeypatch):
@@ -123,6 +137,19 @@ def test_get_batch_returns_batch_id(monkeypatch):
 
     assert resp["batch_id"] == "batch1"
     assert fake.store["worker:worker"]["last_batch"] == "batch1"
+    assert resp["msg_id"] == "1-0"
+    assert not fake.acked
     # verify correct stream was used
     assert fake.read_args[0] == main.HTTP_GROUP
     assert list(fake.read_args[1].keys())[0] == main.JOB_STREAM
+
+    payload = {
+        "worker_id": "worker",
+        "batch_id": resp["batch_id"],
+        "job_id": resp["job_id"],
+        "msg_id": resp["msg_id"],
+        "signature": "sig",
+    }
+    monkeypatch.setattr(main, "verify_signature", lambda a, b, c: True)
+    asyncio.run(main.submit_no_founds(payload))
+    assert fake.ack_args == (main.JOB_STREAM, main.HTTP_GROUP, "1-0")
