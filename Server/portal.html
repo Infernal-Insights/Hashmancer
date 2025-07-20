@@ -27,6 +27,11 @@ pre { background:#111; color:#0f0; padding:5px; overflow:auto; max-height:200px;
 <div id="updated">Updated: never</div>
 </section>
 
+<section id="founds">
+<h2>Found Hashes</h2>
+<pre id="found-output"></pre>
+</section>
+
 <section id="dicts">
 <h2>Dictionaries</h2>
 <ul id="dict-list"></ul>
@@ -61,14 +66,17 @@ pre { background:#111; color:#0f0; padding:5px; overflow:auto; max-height:200px;
 </section>
 
 <script>
-async function updateMetrics(){
-  const res = await fetch('/server_status');
-  const data = await res.json();
+function applyMetrics(data){
   document.getElementById('workers').textContent = data.worker_count;
   document.getElementById('queue').textContent = data.queue_length;
   document.getElementById('results').textContent = data.found_results;
   document.getElementById('gpu').textContent = (data.gpu_temps || []).join(',');
   document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+}
+async function updateMetrics(){
+  const res = await fetch('/server_status');
+  const data = await res.json();
+  applyMetrics(data);
 }
 
 async function loadDicts(){
@@ -185,7 +193,6 @@ async function loadJobs(){
 }
 
 function tick(){
-  updateMetrics();
   loadDicts();
   loadMasks();
   loadWorkers();
@@ -193,8 +200,24 @@ function tick(){
   loadLogs();
 }
 
-setInterval(tick,5000);
+function startWS(){
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws/portal`);
+  ws.onmessage = ev => {
+    const msg = JSON.parse(ev.data);
+    if(msg.metrics) applyMetrics(msg.metrics);
+    if(msg.founds && msg.founds.length){
+      const pre=document.getElementById('found-output');
+      pre.textContent += msg.founds.join('\n')+'\n';
+    }
+    if(msg.workers) loadWorkers();
+  };
+  ws.onclose = () => setTimeout(startWS, 1000);
+}
+
+setInterval(tick,30000);
 tick();
+startWS();
 </script>
 </body>
 </html>
