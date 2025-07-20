@@ -12,8 +12,8 @@ import redis
 from redis_utils import get_redis
 from pattern_utils import word_to_pattern, is_valid_word
 
-# pattern tokens are produced by word_to_pattern as "$U", "$l", "$d", "$s"
-TOKEN_RE = re.compile(r"\$[Ulds]")
+# pattern tokens are produced by word_to_pattern
+TOKEN_RE = re.compile(r"\$[Uldsce]")
 
 
 def update_stats(directory: Path) -> None:

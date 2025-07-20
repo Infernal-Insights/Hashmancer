@@ -1,5 +1,7 @@
 """Predefined character sets for the darkling engine."""
 
+import string
+
 # Emoji-only character set
 EMOJI = (
     "😀😁😂🤣😃😄😅😆😉😊😋😎😍😘🥰😗😙😚🙂🤗"
@@ -8,6 +10,9 @@ EMOJI = (
 
 # Fifteen most common special characters
 COMMON_SYMBOLS = "!@#$%^&*()-=+[]"
+
+# All printable ASCII symbols
+ALL_SYMBOLS = string.punctuation
 
 # Digits 0-9
 DIGITS = "0123456789"
