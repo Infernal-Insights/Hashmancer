@@ -222,3 +222,35 @@ def test_power_limit_intel(monkeypatch):
     assert cmds["cmd"][0] == "intel_gpu_frequency"
     assert "140" in cmds["cmd"]
 
+
+def test_sidecar_run_executes_job(monkeypatch):
+    class DummyResp:
+        def __init__(self, data):
+            self._data = data
+
+        def json(self):
+            return self._data
+
+    # First call for server_status, second for get_batch
+    def fake_get(url, params=None, timeout=None):
+        if "server_status" in url:
+            return DummyResp({"low_bw_engine": "hashcat"})
+        return DummyResp({"batch_id": "job6", "hashes": "[]", "mask": "", "attack_mode": "mask"})
+
+    monkeypatch.setattr(gpu_sidecar.requests, "get", fake_get)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda x: "sig")
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    executed = {}
+
+    def fake_execute(self, batch):
+        executed["batch"] = batch
+        self.running = False
+
+    monkeypatch.setattr(gpu_sidecar.GPUSidecar, "execute_job", fake_execute)
+
+    sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 0}, "http://sv")
+    sidecar.run()
+
+    assert executed["batch"]["batch_id"] == "job6"
+
