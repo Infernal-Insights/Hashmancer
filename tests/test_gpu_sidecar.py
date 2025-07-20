@@ -189,6 +189,44 @@ def test_power_limit_rocm(monkeypatch):
     assert "130" in cmds["cmd"]
 
 
+def test_power_overdrive_rocm(monkeypatch):
+    sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 1}, "http://sv")
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    cmds = {}
+    call_order = []
+
+    def fake_check_call(cmd, stdout=None, stderr=None):
+        call_order.append(cmd[0])
+        if cmd[0] == "nvidia-smi":
+            raise FileNotFoundError()
+        cmds["cmd"] = cmd
+
+    def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
+        return DummyProc(["{}"], "/tmp/job4b.out")
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda x: "sig")
+
+    batch = {
+        "batch_id": "job4b",
+        "hashes": json.dumps(["h"]),
+        "mask": "?a",
+        "attack_mode": "mask",
+        "hash_mode": "0",
+    }
+
+    monkeypatch.setenv("GPU_POWER_LIMIT", "+10%")
+    sidecar.run_hashcat(batch)
+
+    assert cmds["cmd"][0] == "rocm-smi"
+    assert call_order == ["rocm-smi"]
+    assert "--setpoweroverdrive" in cmds["cmd"]
+    assert "+10" in cmds["cmd"]
+
+
 def test_power_limit_intel(monkeypatch):
     sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 1}, "http://sv")
     monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())

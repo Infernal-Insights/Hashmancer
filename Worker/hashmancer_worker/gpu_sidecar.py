@@ -50,17 +50,26 @@ class GPUSidecar(threading.Thread):
             return
 
         index = str(self.gpu.get("index", 0))
-        commands = [
-            ["nvidia-smi", "-i", index, "-pl", str(limit)],
-            ["rocm-smi", "-d", index, "--setpowerlimit", str(limit)],
-            [
-                "intel_gpu_frequency",
-                "--min",
-                str(limit),
-                "--max",
-                str(limit),
-            ],
-        ]
+
+        # value specified as percent for AMD GPUs
+        if isinstance(limit, str) and "%" in limit:
+            value = limit.strip().rstrip("%")
+            sign = ""
+            if value.startswith(('+', '-')):
+                sign, value = value[0], value[1:]
+            commands = [["rocm-smi", "-d", index, "--setpoweroverdrive", sign + value]]
+        else:
+            commands = [
+                ["nvidia-smi", "-i", index, "-pl", str(limit)],
+                ["rocm-smi", "-d", index, "--setpowerlimit", str(limit)],
+                [
+                    "intel_gpu_frequency",
+                    "--min",
+                    str(limit),
+                    "--max",
+                    str(limit),
+                ],
+            ]
 
         for cmd in commands:
             try:
