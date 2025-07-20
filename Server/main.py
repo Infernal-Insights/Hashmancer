@@ -20,6 +20,7 @@ import asyncio
 import glob
 import sys
 import redis_manager
+import orchestrator_agent
 from event_logger import log_error, log_info
 from pathlib import Path
 
@@ -272,6 +273,18 @@ async def process_hashes_jobs():
         await asyncio.sleep(30)
 
 
+async def dispatch_loop():
+    """Periodically dispatch queued batches to workers."""
+    while True:
+        try:
+            orchestrator_agent.dispatch_batches()
+        except redis.exceptions.RedisError as e:
+            log_error("server", "system", "SRED", "Redis unavailable", e)
+        except Exception as e:
+            log_error("server", "system", "S743", "Dispatch loop failed", e)
+        await asyncio.sleep(5)
+
+
 @app.on_event("startup")
 async def start_broadcast():
     print_logo()
@@ -279,6 +292,7 @@ async def start_broadcast():
         asyncio.create_task(broadcast_presence())
     asyncio.create_task(poll_hashes_jobs())
     asyncio.create_task(process_hashes_jobs())
+    asyncio.create_task(dispatch_loop())
 
 
 @app.post("/register_worker")
