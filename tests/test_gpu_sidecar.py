@@ -119,6 +119,36 @@ def test_darkling_engine_selected(monkeypatch):
     assert captured["cmd"][0] == "darkling-engine"
 
 
+def test_custom_mask_charsets(monkeypatch):
+    sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 0}, "http://sv")
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    captured = {}
+
+    def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
+        captured["cmd"] = cmd
+        return DummyProc(["{}"], "/tmp/job7.out")
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda x: "sig")
+
+    batch = {
+        "batch_id": "job7",
+        "hashes": json.dumps(["h"]),
+        "mask": "?1?2?3",
+        "attack_mode": "mask",
+        "hash_mode": "0",
+        "mask_charsets": json.dumps({"?1": "ABC", "?2": "def", "?3": "123"}),
+    }
+
+    sidecar.run_darkling_engine(batch)
+
+    assert "-1" in captured["cmd"] and "ABC" in captured["cmd"]
+    assert "-2" in captured["cmd"] and "def" in captured["cmd"]
+    assert "-3" in captured["cmd"] and "123" in captured["cmd"]
+
+
 def test_power_limit_nvidia(monkeypatch):
     sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 1}, "http://sv")
     monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())

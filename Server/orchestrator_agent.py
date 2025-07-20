@@ -9,6 +9,9 @@ import gzip
 import hashlib
 from redis_utils import get_redis
 from event_logger import log_error
+from pattern_stats import generate_mask, TOKEN_RE
+from pattern_utils import is_valid_word
+from darkling import charsets
 
 JOB_STREAM = os.getenv("JOB_STREAM", "jobs")
 HTTP_GROUP = os.getenv("HTTP_GROUP", "http-workers")
@@ -16,6 +19,19 @@ LOW_BW_JOB_STREAM = os.getenv("LOW_BW_JOB_STREAM", "darkling-jobs")
 LOW_BW_GROUP = os.getenv("LOW_BW_GROUP", "darkling-workers")
 
 r = get_redis()
+
+# Mapping between pattern tokens produced by pattern_stats and mask charset
+# identifiers used by the darkling engine.
+TOKEN_TO_ID = {"$U": "?1", "$l": "?2", "$d": "?3", "$s": "?4"}
+
+# Charsets referenced by those identifiers. These are serialized into the job
+# so low-bandwidth workers can load the correct lookup tables.
+ID_TO_CHARSET = {
+    "?1": charsets.ENGLISH_UPPER,
+    "?2": charsets.ENGLISH_LOWER,
+    "?3": "0123456789",
+    "?4": charsets.COMMON_SYMBOLS,
+}
 
 
 def worker_counts():
@@ -172,11 +188,33 @@ def dispatch_batches():
                 # transform into a basic mask attack for darkling workers
                 d_id = str(uuid.uuid4())
                 transformed = job_data.copy()
+
+                mask_length = 8
+                if batch.get("wordlist"):
+                    try:
+                        lengths = []
+                        with open(batch["wordlist"], "r", encoding="utf-8", errors="ignore") as f:
+                            for i, line in enumerate(f):
+                                if i >= 100:
+                                    break
+                                word = line.strip()
+                                if is_valid_word(word):
+                                    lengths.append(len(word))
+                        if lengths:
+                            mask_length = round(sum(lengths) / len(lengths))
+                    except Exception:
+                        pass
+
+                pattern = generate_mask(mask_length)
+                tokens = TOKEN_RE.findall(pattern)
+                mask = "".join(TOKEN_TO_ID.get(t, "?1") for t in tokens)
+
                 transformed.update({
-                    "mask": "?a" * 8,
+                    "mask": mask,
                     "wordlist": "",
                     "wordlist_key": "",
                     "attack_mode": "mask",
+                    "mask_charsets": json.dumps(ID_TO_CHARSET),
                 })
                 r.hset(f"job:{d_id}", mapping=transformed)
                 r.expire(f"job:{d_id}", 3600)
