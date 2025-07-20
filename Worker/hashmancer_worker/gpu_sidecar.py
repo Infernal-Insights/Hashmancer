@@ -18,6 +18,24 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 
+class DarklingContext:
+    """Per-GPU context keeping the darkling engine state."""
+
+    def __init__(self):
+        self.charsets_json: str | None = None
+
+    def load(self, charsets: dict):
+        """Record the loaded charsets. In a real setup this would preload them
+        on the GPU."""
+        self.charsets_json = json.dumps(charsets, sort_keys=True)
+
+    def matches(self, charsets: dict) -> bool:
+        return self.charsets_json == json.dumps(charsets, sort_keys=True)
+
+    def cleanup(self):
+        self.charsets_json = None
+
+
 class GPUSidecar(threading.Thread):
     """Background thread that fetches and executes jobs via the HTTP API."""
 
@@ -37,6 +55,11 @@ class GPUSidecar(threading.Thread):
             self.low_bw_engine = data.get("low_bw_engine", "hashcat")
         except Exception:
             pass
+        self.darkling_ctx = DarklingContext()
+
+    def stop(self):
+        """Signal the sidecar thread to terminate."""
+        self.running = False
 
     def _apply_power_limit(self, engine: str):
         """Set GPU power limit if configured via environment variables."""
@@ -86,23 +109,26 @@ class GPUSidecar(threading.Thread):
                 return
 
     def run(self):
-        while self.running:
-            try:
-                params = {
-                    "worker_id": self.worker_id,
-                    "signature": sign_message(self.worker_id),
-                }
-                resp = requests.get(
-                    f"{self.server_url}/get_batch", params=params, timeout=10
-                )
-                data = resp.json()
-                if data.get("status") == "none" or "batch_id" not in data:
+        try:
+            while self.running:
+                try:
+                    params = {
+                        "worker_id": self.worker_id,
+                        "signature": sign_message(self.worker_id),
+                    }
+                    resp = requests.get(
+                        f"{self.server_url}/get_batch", params=params, timeout=10
+                    )
+                    data = resp.json()
+                    if data.get("status") == "none" or "batch_id" not in data:
+                        time.sleep(5)
+                        continue
+                    self.execute_job(data)
+                except Exception as e:
+                    print(f"Sidecar error on {self.gpu['uuid']}: {e}")
                     time.sleep(5)
-                    continue
-                self.execute_job(data)
-            except Exception as e:
-                print(f"Sidecar error on {self.gpu['uuid']}: {e}")
-                time.sleep(5)
+        finally:
+            self.darkling_ctx.cleanup()
 
     def execute_job(self, batch: dict):
         """Run hashcat for the provided batch and submit the results."""
@@ -161,7 +187,12 @@ class GPUSidecar(threading.Thread):
         self.current_job = None
 
     def _run_engine(
-        self, engine: str, batch: dict, range_start: int | None = None, range_end: int | None = None
+        self,
+        engine: str,
+        batch: dict,
+        range_start: int | None = None,
+        range_end: int | None = None,
+        skip_charsets: bool = False,
     ) -> list[str]:
         """Execute the given cracking engine according to the batch parameters."""
         batch_id = batch["batch_id"]
@@ -192,7 +223,7 @@ class GPUSidecar(threading.Thread):
                 wordlist_path = str(tmp)
 
         mask_charsets = batch.get("mask_charsets")
-        if mask_charsets:
+        if mask_charsets and not skip_charsets:
             try:
                 cs_map = json.loads(mask_charsets)
             except Exception:
@@ -311,10 +342,23 @@ class GPUSidecar(threading.Thread):
         installed separately. It accepts the same arguments as hashcat so the
         batch formatting is identical.
         """
+        mask_charsets = batch.get("mask_charsets")
+        cs_map = {}
+        if mask_charsets:
+            try:
+                cs_map = json.loads(mask_charsets)
+            except Exception:
+                cs_map = {}
+
+        reload_cs = not self.darkling_ctx.matches(cs_map)
+        if reload_cs:
+            self.darkling_ctx.load(cs_map)
+
         return self._run_engine(
             "darkling-engine",
             batch,
             range_start=batch.get("start"),
             range_end=batch.get("end"),
+            skip_charsets=not reload_cs,
         )
 
