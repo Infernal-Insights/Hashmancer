@@ -8,7 +8,15 @@ per-GPU hashrates and progress back to the server. Wordlists can be served
 from a Redis cache for faster startup on remote nodes.
 GPU specs include a `pci_link_width` field for bandwidth-aware scheduling. The worker automatically detects NVIDIA, AMD, and Intel GPUs.
 Each worker record now stores the configured engine for low-bandwidth GPUs so the
-orchestrator knows whether to dispatch the special `darkling` engine.
+orchestrator knows whether to dispatch the special `darkling` engine. When
+batches are prefetched the orchestrator checks all workers and routes jobs into
+separate Redis streams:
+
+- `jobs` – normal queue for hashcat-based workers
+- `darkling-jobs` – mask tasks for workers running the `darkling` engine
+
+Dictionary or hybrid batches are duplicated for `darkling-jobs` as simple mask
+attacks so low-bandwidth nodes can contribute work.
 
 
 * `Server/` – FastAPI server and orchestration tools
