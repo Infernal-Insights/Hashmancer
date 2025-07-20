@@ -19,6 +19,7 @@ import socket
 import asyncio
 import glob
 import sys
+import redis_manager
 from event_logger import log_error, log_info
 from pathlib import Path
 
@@ -243,12 +244,41 @@ async def poll_hashes_jobs():
         await asyncio.sleep(HASHES_POLL_INTERVAL)
 
 
+async def process_hashes_jobs():
+    """Queue batches for jobs fetched from hashes.com."""
+    while True:
+        try:
+            for key in r.scan_iter("hashes_job:*"):
+                job = r.hgetall(key)
+                if job.get("status") == "processed":
+                    continue
+
+                try:
+                    hashes = json.loads(job.get("hashes", "[]"))
+                except Exception:
+                    hashes = []
+
+                mask = job.get("mask", "")
+                wordlist = job.get("wordlist", "")
+
+                batch_id = redis_manager.store_batch(hashes, mask=mask, wordlist=wordlist)
+                if batch_id:
+                    r.hset(key, mapping={"status": "processed", "batch_id": batch_id})
+        except redis.exceptions.RedisError as e:
+            log_error("server", "system", "SRED", "Redis unavailable", e)
+        except Exception as e:
+            log_error("server", "system", "S742", "Failed to process hashes jobs", e)
+
+        await asyncio.sleep(30)
+
+
 @app.on_event("startup")
 async def start_broadcast():
     print_logo()
     if BROADCAST_ENABLED:
         asyncio.create_task(broadcast_presence())
     asyncio.create_task(poll_hashes_jobs())
+    asyncio.create_task(process_hashes_jobs())
 
 
 @app.post("/register_worker")
