@@ -97,8 +97,9 @@ class GPUSidecar(threading.Thread):
 
     def execute_job(self, batch: dict):
         """Run hashcat for the provided batch and submit the results."""
-        job_id = batch["batch_id"]
-        self.current_job = job_id
+        batch_id = batch["batch_id"]
+        job_id = batch.get("job_id", batch_id)
+        self.current_job = batch_id
         self.hashrate = 0.0
         self.progress = 0.0
 
@@ -116,7 +117,7 @@ class GPUSidecar(threading.Thread):
                 except Exception:
                     pass
 
-        print(f"GPU {self.gpu['uuid']} processing {job_id}")
+        print(f"GPU {self.gpu['uuid']} processing {batch_id}")
         if (
             self.gpu.get("pci_link_width", self.gpu.get("pci_width", 16)) <= 4
             and self.low_bw_engine == "darkling"
@@ -128,7 +129,7 @@ class GPUSidecar(threading.Thread):
         if founds:
             payload = {
                 "worker_id": self.worker_id,
-                "batch_id": job_id,
+                "batch_id": batch_id,
                 "founds": founds,
                 "signature": sign_message(json.dumps(founds)),
             }
@@ -136,8 +137,8 @@ class GPUSidecar(threading.Thread):
         else:
             payload = {
                 "worker_id": self.worker_id,
-                "batch_id": job_id,
-                "signature": sign_message(job_id),
+                "batch_id": batch_id,
+                "signature": sign_message(batch_id),
             }
             endpoint = "submit_no_founds"
 
@@ -152,13 +153,13 @@ class GPUSidecar(threading.Thread):
 
     def _run_engine(self, engine: str, batch: dict) -> list[str]:
         """Execute the given cracking engine according to the batch parameters."""
-        job_id = batch["batch_id"]
+        batch_id = batch["batch_id"]
         hashes = json.loads(batch.get("hashes", "[]"))
-        hash_file = Path(f"/tmp/{job_id}.hashes")
+        hash_file = Path(f"/tmp/{batch_id}.hashes")
         hash_file.write_text("\n".join(hashes))
 
-        outfile = Path(f"/tmp/{job_id}.out")
-        restore = Path(f"/tmp/{job_id}.restore")
+        outfile = Path(f"/tmp/{batch_id}.out")
+        restore = Path(f"/tmp/{batch_id}.restore")
 
         attack = batch.get("attack_mode", "mask")
         cmd = [engine, "-m", batch.get("hash_mode", "0"), str(hash_file)]
@@ -173,7 +174,7 @@ class GPUSidecar(threading.Thread):
         if not wordlist_path and batch.get("wordlist_key"):
             data_b64 = r.get(f"wlcache:{batch['wordlist_key']}")
             if data_b64:
-                tmp = Path(f"/tmp/{job_id}.wl")
+                tmp = Path(f"/tmp/{batch_id}.wl")
                 tmp.write_bytes(
                     gzip.decompress(base64.b64decode(data_b64.encode()))
                 )
