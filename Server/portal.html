@@ -14,10 +14,42 @@ th,td { border:1px solid #0f0; padding:4px; text-align:center; }
 input, textarea, select { background:#111; color:#0f0; border:1px solid #0f0; }
 button { margin-top:4px; }
 pre { background:#111; color:#0f0; padding:5px; overflow:auto; max-height:200px; }
+#logo { border:none; background:none; margin:0; font-family:monospace; white-space:pre; text-align:center; }
+
+@keyframes runes {
+  from { transform: translate(-10%, -10%) rotate(0deg); }
+  to   { transform: translate(10%, 10%) rotate(360deg); }
+}
+body::before {
+  content: "ᚠᚢᚦᚩᚱᚴ";
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'UnifrakturCook', cursive;
+  font-size: 8rem;
+  color: #0f0;
+  opacity: 0.03;
+  pointer-events: none;
+  animation: runes 40s linear infinite;
+}
 </style>
 </head>
 <body>
 <h1>Hashmancer Portal</h1>
+<pre id="logo">██╗  ██╗ █████╗ ███████╗██╗  ██╗███╗   ███╗ █████╗ ███╗   ██╗ ██████╗███████╗███
+███╗
+██║  ██║██╔══██╗██╔════╝██║  ██║████╗ ████║██╔══██╗████╗  ██║██╔════╝██╔════╝██╔
+══██╗
+███████║███████║███████╗███████║██╔████╔██║███████║██╔██╗ ██║██║     █████╗  ███
+███╔╝
+██╔══██║██╔══██║╚════██║██╔══██║██║╚██╔╝██║██╔══██║██║╚██╗██║██║     ██╔══╝  ██╔
+══██╗
+██║  ██║██║  ██║███████║██║  ██║██║ ╚═╝ ██║██║  ██║██║ ╚████║╚██████╗███████╗██║
+  ██║
+╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝╚══════╝╚═╝
+  ╚═╝</pre>
 
 <section id="metrics">
 <div>Workers: <span id="workers">0</span></div>
