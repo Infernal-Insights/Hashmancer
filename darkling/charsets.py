@@ -9,10 +9,19 @@ EMOJI = (
 # Fifteen most common special characters
 COMMON_SYMBOLS = "!@#$%^&*()-=+[]"
 
+# Digits 0-9
+DIGITS = "0123456789"
+
 # Uppercase and lowercase alphabets for major languages
 
 ENGLISH_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 ENGLISH_LOWER = "abcdefghijklmnopqrstuvwxyz"
+
+# ASCII helper sets
+ASCII_UPPER = ENGLISH_UPPER
+ASCII_LOWER = ENGLISH_LOWER
+ASCII_UPPER_LOWER = ENGLISH_UPPER + ENGLISH_LOWER
+ASCII_ALPHANUMERIC = ASCII_UPPER_LOWER + DIGITS
 
 SPANISH_UPPER = "AÁBCDEÉFGHIÍJKLMNÑOÓPQRSTUÚÜVWXYZ"
 SPANISH_LOWER = "aábcdeéfghiíjklmnñoópqrstuúüvwxyz"

@@ -17,6 +17,18 @@ def test_emoji_only_symbols():
     assert len(charsets.EMOJI) == 40
 
 
+def test_digits_constant():
+    assert charsets.DIGITS == "0123456789"
+    assert len(charsets.DIGITS) == 10
+
+
+def test_ascii_upper_lower_constant():
+    assert (
+        charsets.ASCII_UPPER_LOWER
+        == charsets.ENGLISH_UPPER + charsets.ENGLISH_LOWER
+    )
+
+
 def test_german_umlauts():
     assert "Ä" in charsets.GERMAN_UPPER
     assert "ß" in charsets.GERMAN_LOWER
