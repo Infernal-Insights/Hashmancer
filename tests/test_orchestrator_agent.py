@@ -89,6 +89,7 @@ def test_darkling_transformed_mask(monkeypatch, tmp_path):
     monkeypatch.setattr(orchestrator_agent, "any_darkling_workers", lambda: True)
     monkeypatch.setattr(orchestrator_agent, "cache_wordlist", lambda p: "key")
     monkeypatch.setattr(orchestrator_agent, "generate_mask", lambda length: "$U$l$d$s$c$e")
+    monkeypatch.setattr(orchestrator_agent, "compute_batch_range", lambda r, k: (0, 500))
 
     orchestrator_agent.dispatch_batches()
 
@@ -101,5 +102,5 @@ def test_darkling_transformed_mask(monkeypatch, tmp_path):
     cs = json.loads(job["mask_charsets"])
     assert all(k in cs for k in ["?1", "?2", "?3", "?4", "?5", "?6"])
     assert job["start"] == 0
-    assert job["end"] == 1000
+    assert job["end"] == 500
 

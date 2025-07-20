@@ -7,6 +7,7 @@ import redis
 import base64
 import gzip
 import hashlib
+import re
 from redis_utils import get_redis
 from event_logger import log_error
 from pattern_stats import generate_mask, TOKEN_RE
@@ -42,6 +43,8 @@ ID_TO_CHARSET = {
     "?6": charsets.EMOJI,
 }
 
+
+MASK_ID_RE = re.compile(r"\?[1-6]")
 
 def build_mask_charsets(lang: str | None = None) -> dict[str, str]:
     """Return a mask charset map for the given language."""
@@ -155,6 +158,55 @@ def pending_count(stream: str = JOB_STREAM, group: str = HTTP_GROUP) -> int:
         return 0
 
 
+def average_benchmark_rate() -> float:
+    """Return the average MD5 benchmark rate across GPUs."""
+    rates = []
+    try:
+        for key in r.scan_iter("benchmark:*"):
+            if key.startswith("benchmark_total:"):
+                continue
+            info = r.hgetall(key)
+            try:
+                rate = float(info.get("MD5") or 0)
+            except (TypeError, ValueError):
+                rate = 0.0
+            if rate > 0:
+                rates.append(rate)
+    except redis.exceptions.RedisError as e:
+        log_error("orchestrator", "system", "SRED", "Redis unavailable", e)
+        return 0.0
+    if not rates:
+        return 0.0
+    return sum(rates) / len(rates)
+
+
+def estimate_keyspace(mask: str, charset_map: dict[str, str]) -> int:
+    """Estimate keyspace for a mask given its charsets."""
+    tokens = MASK_ID_RE.findall(mask)
+    if not tokens:
+        return 0
+    space = 1
+    for t in tokens:
+        cs = charset_map.get(t, "")
+        space *= max(len(cs), 1)
+    return space
+
+
+def compute_batch_range(gpu_rate: float, keyspace: int) -> tuple[int, int]:
+    """Return a start/end range scaled by the GPU benchmark rate."""
+    base = 1000
+    if keyspace <= 0:
+        return 0, base
+    if gpu_rate <= 0:
+        end = min(base, keyspace)
+        return 0, end
+
+    scale = max(gpu_rate / 10.0, 1.0)
+    end = int(base * scale)
+    if keyspace < end:
+        end = keyspace
+    return 0, end
+
 def dispatch_batches(lang: str = "English"):
     """Prefetch batches from batch:queue into one of the job streams."""
     try:
@@ -194,8 +246,11 @@ def dispatch_batches(lang: str = "English"):
             # route job depending on attack type
             if attack == "mask" and darkling and pending_low < backlog_target:
                 task_id = str(uuid.uuid4())
-                job_data["start"] = 0
-                job_data["end"] = 1000
+                cs_map = build_mask_charsets(lang)
+                keyspace = estimate_keyspace(job_data["mask"], cs_map)
+                rate = average_benchmark_rate()
+                start, end = compute_batch_range(rate, keyspace)
+                job_data.update({"start": start, "end": end})
                 r.hset(f"job:{task_id}", mapping=job_data)
                 r.expire(f"job:{task_id}", 3600)
                 r.xadd(LOW_BW_JOB_STREAM, {"job_id": task_id})
@@ -233,15 +288,18 @@ def dispatch_batches(lang: str = "English"):
                 tokens = TOKEN_RE.findall(pattern)
                 mask = "".join(TOKEN_TO_ID.get(t, "?1") for t in tokens)
 
+                cs_map = build_mask_charsets(lang)
                 transformed.update({
                     "mask": mask,
                     "wordlist": "",
                     "wordlist_key": "",
                     "attack_mode": "mask",
-                    "mask_charsets": json.dumps(build_mask_charsets(lang)),
-                    "start": 0,
-                    "end": 1000,
+                    "mask_charsets": json.dumps(cs_map),
                 })
+                keyspace = estimate_keyspace(mask, cs_map)
+                rate = average_benchmark_rate()
+                start, end = compute_batch_range(rate, keyspace)
+                transformed.update({"start": start, "end": end})
                 r.hset(f"job:{d_id}", mapping=transformed)
                 r.expire(f"job:{d_id}", 3600)
                 r.xadd(LOW_BW_JOB_STREAM, {"job_id": d_id})
