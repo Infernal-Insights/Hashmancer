@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import pytest
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -413,4 +414,30 @@ def test_parse_benchmark_units(monkeypatch):
     gpu = {"uuid": "gpu", "index": 0}
     rates = gpu_sidecar.run_hashcat_benchmark(gpu)
     assert rates == {"MD5": 1.5e9, "SHA1": 500e3, "NTLM": 2.5e12}
+
+
+def test_darkling_mask_length_limit(monkeypatch):
+    sidecar = gpu_sidecar.GPUSidecar("w", {"uuid": "gpu", "index": 0}, "http://sv")
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
+        return DummyProc(["{}"], "/tmp/joblen.out")
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda x: "sig")
+
+    batch = {
+        "batch_id": "joblen",
+        "hashes": json.dumps(["h"]),
+        "mask": "a" * 55,
+        "attack_mode": "mask",
+        "hash_mode": "0",
+    }
+
+    sidecar.run_darkling_engine(batch)
+
+    batch["mask"] = "a" * 56
+    with pytest.raises(ValueError):
+        sidecar.run_darkling_engine(batch)
 
