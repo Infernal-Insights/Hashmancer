@@ -25,6 +25,7 @@ Hashmancer is a high-performance, distributed hash cracking orchestration system
 - `hashescom_client.upload_founds` returns `True` when the API confirms receipt
 - Redis-based orchestrator balances batches between high- and low-bandwidth queues
 - Optional UDP broadcast so workers on the local network can auto-discover the server
+- Portal page includes an **Open Glyph** button and Glyph reports server load, backlog size, and queued batches
 
 ---
 
@@ -96,13 +97,16 @@ sudo systemctl start hashmancer-server
 
 `main.py` now includes a tiny dashboard called **Glyph** that you can view from
 any device on your network. Start the server with `uvicorn` as shown above and
-open your browser to `http://<server-ip>:8000/glyph`.
+open your browser to `http://<server-ip>:8000/glyph`. The `/portal` page also
+contains an **Open Glyph** button so you can pop the dashboard into its own tab
+for fullscreen monitoring.
 
 The page refreshes every few seconds and displays worker counts, queue length,
-found results, and GPU temperatures. Recent cracked hashes are shown in a small
-list so you can quickly verify progress. Worker statuses are now color-coded
-(`idle` in green, `maintenance` in orange, `offline` in red) for easier at-a-
-glance monitoring. The footer shows the last update time.
+found results, GPU temperatures, and additional metrics such as server load,
+backlog target size, and queued batches. Recent cracked hashes are shown in a
+small list so you can quickly verify progress. Worker statuses are now
+color-coded (`idle` in green, `maintenance` in orange, `offline` in red) for
+easier at-a-glance monitoring. The footer shows the last update time.
 
 All connected workers are listed with a drop-down to change their status
 (for example `idle`, `maintenance`, or `offline`). The layout is landscape
