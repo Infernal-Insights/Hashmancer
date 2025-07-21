@@ -18,6 +18,10 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
+# Maximum number of digests the darkling engine can accept in a single
+# launch.  This must match the constant defined in the CUDA/CL sources.
+MAX_HASHES = 2048
+
 
 class DarklingContext:
     """Per-GPU context keeping the darkling engine state."""
@@ -374,31 +378,53 @@ class GPUSidecar(threading.Thread):
         if reload_cs:
             self.darkling_ctx.load(cs_map)
 
+        hashes = json.loads(batch.get("hashes", "[]"))
+
+        hash_chunks = [
+            hashes[i : i + MAX_HASHES] for i in range(0, len(hashes), MAX_HASHES)
+        ]
+
+        results: list[str] = []
+        first = True
+
+        indices: list[int] | None = None
         if self.probabilistic_order:
             markov = statistics.load_markov()
             indices = statistics.probability_index_order(
                 batch.get("mask", ""), cs_map, markov
             )
-            results: list[str] = []
-            for idx in indices:
+
+        for chunk in hash_chunks:
+            sub = batch.copy()
+            sub["hashes"] = json.dumps(chunk)
+            skip = not reload_cs if first else True
+
+            if indices is not None:
+                for idx in indices:
+                    results.extend(
+                        self._run_engine(
+                            "darkling-engine",
+                            sub,
+                            range_start=idx,
+                            range_end=idx + 1,
+                            skip_charsets=skip,
+                        )
+                    )
+                    skip = True
+            else:
                 results.extend(
                     self._run_engine(
                         "darkling-engine",
-                        batch,
-                        range_start=idx,
-                        range_end=idx + 1,
-                        skip_charsets=not reload_cs,
+                        sub,
+                        range_start=batch.get("start"),
+                        range_end=batch.get("end"),
+                        skip_charsets=skip,
                     )
                 )
-            return results
 
-        return self._run_engine(
-            "darkling-engine",
-            batch,
-            range_start=batch.get("start"),
-            range_end=batch.get("end"),
-            skip_charsets=not reload_cs,
-        )
+            first = False
+
+        return results
 
 
 def run_hashcat_benchmark(gpu: dict, engine: str = "hashcat") -> dict[str, float]:
