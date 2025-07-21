@@ -20,6 +20,11 @@ struct DarklingContext {
     std::vector<uint8_t> pos_map;
     std::vector<uint8_t> hashes;
 
+    std::vector<std::string> prev_charsets;
+    std::vector<uint8_t> prev_hashes;
+    bool charsets_dirty = true;
+    bool hashes_dirty = true;
+
     char* h_results = nullptr;
     char* d_results = nullptr;
     int* h_count = nullptr;
@@ -29,6 +34,34 @@ struct DarklingContext {
     dim3 block{256};
 
     bool tuned = false;
+
+    void upload_device_data() {
+        cudaMemcpyToSymbol(d_pwd_len, &pwd_len, sizeof(int));
+        cudaMemcpyToSymbol(d_hash_len, &hash_len, sizeof(int));
+        cudaMemcpyToSymbol(d_num_hashes, &num_hashes, sizeof(int));
+        cudaMemcpyToSymbol(d_pos_charset, pos_map.data(), pwd_len);
+
+        if(charsets_dirty) {
+            for(int i=0;i<MAX_CUSTOM_SETS;i++) {
+                int size = i < (int)charset_sizes.size() ? charset_sizes[i] : 0;
+                cudaMemcpyToSymbol(d_charset_lens, &size, sizeof(int), i*sizeof(int));
+                if(size > 0) {
+                    const uint8_t* bp = i < (int)charset_byte_ptrs.size() ? charset_byte_ptrs[i] : nullptr;
+                    const uint8_t* lp = i < (int)charset_len_ptrs.size() ? charset_len_ptrs[i] : nullptr;
+                    cudaMemcpyToSymbol(d_charset_bytes, bp, size*MAX_UTF8_BYTES,
+                                       i*MAX_CHARSET_CHARS*MAX_UTF8_BYTES);
+                    cudaMemcpyToSymbol(d_charset_charlen, lp, size,
+                                       i*MAX_CHARSET_CHARS);
+                }
+            }
+            charsets_dirty = false;
+        }
+
+        if(hashes_dirty) {
+            cudaMemcpyToSymbol(d_hashes, hashes.data(), num_hashes * hash_len);
+            hashes_dirty = false;
+        }
+    }
 
     static void apply_power_limit(int device) {
         const char* lim = std::getenv("DARKLING_GPU_POWER_LIMIT");
@@ -57,11 +90,10 @@ struct DarklingContext {
         apply_power_limit(device);
 
         cudaEvent_t s,e; cudaEventCreate(&s); cudaEventCreate(&e);
+        upload_device_data();
         cudaMemset(d_count, 0, sizeof(int));
         cudaEventRecord(s);
-        launch_darkling(charset_byte_ptrs.data(), charset_len_ptrs.data(), charset_sizes.data(),
-                        pos_map.data(), pwd_len, hashes.data(), num_hashes, hash_len,
-                        sample_start, sample_end, d_results, max_results, d_count, grid, block);
+        launch_darkling_kernel(sample_start, sample_end, d_results, max_results, d_count, grid, block);
         cudaEventRecord(e); cudaEventSynchronize(e);
         float ms=0; cudaEventElapsedTime(&ms, s, e);
         float rate = (float)(sample_end - sample_start)/(ms/1000.0f);
@@ -85,6 +117,12 @@ struct DarklingContext {
         pwd_len = plen;
         hash_len = hlen;
         num_hashes = hsh.size() / hlen;
+
+        charsets_dirty = (prev_charsets != charsets);
+        hashes_dirty = (prev_hashes != hsh);
+        prev_charsets = charsets;
+        prev_hashes = hsh;
+
         hashes = hsh;
 
         charset_byte_ptrs.clear();
@@ -125,12 +163,11 @@ struct DarklingContext {
             uint64_t sample_end = start + std::min<uint64_t>(1000, end-start);
             autotune(start, sample_end);
         }
+        upload_device_data();
+
         cudaMemset(d_count, 0, sizeof(int));
-        launch_darkling(charset_byte_ptrs.data(), charset_len_ptrs.data(),
-                        charset_sizes.data(), pos_map.data(), pwd_len,
-                        hashes.data(), num_hashes, hash_len,
-                        start, end, d_results, max_results, d_count,
-                        grid, block);
+        launch_darkling_kernel(start, end, d_results, max_results, d_count,
+                               grid, block);
         cudaDeviceSynchronize();
         int found = *h_count;
         std::vector<std::string> results;

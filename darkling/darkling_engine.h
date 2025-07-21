@@ -32,6 +32,16 @@ void launch_darkling(const uint8_t **charset_bytes,
                      char *d_results, int max_results, int *d_count,
                      dim3 grid, dim3 block);
 
+void load_darkling_data(const uint8_t **charset_bytes,
+                        const uint8_t **charset_lens,
+                        const int *charset_sizes,
+                        const uint8_t *pos_map, int pwd_len,
+                        const uint8_t *hashes, int num_hashes, int hash_len);
+
+void launch_darkling_kernel(uint64_t start, uint64_t end,
+                            char *d_results, int max_results, int *d_count,
+                            dim3 grid, dim3 block);
+
 #ifdef __cplusplus
 }
 #endif
