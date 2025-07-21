@@ -15,6 +15,18 @@ input, textarea, select { background:#111; color:#0f0; border:1px solid #0f0; }
 button { margin-top:4px; }
 pre { background:#111; color:#0f0; padding:5px; overflow:auto; max-height:200px; }
 #logo { border:none; background:none; margin:0; font-family:monospace; white-space:pre; text-align:center; }
+#login-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.9);
+  color: #0f0;
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+#login-overlay input { background:#111; color:#0f0; border:1px solid #0f0; margin-top:4px; }
 
 @keyframes runes {
   from { transform: translate(-10%, -10%) rotate(0deg); }
@@ -38,6 +50,12 @@ body::before {
 </head>
 <body>
 <h1>Hashmancer Portal</h1>
+<div id="login-overlay">
+  <h2>Portal Login</h2>
+  <input type="password" id="passkey" placeholder="passkey">
+  <button onclick="submitPasskey()">Login</button>
+  <div id="login-error" style="color:red; margin-top:4px;"></div>
+</div>
 <pre id="logo">██╗  ██╗ █████╗ ███████╗██╗  ██╗███╗   ███╗ █████╗ ███╗   ██╗ ██████╗███████╗███
 ███╗
 ██║  ██║██╔══██╗██╔════╝██║  ██║████╗ ████║██╔══██╗████╗  ██║██╔════╝██╔════╝██╔
@@ -370,9 +388,44 @@ function startWS(){
   ws.onclose = () => setTimeout(startWS, 1000);
 }
 
-setInterval(tick,30000);
-tick();
-startWS();
+function showLogin(){
+  document.getElementById('login-overlay').style.display='flex';
+}
+
+async function submitPasskey(){
+  const key=document.getElementById('passkey').value.trim();
+  if(!key) return;
+  const res=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({passkey:key})});
+  if(res.ok){
+    const data=await res.json();
+    document.cookie=`session=${data.cookie}; path=/`;
+    location.reload();
+  }else{
+    document.getElementById('login-error').textContent='Invalid passkey';
+  }
+}
+
+const origFetch=window.fetch;
+window.fetch=async(...args)=>{
+  const res=await origFetch(...args);
+  if(res.status===401){
+    showLogin();
+    throw new Error('Unauthorized');
+  }
+  return res;
+};
+
+async function init(){
+  const res=await fetch('/server_status');
+  if(res.status===401){ showLogin(); return; }
+  const data=await res.json();
+  applyMetrics(data);
+  setInterval(tick,30000);
+  tick();
+  startWS();
+}
+
+init();
 </script>
 </body>
 </html>
