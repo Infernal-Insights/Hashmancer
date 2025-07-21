@@ -19,6 +19,8 @@ struct DarklingContext {
     std::vector<std::vector<uint8_t>> charset_lens;
     std::vector<uint8_t> pos_map;
     std::vector<uint8_t> hashes;
+    uint8_t* d_all_hashes = nullptr;
+    size_t d_all_hashes_size = 0;
 
     std::vector<std::string> prev_charsets;
     std::vector<uint8_t> prev_hashes;
@@ -35,10 +37,30 @@ struct DarklingContext {
 
     bool tuned = false;
 
-    void upload_device_data() {
+    void cleanup() {
+        if (d_all_hashes) {
+            cudaFree(d_all_hashes);
+            d_all_hashes = nullptr;
+            d_all_hashes_size = 0;
+        }
+        if (h_results) {
+            cudaFreeHost(h_results);
+            h_results = nullptr;
+            d_results = nullptr;
+        }
+        if (h_count) {
+            cudaFreeHost(h_count);
+            h_count = nullptr;
+            d_count = nullptr;
+        }
+    }
+
+    ~DarklingContext() { cleanup(); }
+
+    void upload_device_data(int start_hash, int batch_size) {
         cudaMemcpyToSymbol(d_pwd_len, &pwd_len, sizeof(int));
         cudaMemcpyToSymbol(d_hash_len, &hash_len, sizeof(int));
-        cudaMemcpyToSymbol(d_num_hashes, &num_hashes, sizeof(int));
+        cudaMemcpyToSymbol(d_num_hashes, &batch_size, sizeof(int));
         cudaMemcpyToSymbol(d_pos_charset, pos_map.data(), pwd_len);
 
         if(charsets_dirty) {
@@ -58,9 +80,13 @@ struct DarklingContext {
         }
 
         if(hashes_dirty) {
-            cudaMemcpyToSymbol(d_hashes, hashes.data(), num_hashes * hash_len);
+            cudaMemcpy(d_all_hashes, hashes.data(), d_all_hashes_size, cudaMemcpyHostToDevice);
             hashes_dirty = false;
         }
+
+        const uint8_t* slice = d_all_hashes + static_cast<size_t>(start_hash) * hash_len;
+        cudaMemcpyToSymbol(d_hashes, slice, static_cast<size_t>(batch_size) * hash_len,
+                           0, cudaMemcpyDeviceToDevice);
     }
 
     static void apply_power_limit(int device) {
@@ -90,7 +116,8 @@ struct DarklingContext {
         apply_power_limit(device);
 
         cudaEvent_t s,e; cudaEventCreate(&s); cudaEventCreate(&e);
-        upload_device_data();
+        int batch = std::min(num_hashes, MAX_HASHES);
+        upload_device_data(0, batch);
         cudaMemset(d_count, 0, sizeof(int));
         cudaEventRecord(s);
         launch_darkling_kernel(sample_start, sample_end, d_results, max_results, d_count, grid, block);
@@ -124,6 +151,15 @@ struct DarklingContext {
         prev_hashes = hsh;
 
         hashes = hsh;
+
+        size_t required = static_cast<size_t>(num_hashes) * hash_len;
+        if (d_all_hashes_size != required) {
+            if (d_all_hashes) cudaFree(d_all_hashes);
+            cudaMalloc(&d_all_hashes, required);
+            d_all_hashes_size = required;
+        }
+        cudaMemcpy(d_all_hashes, hashes.data(), required, cudaMemcpyHostToDevice);
+        hashes_dirty = false;
 
         charset_byte_ptrs.clear();
         charset_len_ptrs.clear();
@@ -163,16 +199,24 @@ struct DarklingContext {
             uint64_t sample_end = start + std::min<uint64_t>(1000, end-start);
             autotune(start, sample_end);
         }
-        upload_device_data();
-
-        cudaMemset(d_count, 0, sizeof(int));
-        launch_darkling_kernel(start, end, d_results, max_results, d_count,
-                               grid, block);
-        cudaDeviceSynchronize();
-        int found = *h_count;
         std::vector<std::string> results;
-        for (int i = 0; i < found && i < max_results; ++i) {
-            results.emplace_back(h_results + i * MAX_PWD_BYTES);
+        size_t result_off = 0;
+        int remaining = max_results;
+        for(int offset=0; offset < num_hashes && remaining > 0; offset += MAX_HASHES) {
+            int batch = std::min(num_hashes - offset, MAX_HASHES);
+            upload_device_data(offset, batch);
+            cudaMemset(d_count, 0, sizeof(int));
+            char* d_res_ptr = d_results + result_off * MAX_PWD_BYTES;
+            launch_darkling_kernel(start, end, d_res_ptr, remaining, d_count,
+                                   grid, block);
+            cudaDeviceSynchronize();
+            int found = *h_count;
+            char* h_ptr = h_results + result_off * MAX_PWD_BYTES;
+            for (int i = 0; i < found && i < remaining; ++i) {
+                results.emplace_back(h_ptr + i * MAX_PWD_BYTES);
+            }
+            remaining = max_results - static_cast<int>(results.size());
+            result_off = results.size();
         }
         return results;
     }
