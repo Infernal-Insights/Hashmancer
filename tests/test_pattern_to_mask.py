@@ -12,7 +12,8 @@ class FakeRedis:
         self.data = {}
 
     def zrevrange(self, key, start, end):
-        ordered = sorted(self.data.items(), key=lambda x: -x[1])
+        items = self.data.get(key, {})
+        ordered = sorted(items.items(), key=lambda x: -x[1])
         return [p for p, _ in ordered[start:end+1]]
 
 def test_pattern_to_mask_simple():
@@ -20,7 +21,7 @@ def test_pattern_to_mask_simple():
 
 def test_get_top_masks(monkeypatch):
     fake = FakeRedis()
-    fake.data = {"$U$l$d": 5, "$l$l": 2}
+    fake.data = {"dictionary:patterns:english": {"$U$l$d": 5, "$l$l": 2}}
     monkeypatch.setattr(pattern_to_mask, "get_redis", lambda: fake)
     masks = pattern_to_mask.get_top_masks(1)
     assert masks == ["?u?l?d"]

@@ -47,11 +47,11 @@ def build_markov(records: Iterable[tuple[str, int]]) -> dict:
     return {"start": dict(start), "trans": out_trans}
 
 
-def load_markov(r=None) -> dict:
-    """Load pattern statistics from Redis and build Markov tables."""
+def load_markov(r=None, lang: str = "english") -> dict:
+    """Load pattern statistics for *lang* from Redis and build Markov tables."""
     if r is None:
         r = get_redis()
-    pairs = r.zrange("dictionary:patterns", 0, -1, withscores=True)
+    pairs = r.zrange(f"dictionary:patterns:{lang}", 0, -1, withscores=True)
     return build_markov((p, int(s)) for p, s in pairs)
 
 
