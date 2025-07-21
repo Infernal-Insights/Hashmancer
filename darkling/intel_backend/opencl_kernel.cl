@@ -6,7 +6,7 @@
 #define MAX_CUSTOM_SETS 16
 #define MAX_CHARSET_CHARS 256
 #define MAX_PWD_BYTES (MAX_MASK_LEN * MAX_UTF8_BYTES)
-#define MAX_HASHES 1024
+#define MAX_HASHES 2048
 
 inline uint rotl32(uint x, uint n) { return (x<<n) | (x>>(32-n)); }
 
