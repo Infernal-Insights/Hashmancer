@@ -122,6 +122,25 @@ body::before {
 <pre id="hashes-job-output"></pre>
 </section>
 
+<section id="markov">
+<h2>Markov Training</h2>
+<div>
+  <select id="markov-language">
+    <option value="english">english</option>
+    <option value="german">german</option>
+    <option value="french">french</option>
+    <option value="spanish">spanish</option>
+  </select>
+  <button onclick="trainMarkov()">Train Markov</button>
+  <button onclick="changeMarkovLang()">Set Active</button>
+</div>
+<div>
+  <label><input type="checkbox" id="prob-order" onchange="updateProbOrder()"> Probabilistic Ordering</label>
+</div>
+<div>Current Language: <span id="current-markov-lang"></span></div>
+<div>Probabilistic Order: <span id="current-prob-order"></span></div>
+</section>
+
 <script>
 function applyMetrics(data){
   document.getElementById('workers').textContent = data.worker_count;
@@ -129,6 +148,10 @@ function applyMetrics(data){
   document.getElementById('results').textContent = data.found_results;
   document.getElementById('gpu').textContent = (data.gpu_temps || []).join(',');
   document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+  document.getElementById('current-prob-order').textContent = data.probabilistic_order ? 'on' : 'off';
+  document.getElementById('current-markov-lang').textContent = data.markov_lang || '';
+  document.getElementById('prob-order').checked = !!data.probabilistic_order;
+  document.getElementById('markov-language').value = data.markov_lang || 'english';
 }
 async function updateMetrics(){
   const res = await fetch('/server_status');
@@ -304,7 +327,25 @@ async function loadHashesJobs(){
   document.getElementById('hashes-job-output').textContent=JSON.stringify(jobs,null,2);
 }
 
+async function trainMarkov(){
+  const lang=document.getElementById('markov-language').value;
+  await fetch('/train_markov',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lang})});
+}
+
+async function updateProbOrder(){
+  const enabled=document.getElementById('prob-order').checked;
+  await fetch('/probabilistic_order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});
+  updateMetrics();
+}
+
+async function changeMarkovLang(){
+  const lang=document.getElementById('markov-language').value;
+  await fetch('/markov_lang',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lang})});
+  updateMetrics();
+}
+
 function tick(){
+  updateMetrics();
   loadDicts();
   loadMasks();
   loadRestores();
