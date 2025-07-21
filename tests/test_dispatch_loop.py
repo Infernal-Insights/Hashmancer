@@ -114,3 +114,20 @@ def test_dispatch_loop_queues_job(monkeypatch):
     stream, mapping = fake.streams[0]
     assert stream == orchestrator_agent.JOB_STREAM
     assert fake.jobs[f"job:{mapping['job_id']}"]['batch_id'] == '1'
+
+
+def test_dispatch_loop_routes_low_bw(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(orchestrator_agent, 'r', fake)
+    monkeypatch.setattr(orchestrator_agent, 'compute_backlog_target', lambda: 1)
+    monkeypatch.setattr(orchestrator_agent, 'pending_count', lambda *a, **k: 0)
+    monkeypatch.setattr(orchestrator_agent, 'any_darkling_workers', lambda: True)
+    monkeypatch.setattr(orchestrator_agent, 'cache_wordlist', lambda p: '')
+    monkeypatch.setattr(orchestrator_agent, 'average_benchmark_rate', lambda: 0.0)
+    monkeypatch.setattr(orchestrator_agent, 'estimate_keyspace', lambda m, c: 0)
+    monkeypatch.setattr(orchestrator_agent, 'compute_batch_range', lambda r, k: (0, 100))
+    run_once()
+    assert fake.streams
+    stream, mapping = fake.streams[0]
+    assert stream == orchestrator_agent.LOW_BW_JOB_STREAM
+    assert fake.jobs[f"job:{mapping['job_id']}"]['batch_id'] == '1'
