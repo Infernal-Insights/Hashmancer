@@ -69,6 +69,7 @@ This will:
 - Configure Redis and logging
 - Install a systemd service
 - Optionally enable a UDP broadcast so workers can auto-discover the server
+- Generate a random portal passkey and show it at the end
 
 3. Start the server (if not done via systemd):
 
@@ -227,14 +228,14 @@ To restrict access to the web dashboard set `"portal_key"` in
 ### Portal passkey
 
 Dashboard logins also require a `"portal_passkey"` in `~/.hashmancer/server_config.json`.
-Generate one with the helper function in `setup.py`:
+The interactive setup script now creates one automatically and prints it when
+setup finishes. If you ever need to generate a new key manually run:
 
 ```bash
 python3 -c 'from Server.setup import generate_passkey; generate_passkey()'
 ```
 
-This writes a random key to the config file. To obtain a session token send the
-passkey to `/login`:
+After setup, send the passkey to `/login` to obtain a session token:
 
 ```bash
 curl -X POST -H 'Content-Type: application/json' \
