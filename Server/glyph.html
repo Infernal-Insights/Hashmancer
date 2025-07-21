@@ -54,6 +54,11 @@ canvas {
 <div class="section">CPU Usage: <span id="cpu">N/A</span></div>
 <div class="section">Memory Utilization: <span id="memory">N/A</span></div>
 <div class="section">Disk Usage: <span id="disk">N/A</span></div>
+<div class="section">CPU Load: <span id="cpu-load">N/A</span></div>
+<div class="section">Memory Usage: <span id="memory-usage">N/A</span></div>
+<div class="section">Backlog Target: <span id="backlog-target">N/A</span></div>
+<div class="section">Pending Jobs: <span id="pending-jobs">N/A</span></div>
+<div class="section">Queued Batches: <span id="queued-batches">N/A</span></div>
 <div class="section">Recent Cracks:
   <ul id="found-list"></ul>
 </div>
@@ -84,6 +89,11 @@ async function updateMetrics() {
     document.getElementById('cpu').textContent = data.cpu_usage + '%';
     document.getElementById('memory').textContent = data.memory_utilization + '%';
     document.getElementById('disk').textContent = data.disk_space + '%';
+    document.getElementById('cpu-load').textContent = data.cpu_load;
+    document.getElementById('memory-usage').textContent = data.memory_usage;
+    document.getElementById('backlog-target').textContent = data.backlog_target;
+    document.getElementById('pending-jobs').textContent = data.pending_jobs;
+    document.getElementById('queued-batches').textContent = data.queued_batches;
     document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
 }
 
