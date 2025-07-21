@@ -1165,6 +1165,17 @@ async def admin_page():
         return HTMLResponse("<h1>Admin page not available</h1>", status_code=500)
 
 
+@app.get("/login_page", response_class=HTMLResponse)
+async def login_page():
+    """Serve a simple login form for the portal."""
+    try:
+        html_path = Path(__file__).parent / "login.html"
+        return html_path.read_text()
+    except Exception as e:
+        log_error("server", "system", "S729", "Failed to load login page", e)
+        return HTMLResponse("<h1>Login page not available</h1>", status_code=500)
+
+
 @app.get("/", response_class=HTMLResponse)
 @app.get("/portal", response_class=HTMLResponse)
 async def portal_page():

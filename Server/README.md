@@ -244,6 +244,10 @@ curl -X POST -H 'Content-Type: application/json' \
 
 Use the returned `cookie` value as the `session` cookie for subsequent requests.
 
+You can also login through the built-in HTML form by visiting `/login_page` in a
+browser. Enter the passkey and you will be redirected to the portal once the
+`session` cookie is set.
+
 ## 🌐 Reverse Proxy Setup
 
 When exposing Hashmancer to the internet it's best to place a TLS-enabled
