@@ -346,6 +346,20 @@ class GPUSidecar(threading.Thread):
         installed separately. It accepts the same arguments as hashcat so the
         batch formatting is identical.
         """
+        def _count_mask(mask: str) -> int:
+            count = 0
+            i = 0
+            while i < len(mask):
+                if mask[i] == "?" and i + 1 < len(mask):
+                    i += 2
+                else:
+                    i += 1
+                count += 1
+            return count
+
+        if _count_mask(batch.get("mask", "")) >= 56:
+            raise ValueError("darkling-engine supports masks <56 characters")
+
         mask_charsets = batch.get("mask_charsets")
         cs_map = {}
         if mask_charsets:
