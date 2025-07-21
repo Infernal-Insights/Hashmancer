@@ -24,6 +24,9 @@ import orchestrator_agent
 from event_logger import log_error, log_info
 from pathlib import Path
 import learn_trends
+import time
+import hmac
+import hashlib
 
 from waifus import assign_waifu
 from auth_utils import verify_signature, verify_signature_with_key
@@ -55,6 +58,8 @@ RESTORE_DIR = Path(CONFIG.get("restore_dir", "/opt/hashmancer/restores"))
 # API key used to protect the portal and legacy dashboard pages. When not set
 # these routes remain publicly accessible.
 PORTAL_KEY = CONFIG.get("portal_key")
+PORTAL_PASSKEY = CONFIG.get("portal_passkey")
+SESSION_TTL = 3600  # seconds
 
 # select which cracking engine low bandwidth workers should use. The
 # specialized option is called "darkling".
@@ -81,6 +86,31 @@ def save_config():
             json.dump(CONFIG, f, indent=2)
     except Exception as e:
         log_error("server", "system", "S740", "Failed to save config", e)
+
+
+def sign_session(session_id: str, expiry: int) -> str:
+    """Return a signed session token using the configured passkey."""
+    key = (PORTAL_PASSKEY or "").encode()
+    payload = f"{session_id}|{expiry}".encode()
+    sig = hmac.new(key, payload, hashlib.sha256).hexdigest()
+    return f"{session_id}|{expiry}|{sig}"
+
+
+def verify_session_token(token: str) -> bool:
+    """Validate a session token and confirm it's stored in Redis."""
+    try:
+        session_id, exp_s, sig = token.split("|")
+        expiry = int(exp_s)
+    except ValueError:
+        return False
+    if expiry < int(time.time()):
+        return False
+    expected = hmac.new(
+        (PORTAL_PASSKEY or "").encode(), f"{session_id}|{expiry}".encode(), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected, sig):
+        return False
+    return bool(r.exists(f"session:{session_id}"))
 
 # baseline undervolt/flash settings per GPU model
 FLASH_PRESETS_FILE = Path(__file__).with_name("flash_presets.json")
@@ -162,13 +192,35 @@ class PortalAuthMiddleware:
                     k.decode().lower(): v.decode() for k, v in scope.get("headers", [])
                 }
                 if headers.get("x-api-key") != self.key:
-                    response = HTMLResponse("Unauthorized", status_code=401)
-                    await response(scope, receive, send)
-                    return
+                    cookie_header = headers.get("cookie", "")
+                    token = None
+                    for part in cookie_header.split(";"):
+                        if part.strip().startswith("session="):
+                            token = part.strip().split("=", 1)[1]
+                            break
+                    if not token or not verify_session_token(token):
+                        response = HTMLResponse("Unauthorized", status_code=401)
+                        await response(scope, receive, send)
+                        return
         await self.app(scope, receive, send)
 
 
 app.add_middleware(PortalAuthMiddleware, key=PORTAL_KEY)
+
+
+class LoginRequest(BaseModel):
+    passkey: str
+
+
+@app.post("/login")
+async def login(req: LoginRequest):
+    if not PORTAL_PASSKEY or req.passkey != PORTAL_PASSKEY:
+        raise HTTPException("unauthorized")
+    session_id = uuid.uuid4().hex
+    expiry = int(time.time()) + SESSION_TTL
+    token = sign_session(session_id, expiry)
+    r.set(f"session:{session_id}", 1, ex=SESSION_TTL)
+    return {"status": "ok", "cookie": token}
 
 
 class RegisterWorkerRequest(BaseModel):

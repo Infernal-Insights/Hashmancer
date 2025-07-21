@@ -133,6 +133,14 @@ class FakeRedis:
     def rpush(self, key, value):
         self.store.setdefault(key, []).append(value)
 
+    def set(self, key, value, ex=None):
+        self.store[key] = value
+        if ex:
+            self.store[f"ttl:{key}"] = ex
+
+    def exists(self, key):
+        return key in self.store
+
 
 class FakeWebSocket:
     def __init__(self):
@@ -207,3 +215,83 @@ def test_portal_ws_reports_status(monkeypatch):
     assert len(ws.sent) == 1
     data = json.loads(ws.sent[0])
     assert any(w["name"] == "alpha" and w["status"] == "busy" for w in data["workers"])
+
+
+def test_login_creates_session(monkeypatch):
+    fake_r = FakeRedis()
+    monkeypatch.setattr(main, "r", fake_r)
+    monkeypatch.setitem(main.CONFIG, "portal_passkey", "pass")
+    monkeypatch.setattr(main, "PORTAL_PASSKEY", "pass")
+
+    class Req:
+        passkey = "pass"
+
+    resp = asyncio.run(main.login(Req()))
+    assert resp["status"] == "ok"
+    cookie = resp["cookie"]
+    sid = cookie.split("|")[0]
+    assert f"session:{sid}" in fake_r.store
+
+
+def test_portal_auth_allows_cookie(monkeypatch):
+    fake_r = FakeRedis()
+    monkeypatch.setattr(main, "r", fake_r)
+    monkeypatch.setitem(main.CONFIG, "portal_passkey", "pass")
+    monkeypatch.setattr(main, "PORTAL_PASSKEY", "pass")
+
+    class Req:
+        passkey = "pass"
+
+    resp = asyncio.run(main.login(Req()))
+    cookie = resp["cookie"]
+
+    events = []
+
+    async def send(evt):
+        events.append(evt)
+
+    app = FakeApp()
+    mw = main.PortalAuthMiddleware(app, key="apikey")
+    scope = {
+        "type": "http",
+        "path": "/portal",
+        "headers": [(b"cookie", f"session={cookie}".encode())],
+    }
+
+    asyncio.run(mw(scope, lambda: None, send))
+
+    assert app.called
+    assert events and events[0].get("done") is True
+
+
+def test_session_expiry(monkeypatch):
+    fake_r = FakeRedis()
+    monkeypatch.setattr(main, "r", fake_r)
+    monkeypatch.setitem(main.CONFIG, "portal_passkey", "pass")
+    monkeypatch.setattr(main, "PORTAL_PASSKEY", "pass")
+
+    class Req:
+        passkey = "pass"
+
+    monkeypatch.setattr(main.time, "time", lambda: 0)
+    resp = asyncio.run(main.login(Req()))
+    cookie = resp["cookie"]
+
+    monkeypatch.setattr(main.time, "time", lambda: main.SESSION_TTL + 1)
+    events = []
+
+    async def send(evt):
+        events.append(evt)
+
+    app = FakeApp()
+    mw = main.PortalAuthMiddleware(app, key="apikey")
+    scope = {
+        "type": "http",
+        "path": "/portal",
+        "headers": [(b"cookie", f"session={cookie}".encode())],
+    }
+
+    asyncio.run(mw(scope, lambda: None, send))
+
+    assert not app.called
+    assert events and events[0]["status"] == 401

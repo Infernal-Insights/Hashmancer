@@ -3,6 +3,7 @@ import json
 import subprocess
 import socket
 import getpass
+import secrets
 from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".hashmancer"
@@ -25,6 +26,23 @@ def detect_local_ip():
         return socket.gethostbyname(socket.gethostname())
     except Exception:
         return "127.0.0.1"
+
+
+def generate_passkey() -> str:
+    """Generate and store a portal passkey in server_config.json."""
+    key = secrets.token_hex(16)
+    config = {}
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE) as f:
+                config = json.load(f)
+        except Exception:
+            pass
+    config["portal_passkey"] = key
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=2)
+    print(f"Generated portal passkey stored in {CONFIG_FILE}")
+    return key
 
 
 def install_dependencies():
