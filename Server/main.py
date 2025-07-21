@@ -28,6 +28,7 @@ from waifus import assign_waifu
 from auth_utils import verify_signature, verify_signature_with_key
 from pydantic import BaseModel
 from ascii_logo import print_logo
+from pattern_to_mask import get_top_masks
 
 app = FastAPI()
 
@@ -483,6 +484,16 @@ async def list_masks():
         return [f.name for f in MASKS_DIR.iterdir() if f.is_file()]
     except Exception as e:
         log_error("server", "system", "S706", "Failed to list masks", e)
+        return []
+
+
+@app.get("/top_masks")
+async def export_top_masks(limit: int = 10):
+    """Return the top password masks derived from stored patterns."""
+    try:
+        return get_top_masks(limit)
+    except Exception as e:
+        log_error("server", "system", "S736", "Failed to export masks", e)
         return []
 
 
