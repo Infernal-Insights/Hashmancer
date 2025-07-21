@@ -33,6 +33,7 @@ from auth_utils import verify_signature, verify_signature_with_key
 from pydantic import BaseModel
 from ascii_logo import print_logo
 from pattern_to_mask import get_top_masks
+import psutil
 
 app = FastAPI()
 
@@ -607,7 +608,22 @@ async def server_status():
             "low_bw_engine": LOW_BW_ENGINE,
             "probabilistic_order": PROBABILISTIC_ORDER,
             "markov_lang": MARKOV_LANG,
+            "cpu_usage": None,
+            "memory_utilization": None,
+            "disk_space": None,
         }
+        try:
+            status["cpu_usage"] = psutil.cpu_percent(interval=None)
+        except Exception:
+            pass
+        try:
+            status["memory_utilization"] = psutil.virtual_memory().percent
+        except Exception:
+            pass
+        try:
+            status["disk_space"] = psutil.disk_usage("/").percent
+        except Exception:
+            pass
         return status
     except redis.exceptions.RedisError as e:
         log_error("server", "system", "SRED", "Redis unavailable", e)

@@ -51,6 +51,9 @@ canvas {
 <div class="section">Queue Length: <span id="queue">0</span></div>
 <div class="section">Found Results: <span id="results">0</span></div>
 <div class="section">GPU Temps: <span id="gpu">N/A</span></div>
+<div class="section">CPU Usage: <span id="cpu">N/A</span></div>
+<div class="section">Memory Utilization: <span id="memory">N/A</span></div>
+<div class="section">Disk Usage: <span id="disk">N/A</span></div>
 <div class="section">Recent Cracks:
   <ul id="found-list"></ul>
 </div>
@@ -78,6 +81,9 @@ async function updateMetrics() {
     document.getElementById('queue').textContent = data.queue_length;
     document.getElementById('results').textContent = data.found_results;
     document.getElementById('gpu').textContent = (data.gpu_temps || []).join(', ');
+    document.getElementById('cpu').textContent = data.cpu_usage + '%';
+    document.getElementById('memory').textContent = data.memory_utilization + '%';
+    document.getElementById('disk').textContent = data.disk_space + '%';
     document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
 }
 

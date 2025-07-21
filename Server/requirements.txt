@@ -5,3 +5,4 @@ requests
 pydantic
 cryptography
 python-multipart
+psutil
