@@ -6,7 +6,7 @@
 // Max limits
 #define MAX_CHARSETS 16
 #define MAX_MASK_LEN 32
-#define MAX_HASHES 4096
+#define MAX_HASHES 2048
 #define MAX_RESULT_BUFFER 512
 
 // Job Configuration (passed to GPU)

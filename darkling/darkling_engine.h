@@ -8,7 +8,7 @@
 #define MAX_CHARSET_CHARS 256
 #define MAX_PWD_BYTES (MAX_MASK_LEN * MAX_UTF8_BYTES)
 #define MAX_CHARSET_SIZE (MAX_CHARSET_CHARS * MAX_UTF8_BYTES)
-#define MAX_HASHES 1024
+#define MAX_HASHES 2048
 
 #ifdef __cplusplus
 extern "C" {
