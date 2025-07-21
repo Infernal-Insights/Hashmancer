@@ -24,10 +24,29 @@ def process_wordlists(directory: Path) -> None:
                 r.zincrby("dictionary:patterns", 1, pattern)
 
 
+def top_patterns(count: int, r=None) -> list[tuple[str, int]]:
+    """Return ``count`` most common patterns and their counts."""
+    if r is None:
+        r = get_redis()
+    results = r.zrevrange("dictionary:patterns", 0, count - 1, withscores=True)
+    patterns: list[tuple[str, int]] = []
+    for pat, score in results:
+        if isinstance(pat, bytes):
+            pat = pat.decode()
+        patterns.append((pat, int(score)))
+    return patterns
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "directory", type=Path, help="Directory containing wordlists",
     )
+    parser.add_argument(
+        "--top", type=int, default=0, help="Show N most common patterns after processing",
+    )
     args = parser.parse_args()
     process_wordlists(args.directory)
+    if args.top:
+        for pattern, count in top_patterns(args.top):
+            print(f"{pattern} {count}")
