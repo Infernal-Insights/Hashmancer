@@ -611,17 +611,40 @@ async def server_status():
             "cpu_usage": None,
             "memory_utilization": None,
             "disk_space": None,
+            "cpu_load": None,
+            "memory_usage": None,
+            "backlog_target": None,
+            "pending_jobs": None,
+            "queued_batches": None,
         }
         try:
             status["cpu_usage"] = psutil.cpu_percent(interval=None)
         except Exception:
             pass
         try:
-            status["memory_utilization"] = psutil.virtual_memory().percent
+            vm = psutil.virtual_memory()
+            status["memory_utilization"] = vm.percent
+            status["memory_usage"] = getattr(vm, "used", None)
         except Exception:
             pass
         try:
             status["disk_space"] = psutil.disk_usage("/").percent
+        except Exception:
+            pass
+        try:
+            status["cpu_load"] = psutil.getloadavg()[0] if hasattr(psutil, "getloadavg") else os.getloadavg()[0]
+        except Exception:
+            pass
+        try:
+            status["backlog_target"] = orchestrator_agent.compute_backlog_target()
+        except Exception:
+            pass
+        try:
+            status["pending_jobs"] = orchestrator_agent.pending_count()
+        except Exception:
+            pass
+        try:
+            status["queued_batches"] = r.llen("batch:queue")
         except Exception:
             pass
         return status
