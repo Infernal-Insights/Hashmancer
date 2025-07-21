@@ -162,14 +162,11 @@ __global__ void crack_kernel(uint64_t start, uint64_t total, char *results,
     }
 }
 
-extern "C" void launch_darkling(const uint8_t **charset_bytes,
-                                 const uint8_t **charset_lens,
-                                 const int *charset_sizes,
-                                 const uint8_t *pos_map, int pwd_len,
-                                 const uint8_t *hashes, int num_hashes, int hash_len,
-                                 uint64_t start, uint64_t end,
-                                 char *d_results, int max_results, int *d_count,
-                                 dim3 grid, dim3 block)
+extern "C" void load_darkling_data(const uint8_t **charset_bytes,
+                                   const uint8_t **charset_lens,
+                                   const int *charset_sizes,
+                                   const uint8_t *pos_map, int pwd_len,
+                                   const uint8_t *hashes, int num_hashes, int hash_len)
 {
     cudaMemcpyToSymbol(d_pwd_len, &pwd_len, sizeof(int));
     cudaMemcpyToSymbol(d_hash_len, &hash_len, sizeof(int));
@@ -185,6 +182,26 @@ extern "C" void launch_darkling(const uint8_t **charset_bytes,
         }
     }
     cudaMemcpyToSymbol(d_hashes, hashes, num_hashes * hash_len);
+}
+
+extern "C" void launch_darkling_kernel(uint64_t start, uint64_t end,
+                                        char *d_results, int max_results, int *d_count,
+                                        dim3 grid, dim3 block)
+{
     uint64_t total = end - start;
     crack_kernel<<<grid, block>>>(start, total, d_results, max_results, d_count);
+}
+
+extern "C" void launch_darkling(const uint8_t **charset_bytes,
+                                 const uint8_t **charset_lens,
+                                 const int *charset_sizes,
+                                 const uint8_t *pos_map, int pwd_len,
+                                 const uint8_t *hashes, int num_hashes, int hash_len,
+                                 uint64_t start, uint64_t end,
+                                 char *d_results, int max_results, int *d_count,
+                                 dim3 grid, dim3 block)
+{
+    load_darkling_data(charset_bytes, charset_lens, charset_sizes, pos_map,
+                       pwd_len, hashes, num_hashes, hash_len);
+    launch_darkling_kernel(start, end, d_results, max_results, d_count, grid, block);
 }

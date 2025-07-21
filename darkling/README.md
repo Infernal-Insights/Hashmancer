@@ -27,6 +27,11 @@ g++ darkling_host.cpp -o darkling-host -lcuda -lcudart
 It preloads the kernel data into GPU memory and invokes `launch_darkling` across
 multiple counter ranges without re-allocating buffers.
 
+Beginning with version 2 the host code caches charsets and hash lists on the
+GPU. `DarklingContext` tracks the previously loaded data and only uploads new
+values when they change. This avoids repeated `cudaMemcpyToSymbol` calls and
+reduces kernel launch overhead when processing many small ranges.
+
 The `launcher.py` script wraps the binary and selects built-in alphabets
 for convenience. Use `--lang` to map `?1`/`?2` to a specific language:
 
