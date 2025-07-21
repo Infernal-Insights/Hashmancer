@@ -22,10 +22,11 @@ def pattern_to_mask(pattern: str) -> str:
     return "".join(TOKEN_TO_MASK.get(t, "?a") for t in tokens)
 
 
-def get_top_masks(count: int, key: str = "dictionary:patterns", r=None) -> List[str]:
+def get_top_masks(count: int, lang: str = "english", r=None) -> List[str]:
     """Return ``count`` masks generated from the most common patterns."""
     if r is None:
         r = get_redis()
+    key = f"dictionary:patterns:{lang}"
     raw = r.zrevrange(key, 0, count - 1)
     masks: List[str] = []
     for item in raw:
@@ -37,7 +38,7 @@ def get_top_masks(count: int, key: str = "dictionary:patterns", r=None) -> List[
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--count", type=int, default=10, help="Number of masks to output")
-    parser.add_argument("--key", default="dictionary:patterns", help="Redis key containing patterns")
+    parser.add_argument("--lang", default="english", help="Language identifier for pattern statistics")
     args = parser.parse_args()
-    for mask in get_top_masks(args.count, args.key):
+    for mask in get_top_masks(args.count, args.lang):
         print(mask)
