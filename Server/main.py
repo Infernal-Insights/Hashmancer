@@ -217,7 +217,7 @@ class LoginRequest(BaseModel):
 @app.post("/login")
 async def login(req: LoginRequest):
     if not PORTAL_PASSKEY or req.passkey != PORTAL_PASSKEY:
-        raise HTTPException("unauthorized")
+        raise HTTPException(status_code=401, detail="unauthorized")
     session_id = uuid.uuid4().hex
     expiry = int(time.time()) + SESSION_TTL
     token = sign_session(session_id, expiry)
