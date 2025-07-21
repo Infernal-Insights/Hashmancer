@@ -170,6 +170,22 @@ def test_portal_auth_denies_without_key(monkeypatch):
     assert events and events[0]["status"] == 401
 
 
+def test_root_auth_denies_without_key(monkeypatch):
+    events = []
+
+    async def send(evt):
+        events.append(evt)
+
+    app = FakeApp()
+    mw = main.PortalAuthMiddleware(app, key="secret")
+    scope = {"type": "http", "path": "/", "headers": []}
+
+    asyncio.run(mw(scope, lambda: None, send))
+
+    assert not app.called
+    assert events and events[0]["status"] == 401
+
+
 def test_portal_auth_allows_with_key(monkeypatch):
     events = []
 
@@ -179,6 +195,22 @@ def test_portal_auth_allows_with_key(monkeypatch):
     app = FakeApp()
     mw = main.PortalAuthMiddleware(app, key="secret")
     scope = {"type": "http", "path": "/portal", "headers": [(b"x-api-key", b"secret")]} 
+
+    asyncio.run(mw(scope, lambda: None, send))
+
+    assert app.called
+    assert events and events[0].get("done") is True
+
+
+def test_root_auth_allows_with_key(monkeypatch):
+    events = []
+
+    async def send(evt):
+        events.append(evt)
+
+    app = FakeApp()
+    mw = main.PortalAuthMiddleware(app, key="secret")
+    scope = {"type": "http", "path": "/", "headers": [(b"x-api-key", b"secret")]}
 
     asyncio.run(mw(scope, lambda: None, send))
 

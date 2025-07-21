@@ -184,7 +184,8 @@ class PortalAuthMiddleware:
         if scope.get("type") == "http" and self.key:
             path = scope.get("path", "")
             if (
-                path.startswith("/portal")
+                path == "/"
+                or path.startswith("/portal")
                 or path.startswith("/glyph")
                 or path.startswith("/admin")
             ):
@@ -1120,6 +1121,7 @@ async def admin_page():
         return HTMLResponse("<h1>Admin page not available</h1>", status_code=500)
 
 
+@app.get("/", response_class=HTMLResponse)
 @app.get("/portal", response_class=HTMLResponse)
 async def portal_page():
     """Serve the combined portal interface."""
