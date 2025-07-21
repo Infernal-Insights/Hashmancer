@@ -233,6 +233,9 @@ def main(argv: list[str] | None = None):
     )
     args = parser.parse_args(argv)
 
+    probabilistic_order = False
+    markov_lang = "english"
+    
     print_logo()
     worker_id = os.getenv("WORKER_ID", str(uuid.uuid4()))
     gpus = detect_gpus()
@@ -241,8 +244,15 @@ def main(argv: list[str] | None = None):
     low_bw_engine = "hashcat"
     try:
         resp = requests.get(f"{SERVER_URL}/server_status", timeout=5)
-        low_bw_engine = resp.json().get("low_bw_engine", "hashcat")
+        data = resp.json()
+        low_bw_engine = data.get("low_bw_engine", "hashcat")
+        if not args.probabilistic_order:
+            probabilistic_order = data.get("probabilistic_order", False)
+        else:
+            probabilistic_order = True
+        markov_lang = data.get("markov_lang", "english")
     except Exception:
+        probabilistic_order = args.probabilistic_order
         pass
 
     for gpu in gpus:
@@ -271,11 +281,23 @@ def main(argv: list[str] | None = None):
         try:
             threads.append(
                 GPUSidecar(
-                    name, gpu, SERVER_URL, probabilistic_order=args.probabilistic_order
+                    name,
+                    gpu,
+                    SERVER_URL,
+                    probabilistic_order=probabilistic_order,
+                    markov_lang=markov_lang,
                 )
             )
         except TypeError:
-            threads.append(GPUSidecar(name, gpu, SERVER_URL))
+            threads.append(
+                GPUSidecar(
+                    name,
+                    gpu,
+                    SERVER_URL,
+                    probabilistic_order=probabilistic_order,
+                    markov_lang=markov_lang,
+                )
+            )
     for t in threads:
         t.start()
     flash_mgr = GPUFlashManager(name, SERVER_URL, gpus)
