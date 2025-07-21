@@ -441,3 +441,33 @@ def test_darkling_mask_length_limit(monkeypatch):
     with pytest.raises(ValueError):
         sidecar.run_darkling_engine(batch)
 
+
+def test_darkling_hash_batching(monkeypatch):
+    sidecar = gpu_sidecar.GPUSidecar("w", {"uuid": "gpu", "index": 0}, "http://sv")
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    calls = []
+
+    def fake_run_engine(self, engine, batch, range_start=None, range_end=None, skip_charsets=False):
+        calls.append((engine, json.loads(batch["hashes"]), skip_charsets))
+        return [f"{h}:pass" for h in json.loads(batch["hashes"])]
+
+    monkeypatch.setattr(gpu_sidecar.GPUSidecar, "_run_engine", fake_run_engine)
+    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda x: "sig")
+
+    hashes = [f"h{i}" for i in range(gpu_sidecar.MAX_HASHES + 5)]
+    batch = {
+        "batch_id": "jobbatch",
+        "hashes": json.dumps(hashes),
+        "mask": "?a",
+        "attack_mode": "mask",
+        "hash_mode": "0",
+    }
+
+    res = sidecar.run_darkling_engine(batch)
+    assert len(calls) == 2
+    assert len(res) == len(hashes)
+    assert calls[0][2] is False
+    assert calls[1][2] is True
+
