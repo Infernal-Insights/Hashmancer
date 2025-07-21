@@ -13,6 +13,7 @@ Hashmancer is a high-performance, distributed hash cracking orchestration system
 - Intelligent batch dispatching with N+2 prefetch
 - Larger backlog for high-bandwidth GPUs
 - Wordlists cached in Redis for quick distribution
+- Cracked hashes cached in Redis to skip duplicates
 - Backlog scales with reported GPU load
 - Orchestration tools for AWS, Vast.ai, and on-prem deployments
 - Self-healing logic with watchdog and error reporting
@@ -117,7 +118,7 @@ performance over time.
 |--------|---------------------|-------------------------------------|
 | POST   | `/register_worker`  | Register a new worker (optional signature) |
 | GET    | `/get_batch`        | Worker requests a batch             |
-| POST   | `/submit_founds`    | Submit cracked hashes               |
+| POST   | `/submit_founds`    | Submit cracked hashes (cached)      |
 | POST   | `/submit_no_founds` | Report a finished batch with none   |
 | POST   | `/upload_restore`   | Upload a `.restore` file from a worker |
 | GET    | `/wordlists`        | List available wordlists            |

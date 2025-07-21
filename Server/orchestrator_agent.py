@@ -21,6 +21,28 @@ LOW_BW_GROUP = os.getenv("LOW_BW_GROUP", "darkling-workers")
 
 r = get_redis()
 
+
+def is_already_cracked(hash_str: str) -> bool:
+    """Return True if the given hash exists in the found mapping."""
+    try:
+        hexists = getattr(r, "hexists", None)
+        if hexists:
+            return bool(hexists("found:map", hash_str))
+        return False
+    except redis.exceptions.RedisError:
+        return False
+    
+
+def get_cracked_password(hash_str: str) -> str | None:
+    """Return the password for a previously cracked hash, if any."""
+    try:
+        hget = getattr(r, "hget", None)
+        if hget:
+            return hget("found:map", hash_str)
+        return None
+    except redis.exceptions.RedisError:
+        return None
+
 # Mapping between pattern tokens produced by pattern_stats and mask charset
 # identifiers used by the darkling engine.
 TOKEN_TO_ID = {
@@ -222,6 +244,15 @@ def dispatch_batches(lang: str = "English"):
             batch = r.hgetall(f"batch:{batch_id}")
             if not batch:
                 continue
+
+            try:
+                hashes = json.loads(batch.get("hashes", "[]"))
+            except Exception:
+                hashes = []
+            hashes = [h for h in hashes if not is_already_cracked(h)]
+            if not hashes:
+                continue
+            batch["hashes"] = json.dumps(hashes)
 
             attack = "mask"
             if batch.get("wordlist") and batch.get("mask"):

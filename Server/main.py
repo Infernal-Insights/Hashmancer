@@ -474,6 +474,11 @@ async def submit_founds(payload: dict):
 
         for line in payload["founds"]:
             r.rpush("found:results", f"{payload['batch_id']}:{line}")
+            try:
+                hash_str, password = line.split(":", 1)
+            except ValueError:
+                continue
+            r.hset("found:map", hash_str, password)
 
         job_id = payload.get("job_id", payload.get("batch_id"))
         info = r.hgetall(f"job:{job_id}")
