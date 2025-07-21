@@ -44,12 +44,20 @@ class DarklingContext:
 class GPUSidecar(threading.Thread):
     """Background thread that fetches and executes jobs via the HTTP API."""
 
-    def __init__(self, worker_id: str, gpu: dict, server_url: str, probabilistic_order: bool = False):
+    def __init__(
+        self,
+        worker_id: str,
+        gpu: dict,
+        server_url: str,
+        probabilistic_order: bool = False,
+        markov_lang: str = "english",
+    ):
         super().__init__(daemon=True)
         self.worker_id = worker_id
         self.gpu = gpu
         self.server_url = server_url
         self.probabilistic_order = probabilistic_order
+        self.markov_lang = markov_lang
         self.running = True
         self.current_job = None
         self.hashrate = 0.0
@@ -389,7 +397,7 @@ class GPUSidecar(threading.Thread):
 
         indices: list[int] | None = None
         if self.probabilistic_order:
-            markov = statistics.load_markov()
+            markov = statistics.load_markov(lang=self.markov_lang)
             indices = statistics.probability_index_order(
                 batch.get("mask", ""), cs_map, markov
             )

@@ -1,6 +1,7 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Server'))
 
 from Worker.hashmancer_worker import worker_agent
 
@@ -48,7 +49,11 @@ def test_benchmark_low_bw_gpu(monkeypatch):
     monkeypatch.setattr(
         worker_agent.requests,
         "get",
-        lambda url, timeout=5: DummyResp({"low_bw_engine": "darkling"}),
+        lambda url, timeout=5: DummyResp({
+            "low_bw_engine": "darkling",
+            "probabilistic_order": False,
+            "markov_lang": "english",
+        }),
     )
 
     called = {}
@@ -66,7 +71,7 @@ def test_benchmark_low_bw_gpu(monkeypatch):
     monkeypatch.setattr(worker_agent, "sign_message", lambda x: "sig")
 
     class DummySidecar:
-        def __init__(self, name, gpu, url):
+        def __init__(self, name, gpu, url, probabilistic_order=False, markov_lang="english"):
             self.gpu = gpu
             self.progress = 0.0
             self.current_job = None
@@ -99,3 +104,69 @@ def test_benchmark_low_bw_gpu(monkeypatch):
         pass
 
     assert "dark" in called
+
+
+def test_prob_order_from_server(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(worker_agent, "r", fake)
+    monkeypatch.setattr(worker_agent, "print_logo", lambda: None)
+    monkeypatch.setattr(worker_agent, "detect_gpus", lambda: [{"uuid": "g1", "index": 0}])
+    monkeypatch.setattr(worker_agent, "register_worker", lambda wid, g: "name")
+
+    monkeypatch.setattr(
+        worker_agent.requests,
+        "get",
+        lambda url, timeout=5: DummyResp({
+            "low_bw_engine": "hashcat",
+            "probabilistic_order": True,
+            "markov_lang": "spanish",
+        }),
+    )
+
+    captured = {}
+
+    def fake_post(url, json=None, timeout=None):
+        pass
+
+    monkeypatch.setattr(worker_agent, "run_hashcat_benchmark", lambda g, engine="hashcat": {})
+    monkeypatch.setattr(worker_agent.requests, "post", fake_post)
+    monkeypatch.setattr(worker_agent, "sign_message", lambda x: "sig")
+
+    class DummySidecar:
+        def __init__(self, name, gpu, url, probabilistic_order=False, markov_lang="english"):
+            captured["prob"] = probabilistic_order
+            captured["lang"] = markov_lang
+            self.gpu = gpu
+            self.progress = 0.0
+            self.current_job = None
+            self.running = True
+        def start(self):
+            pass
+        def join(self):
+            pass
+
+    monkeypatch.setattr(worker_agent, "GPUSidecar", DummySidecar)
+
+    class DummyFlash:
+        def __init__(self, *a, **k):
+            self.running = False
+        def start(self):
+            pass
+        def join(self):
+            pass
+    monkeypatch.setattr(worker_agent, "GPUFlashManager", DummyFlash)
+
+    monkeypatch.setattr(worker_agent, "get_gpu_temps", lambda: [])
+
+    def stop(_):
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(worker_agent.time, "sleep", stop)
+
+    try:
+        worker_agent.main([])
+    except KeyboardInterrupt:
+        pass
+
+    assert captured["prob"] is True
+    assert captured["lang"] == "spanish"
