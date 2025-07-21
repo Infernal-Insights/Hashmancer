@@ -223,6 +223,45 @@ To restrict access to the web dashboard set `"portal_key"` in
 `~/.hashmancer/server_config.json`. Requests to `/portal`, `/glyph` and
 `/admin` must then include an `X-API-Key` header with the same value.
 
+## 🌐 Reverse Proxy Setup
+
+When exposing Hashmancer to the internet it's best to place a TLS-enabled
+reverse proxy like **Nginx** or **Caddy** in front of the FastAPI server. Set
+`"server_url"` in `~/.hashmancer/server_config.json` to the public domain so
+workers report the correct address. Be sure to choose a `"portal_key"` as shown
+above for basic protection of the dashboard.
+
+### Nginx example
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name hashmancer.win;
+
+    ssl_certificate /etc/letsencrypt/live/hashmancer.win/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/hashmancer.win/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+### Caddy example
+
+```caddy
+hashmancer.win {
+    reverse_proxy localhost:8000
+    tls /etc/letsencrypt/live/hashmancer.win/fullchain.pem \
+        /etc/letsencrypt/live/hashmancer.win/privkey.pem
+}
+```
+
 ## 📈 Learning Password Trends
 
 Run `learn_trends.py <wordlist_dir>` from the `Server` folder to scan every
