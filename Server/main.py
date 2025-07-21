@@ -23,6 +23,7 @@ import redis_manager
 import orchestrator_agent
 from event_logger import log_error, log_info
 from pathlib import Path
+import learn_trends
 
 from waifus import assign_waifu
 from auth_utils import verify_signature, verify_signature_with_key
@@ -67,6 +68,10 @@ BROADCAST_INTERVAL = int(CONFIG.get("broadcast_interval", 30))
 # hashes.com integration settings
 HASHES_POLL_INTERVAL = int(CONFIG.get("hashes_poll_interval", 1800))
 HASHES_ALGORITHMS = [a.lower() for a in CONFIG.get("hashes_algorithms", [])]
+
+# Markov and candidate ordering settings
+PROBABILISTIC_ORDER = bool(CONFIG.get("probabilistic_order", False))
+MARKOV_LANG = CONFIG.get("markov_lang", "english")
 
 
 def save_config():
@@ -542,6 +547,8 @@ async def server_status():
             "found_results": r.llen("found:results"),
             "gpu_temps": get_gpu_temps(),
             "low_bw_engine": LOW_BW_ENGINE,
+            "probabilistic_order": PROBABILISTIC_ORDER,
+            "markov_lang": MARKOV_LANG,
         }
         return status
     except redis.exceptions.RedisError as e:
@@ -803,6 +810,23 @@ async def upload_wordlist(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="upload failed")
 
 
+class TrainMarkovRequest(BaseModel):
+    lang: str = "english"
+    directory: str | None = None
+
+
+@app.post("/train_markov")
+async def train_markov(req: TrainMarkovRequest):
+    """Process wordlists to build Markov statistics."""
+    directory = Path(req.directory) if req.directory else WORDLISTS_DIR
+    try:
+        learn_trends.process_wordlists(directory, lang=req.lang)
+        return {"status": "ok"}
+    except Exception as e:
+        log_error("server", "system", "S735", "Failed to train Markov", e)
+        raise HTTPException(status_code=500, detail="training failed")
+
+
 @app.post("/upload_restore")
 async def upload_restore(file: UploadFile = File(...)):
     """Receive a hashcat restore file and store it in RESTORE_DIR."""
@@ -1001,6 +1025,34 @@ async def set_hashes_algorithms(req: AlgoRequest):
     CONFIG["hashes_algorithms"] = req.algorithms
     global HASHES_ALGORITHMS
     HASHES_ALGORITHMS = [a.lower() for a in req.algorithms]
+    save_config()
+    return {"status": "ok"}
+
+
+class ProbOrderRequest(BaseModel):
+    enabled: bool
+
+
+@app.post("/probabilistic_order")
+async def set_probabilistic_order(req: ProbOrderRequest):
+    """Enable or disable probabilistic candidate ordering."""
+    CONFIG["probabilistic_order"] = bool(req.enabled)
+    global PROBABILISTIC_ORDER
+    PROBABILISTIC_ORDER = bool(req.enabled)
+    save_config()
+    return {"status": "ok"}
+
+
+class MarkovLangRequest(BaseModel):
+    lang: str
+
+
+@app.post("/markov_lang")
+async def set_markov_lang(req: MarkovLangRequest):
+    """Set the default language for Markov statistics."""
+    CONFIG["markov_lang"] = req.lang
+    global MARKOV_LANG
+    MARKOV_LANG = req.lang
     save_config()
     return {"status": "ok"}
 
