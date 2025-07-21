@@ -219,7 +219,20 @@ def register_worker(worker_id: str, gpus: list[dict]):
     return name
 
 
-def main():
+import argparse
+
+
+def main(argv: list[str] | None = None):
+    if argv is None:
+        argv = []
+    parser = argparse.ArgumentParser(description="Hashmancer worker agent")
+    parser.add_argument(
+        "--probabilistic-order",
+        action="store_true",
+        help="use Markov tables for probabilistic candidate ordering",
+    )
+    args = parser.parse_args(argv)
+
     print_logo()
     worker_id = os.getenv("WORKER_ID", str(uuid.uuid4()))
     gpus = detect_gpus()
@@ -253,7 +266,16 @@ def main():
         except Exception as e:
             print(f"Failed to submit benchmark for {gpu.get('uuid')}: {e}")
 
-    threads = [GPUSidecar(name, gpu, SERVER_URL) for gpu in gpus]
+    threads = []
+    for gpu in gpus:
+        try:
+            threads.append(
+                GPUSidecar(
+                    name, gpu, SERVER_URL, probabilistic_order=args.probabilistic_order
+                )
+            )
+        except TypeError:
+            threads.append(GPUSidecar(name, gpu, SERVER_URL))
     for t in threads:
         t.start()
     flash_mgr = GPUFlashManager(name, SERVER_URL, gpus)
@@ -289,4 +311,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(sys.argv[1:])
