@@ -224,6 +224,25 @@ To restrict access to the web dashboard set `"portal_key"` in
 `~/.hashmancer/server_config.json`. Requests to `/portal`, `/glyph` and
 `/admin` must then include an `X-API-Key` header with the same value.
 
+### Portal passkey
+
+Dashboard logins also require a `"portal_passkey"` in `~/.hashmancer/server_config.json`.
+Generate one with the helper function in `setup.py`:
+
+```bash
+python3 -c 'from Server.setup import generate_passkey; generate_passkey()'
+```
+
+This writes a random key to the config file. To obtain a session token send the
+passkey to `/login`:
+
+```bash
+curl -X POST -H 'Content-Type: application/json' \
+     -d '{"passkey": "<your key>"}' http://localhost:8000/login
+```
+
+Use the returned `cookie` value as the `session` cookie for subsequent requests.
+
 ## 🌐 Reverse Proxy Setup
 
 When exposing Hashmancer to the internet it's best to place a TLS-enabled
