@@ -69,7 +69,7 @@ import orchestrator_agent
 class FakeRedis:
     def __init__(self):
         self.queue = ['1']
-        self.store = {'batch:1': {'hashes': '[]', 'mask': '?d?d'}}
+        self.store = {'batch:1': {'hashes': '["h"]', 'mask': '?d?d'}}
         self.jobs = {}
         self.streams = []
     def rpop(self, name):

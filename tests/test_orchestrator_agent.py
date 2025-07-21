@@ -59,7 +59,7 @@ def test_darkling_transformed_mask(monkeypatch, tmp_path):
         def __init__(self):
             super().__init__()
             self.jobs = {}
-            self.store = {"batch:1": {"hashes": "[]", "wordlist": str(wl)}}
+            self.store = {"batch:1": {"hashes": json.dumps(["h"]), "wordlist": str(wl)}}
             self.queue = ["1"]
             self.queued = []
 
@@ -111,4 +111,58 @@ def test_compute_batch_range_scales():
     assert large > small
     capped = orchestrator_agent.compute_batch_range(100.0, 500)[1]
     assert capped == 500
+
+
+def test_dispatch_skips_cracked(monkeypatch):
+    class FR(FakeRedis):
+        def __init__(self):
+            super().__init__()
+            self.jobs = {}
+            self.queue = ["1"]
+            self.store = {"batch:1": {"hashes": json.dumps(["h1", "h2"]), "mask": "?d"}}
+            self.queued = []
+
+        def rpop(self, key):
+            return self.queue.pop(0) if self.queue else None
+
+        def hgetall(self, key):
+            return self.store.get(key, {})
+
+        def hset(self, key, mapping=None, **kw):
+            self.jobs[key] = dict(mapping or {})
+
+        def expire(self, key, ttl):
+            pass
+
+        def xadd(self, stream, mapping):
+            self.queued.append((stream, mapping))
+
+        def scan_iter(self, pattern):
+            return []
+
+    fake = FR()
+
+    monkeypatch.setattr(orchestrator_agent, "r", fake)
+    monkeypatch.setattr(orchestrator_agent, "compute_backlog_target", lambda: 1)
+    monkeypatch.setattr(orchestrator_agent, "pending_count", lambda *a, **k: 0)
+    monkeypatch.setattr(orchestrator_agent, "any_darkling_workers", lambda: False)
+    monkeypatch.setattr(orchestrator_agent, "cache_wordlist", lambda p: "")
+    monkeypatch.setattr(orchestrator_agent, "average_benchmark_rate", lambda: 0.0)
+    monkeypatch.setattr(orchestrator_agent, "estimate_keyspace", lambda m, c: 0)
+    monkeypatch.setattr(orchestrator_agent, "compute_batch_range", lambda r, k: (0, 100))
+
+    calls = []
+
+    def fake_is_already_cracked(h):
+        calls.append(h)
+        return h == "h1"
+
+    monkeypatch.setattr(orchestrator_agent, "is_already_cracked", fake_is_already_cracked)
+
+    orchestrator_agent.dispatch_batches()
+
+    assert calls == ["h1", "h2"]
+    stream, mapping = fake.queued[-1]
+    job = fake.jobs[f"job:{mapping['job_id']}"]
+    assert json.loads(job["hashes"]) == ["h2"]
 
