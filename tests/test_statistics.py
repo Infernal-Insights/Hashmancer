@@ -1,0 +1,18 @@
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(__file__))
+sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "Server"))
+
+from darkling import statistics
+
+
+def test_probability_order_indices():
+    # build simple Markov counts
+    records = [("$U$l", 3), ("$U$U", 1)]
+    markov = statistics.build_markov(records)
+    charset_map = {"?1": "Ac", "?2": "Xy"}
+    order = statistics.probability_index_order("?1?2", charset_map, markov)
+    assert order[:4] == [1, 0, 2, 3]
+

@@ -11,6 +11,7 @@ import gzip
 from pathlib import Path
 
 from .crypto_utils import sign_message
+from darkling import statistics
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
@@ -39,11 +40,12 @@ class DarklingContext:
 class GPUSidecar(threading.Thread):
     """Background thread that fetches and executes jobs via the HTTP API."""
 
-    def __init__(self, worker_id: str, gpu: dict, server_url: str):
+    def __init__(self, worker_id: str, gpu: dict, server_url: str, probabilistic_order: bool = False):
         super().__init__(daemon=True)
         self.worker_id = worker_id
         self.gpu = gpu
         self.server_url = server_url
+        self.probabilistic_order = probabilistic_order
         self.running = True
         self.current_job = None
         self.hashrate = 0.0
@@ -371,6 +373,24 @@ class GPUSidecar(threading.Thread):
         reload_cs = not self.darkling_ctx.matches(cs_map)
         if reload_cs:
             self.darkling_ctx.load(cs_map)
+
+        if self.probabilistic_order:
+            markov = statistics.load_markov()
+            indices = statistics.probability_index_order(
+                batch.get("mask", ""), cs_map, markov
+            )
+            results: list[str] = []
+            for idx in indices:
+                results.extend(
+                    self._run_engine(
+                        "darkling-engine",
+                        batch,
+                        range_start=idx,
+                        range_end=idx + 1,
+                        skip_charsets=not reload_cs,
+                    )
+                )
+            return results
 
         return self._run_engine(
             "darkling-engine",
