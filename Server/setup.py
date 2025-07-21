@@ -153,6 +153,9 @@ def configure():
         "broadcast_port": int(broadcast_port),
     }
 
+    passkey = generate_passkey()
+    config["portal_passkey"] = passkey
+
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=2)
 
@@ -164,6 +167,8 @@ def configure():
     print("\n🎉 Setup complete.")
     print(f"🔑 Config: {CONFIG_FILE}")
     print(f"🔐 API key: {ENV_FILE}")
+    print(f"🔑 Portal passkey: {passkey}")
+    print("   Use this key when logging in to the dashboard for the first time.")
     print("🧠 Server URL:", server_url)
     print("🟢 Service: hashmancer-server (enabled & running)")
 
