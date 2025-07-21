@@ -15,6 +15,9 @@ public:
     bool run_batch() override;
     std::vector<CrackResult> read_results() override;
     GpuStatus get_status() override;
+
+private:
+    MaskJob job_{};
 };
 
 } // namespace darkling

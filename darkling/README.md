@@ -87,3 +87,19 @@ mask_charsets = {
 `charsets.py` exposes uppercase and lowercase alphabets for the top 20
 languages along with `COMMON_SYMBOLS`, `EMOJI`, and scripts such as
 `CHINESE` and `JAPANESE` for convenience.
+
+## Building the GPU Backends
+
+The CUDA implementation is built by default but HIP and OpenCL backends can
+also be compiled via CMake:
+
+```bash
+cd darkling
+cmake -DENABLE_HIP=ON -DENABLE_OPENCL=ON -B build
+cmake --build build
+```
+
+`ENABLE_CUDA`, `ENABLE_HIP`, and `ENABLE_OPENCL` may be toggled to target a
+specific platform.  The resulting static libraries `cuda_backend`,
+`hip_backend`, and `opencl_backend` expose a `launch_darkling` entry point for
+each vendor.

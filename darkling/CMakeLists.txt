@@ -1,0 +1,26 @@
+cmake_minimum_required(VERSION 3.10)
+project(darkling_backends LANGUAGES C CXX)
+
+option(ENABLE_CUDA "Build CUDA backend" ON)
+option(ENABLE_HIP "Build HIP backend" ON)
+option(ENABLE_OPENCL "Build OpenCL backend" ON)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(ENABLE_CUDA)
+  enable_language(CUDA)
+  add_library(cuda_backend STATIC cuda_backend/cuda_cracker.cu darkling_engine.cu)
+endif()
+
+if(ENABLE_HIP)
+  find_package(HIP REQUIRED)
+  hip_add_library(hip_backend STATIC hip_backend/hip_cracker.cpp hip_backend/darkling_engine.hip)
+endif()
+
+if(ENABLE_OPENCL)
+  find_package(OpenCL REQUIRED)
+  add_library(opencl_backend STATIC intel_backend/intel_cracker.cpp)
+  target_sources(opencl_backend PRIVATE intel_backend/opencl_kernel.cl)
+  target_link_libraries(opencl_backend PRIVATE OpenCL::OpenCL)
+endif()
