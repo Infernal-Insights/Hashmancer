@@ -207,6 +207,10 @@ To enable it via configuration instead, add these fields to
 }
 ```
 
+Fine-tuning can be initiated through `/train_llm`. Provide a JSON body
+containing `dataset`, `base_model`, `epochs`, `learning_rate` and
+`output_dir` to run a local `transformers.Trainer` job.
+
 ---
 
 ## 🚀 Hashmancer Agent

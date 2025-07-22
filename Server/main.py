@@ -21,6 +21,10 @@ import glob
 import sys
 import redis_manager
 from event_logger import log_error, log_info
+try:  # optional transformers dependency
+    import train_llm  # type: ignore
+except Exception:  # pragma: no cover - optional component
+    train_llm = None
 from pathlib import Path
 import learn_trends
 import time
@@ -1010,6 +1014,14 @@ class TrainMarkovRequest(BaseModel):
     directory: str | None = None
 
 
+class TrainLLMRequest(BaseModel):
+    dataset: str
+    base_model: str
+    epochs: int
+    learning_rate: float
+    output_dir: str
+
+
 @app.post("/train_markov")
 async def train_markov(req: TrainMarkovRequest):
     """Process wordlists to build Markov statistics."""
@@ -1019,6 +1031,27 @@ async def train_markov(req: TrainMarkovRequest):
         return {"status": "ok"}
     except Exception as e:
         log_error("server", "system", "S735", "Failed to train Markov", e)
+        raise HTTPException(status_code=500, detail="training failed")
+
+
+@app.post("/train_llm")
+async def train_llm_endpoint(req: TrainLLMRequest):
+    """Fine-tune a local language model using transformers."""
+    dataset = Path(req.dataset)
+    out_dir = Path(req.output_dir)
+    try:
+        if train_llm is None:
+            raise RuntimeError("transformers not available")
+        train_llm.train_model(
+            dataset,
+            req.base_model,
+            req.epochs,
+            req.learning_rate,
+            out_dir,
+        )
+        return {"status": "ok"}
+    except Exception as e:
+        log_error("server", "system", "S741", "Failed to train LLM", e)
         raise HTTPException(status_code=500, detail="training failed")
 
 
