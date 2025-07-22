@@ -27,6 +27,8 @@ import learn_trends
 import time
 import hmac
 import hashlib
+import csv
+import io
 
 from waifus import assign_waifu
 from auth_utils import verify_signature, verify_signature_with_key
@@ -952,6 +954,35 @@ async def upload_wordlist(file: UploadFile = File(...)):
     except Exception as e:
         log_error("server", "system", "S720", "Failed to upload wordlist", e)
         raise HTTPException(status_code=500, detail="upload failed")
+
+
+@app.post("/import_hashes")
+async def import_hashes(file: UploadFile = File(...), hash_mode: str = "0"):
+    """Parse a CSV of hashes and queue cracking batches."""
+    try:
+        data = await file.read()
+        reader = csv.DictReader(io.StringIO(data.decode()))
+        queued: list[str] = []
+        errors: list[str] = []
+        for i, row in enumerate(reader, start=1):
+            h = (row.get("hash") or "").strip()
+            if not h:
+                errors.append(f"line {i}: missing hash")
+                continue
+            mask = (row.get("mask") or "").strip()
+            wordlist = (row.get("wordlist") or "").strip()
+            target = row.get("target") or "any"
+            batch_id = redis_manager.store_batch(
+                [h], mask=mask, wordlist=wordlist, target=target, hash_mode=hash_mode
+            )
+            if batch_id:
+                queued.append(batch_id)
+            else:
+                errors.append(f"line {i}: redis error")
+        return {"queued": len(queued), "errors": errors}
+    except Exception as e:
+        log_error("server", "system", "S726", "Failed to import hashes", e)
+        raise HTTPException(status_code=500, detail="import failed")
 
 
 class TrainMarkovRequest(BaseModel):
