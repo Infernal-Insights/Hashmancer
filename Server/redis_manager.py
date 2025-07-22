@@ -7,7 +7,14 @@ import time
 r = get_redis()
 
 
-def store_batch(hashes, mask="", wordlist="", ttl=1800, target="any"):
+def store_batch(
+    hashes,
+    mask="",
+    wordlist="",
+    ttl=1800,
+    target="any",
+    hash_mode="0",
+):
     batch_id = str(uuid.uuid4())
     try:
         r.hset(
@@ -19,6 +26,7 @@ def store_batch(hashes, mask="", wordlist="", ttl=1800, target="any"):
                 "created": int(time.time()),
                 "target": json.dumps(target),
                 "status": "queued",
+                "hash_mode": str(hash_mode),
             },
         )
         r.expire(f"batch:{batch_id}", ttl)

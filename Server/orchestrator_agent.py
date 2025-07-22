@@ -270,6 +270,7 @@ def dispatch_batches(lang: str = "English"):
                 "mask": batch.get("mask", ""),
                 "wordlist": batch.get("wordlist", ""),
                 "wordlist_key": wordlist_key,
+                "hash_mode": batch.get("hash_mode", "0"),
                 "attack_mode": attack,
                 "status": "queued",
             }
