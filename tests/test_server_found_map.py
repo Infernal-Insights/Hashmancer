@@ -2,6 +2,7 @@ import asyncio
 import sys
 import os
 import types
+from pathlib import Path
 
 # Stub FastAPI and Pydantic as in other server tests
 fastapi_stub = types.ModuleType("fastapi")
@@ -34,6 +35,7 @@ sys.modules.setdefault("fastapi.middleware.cors", cors_stub)
 
 resp_stub = types.ModuleType("fastapi.responses")
 resp_stub.HTMLResponse = object
+resp_stub.FileResponse = object
 sys.modules.setdefault("fastapi.responses", resp_stub)
 
 pydantic_stub = types.ModuleType("pydantic")
@@ -94,7 +96,12 @@ def test_submit_founds_maps(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(main, "r", fake)
     monkeypatch.setattr(main, "verify_signature", lambda a, b, c: True)
+    tmp = Path("/tmp/founds.txt")
+    if tmp.exists():
+        tmp.unlink()
+    monkeypatch.setattr(main, "FOUNDS_FILE", tmp)
     resp = asyncio.run(call())
     assert resp["status"] == "ok"
     assert fake.store["found:map"]["h1"] == "p1"
     assert fake.store["found:map"]["h2"] == "p2"
+    assert tmp.read_text().splitlines() == ["h1:p1", "h2:p2"]

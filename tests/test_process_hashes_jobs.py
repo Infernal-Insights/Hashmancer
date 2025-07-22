@@ -3,6 +3,7 @@ import sys
 import os
 import types
 import json
+from pathlib import Path
 
 # Stub FastAPI and related modules
 fastapi_stub = types.ModuleType('fastapi')
@@ -35,6 +36,7 @@ sys.modules.setdefault('fastapi.middleware.cors', cors_stub)
 
 resp_stub = types.ModuleType('fastapi.responses')
 resp_stub.HTMLResponse = object
+resp_stub.FileResponse = object
 sys.modules.setdefault('fastapi.responses', resp_stub)
 
 pydantic_stub = types.ModuleType('pydantic')
@@ -71,6 +73,7 @@ class FakeRedis:
     def __init__(self):
         self.store = {}
         self.queue = []
+        self.lists = []
 
     def hset(self, key, mapping=None, **kwargs):
         self.store.setdefault(key, {}).update(mapping or {})
@@ -80,6 +83,12 @@ class FakeRedis:
 
     def lpush(self, name, value):
         self.queue.insert(0, value)
+
+    def rpush(self, name, value):
+        self.lists.append((name, value))
+
+    def hget(self, key, field):
+        return self.store.get(key, {}).get(field)
 
     def hgetall(self, key):
         return dict(self.store.get(key, {}))
@@ -112,7 +121,9 @@ def test_process_hashes_jobs(monkeypatch):
     fake.store['hashes_job:1'] = {
         'hashes': json.dumps(['a', 'b']),
         'mask': '?d?d',
-        'wordlist': 'wl.txt'
+        'wordlist': 'wl.txt',
+        'algorithmName': 'MD5',
+        'algorithmId': '0'
     }
 
     asyncio.run(run_once())
@@ -120,3 +131,38 @@ def test_process_hashes_jobs(monkeypatch):
     assert 'batch:11111111-1111-1111-1111-111111111111' in fake.store
     assert fake.queue == ['11111111-1111-1111-1111-111111111111']
     assert fake.store['hashes_job:1']['status'] == 'processed'
+
+
+def test_process_hashes_known(monkeypatch, tmp_path):
+    fake = FakeRedis()
+    monkeypatch.setattr(main, 'r', fake)
+    monkeypatch.setattr(redis_manager, 'r', fake)
+    monkeypatch.setattr(redis_manager.uuid, 'uuid4', lambda: UUID('22222222-2222-2222-2222-222222222222'))
+
+    md5 = '5d41402abc4b2a76b9719d911017c592'
+    fake.store['found:map'] = {md5: 'hello'}
+
+    uploaded = {}
+
+    def mock_upload(algo_id, path):
+        uploaded['algo'] = algo_id
+        uploaded['data'] = Path(path).read_text().strip()
+        return True
+
+    monkeypatch.setitem(sys.modules, 'hashescom_client', types.SimpleNamespace(upload_founds=mock_upload))
+
+    fake.store['hashes_job:2'] = {
+        'hashes': json.dumps([md5, 'deadbeef']),
+        'mask': '',
+        'wordlist': '',
+        'algorithmName': 'MD5',
+        'algorithmId': '0'
+    }
+
+    asyncio.run(run_once())
+
+    assert uploaded['algo'] == '0'
+    assert uploaded['data'] == f'{md5}:hello'
+    assert 'batch:22222222-2222-2222-2222-222222222222' in fake.store
+    batch = fake.store['batch:22222222-2222-2222-2222-222222222222']
+    assert json.loads(batch['hashes']) == ['deadbeef']

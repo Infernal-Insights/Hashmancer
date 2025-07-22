@@ -55,6 +55,9 @@ WORDLISTS_DIR = Path(CONFIG.get("wordlists_dir", "/opt/hashmancer/wordlists"))
 MASKS_DIR = Path(CONFIG.get("masks_dir", "/opt/hashmancer/masks"))
 RULES_DIR = Path(CONFIG.get("rules_dir", "/opt/hashmancer/rules"))
 RESTORE_DIR = Path(CONFIG.get("restore_dir", "/opt/hashmancer/restores"))
+STORAGE_DIR = Path(CONFIG.get("storage_path", "/opt/hashmancer"))
+FOUNDS_FILE = STORAGE_DIR / "founds.txt"
+STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 # API key used to protect the portal and legacy dashboard pages. When not set
 # these routes remain publicly accessible.
@@ -112,6 +115,19 @@ def verify_session_token(token: str) -> bool:
     if not hmac.compare_digest(expected, sig):
         return False
     return bool(r.exists(f"session:{session_id}"))
+
+
+def verify_hash(password: str, hash_str: str, algorithm: str) -> bool:
+    """Return True if password hashes to hash_str for the given algorithm."""
+    algo = algorithm.lower()
+    try:
+        if algo == "ntlm":
+            digest = hashlib.new("md4", password.encode("utf-16le")).hexdigest()
+        else:
+            digest = hashlib.new(algo, password.encode()).hexdigest()
+    except Exception:
+        return False
+    return digest.lower() == hash_str.lower()
 
 # baseline undervolt/flash settings per GPU model
 FLASH_PRESETS_FILE = Path(__file__).with_name("flash_presets.json")
@@ -319,12 +335,37 @@ async def process_hashes_jobs():
                 except Exception:
                     hashes = []
 
+                algorithm = job.get("algorithmName", "")
+                algo_id = job.get("algorithmId")
+
+                known: list[str] = []
+                remaining: list[str] = []
+                for h in hashes:
+                    pw = r.hget("found:map", h)
+                    if pw and verify_hash(pw, h, algorithm):
+                        known.append(f"{h}:{pw}")
+                    else:
+                        remaining.append(h)
+
                 mask = job.get("mask", "")
                 wordlist = job.get("wordlist", "")
+                if known:
+                    try:
+                        import tempfile
+                        from hashescom_client import upload_founds
 
-                batch_id = redis_manager.store_batch(hashes, mask=mask, wordlist=wordlist)
-                if batch_id:
-                    r.hset(key, mapping={"status": "processed", "batch_id": batch_id})
+                        with tempfile.NamedTemporaryFile("w", delete=False) as fh:
+                            fh.write("\n".join(known))
+                            temp_path = fh.name
+                        upload_founds(algo_id, temp_path)
+                        os.unlink(temp_path)
+                    except Exception:
+                        pass
+
+                batch_id = None
+                if remaining:
+                    batch_id = redis_manager.store_batch(remaining, mask=mask, wordlist=wordlist)
+                r.hset(key, mapping={"status": "processed", "batch_id": batch_id or ""})
         except redis.exceptions.RedisError as e:
             log_error("server", "system", "SRED", "Redis unavailable", e)
         except Exception as e:
@@ -480,6 +521,12 @@ async def submit_founds(payload: dict):
             except ValueError:
                 continue
             r.hset("found:map", hash_str, password)
+        try:
+            with FOUNDS_FILE.open("a", encoding="utf-8") as fh:
+                for line in payload["founds"]:
+                    fh.write(line + "\n")
+        except Exception:
+            pass
 
         job_id = payload.get("job_id", payload.get("batch_id"))
         info = r.hgetall(f"job:{job_id}")
