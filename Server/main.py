@@ -20,7 +20,6 @@ import asyncio
 import glob
 import sys
 import redis_manager
-import orchestrator_agent
 from event_logger import log_error, log_info
 from pathlib import Path
 import learn_trends
@@ -84,12 +83,26 @@ HASHES_ALGORITHMS = [a.lower() for a in CONFIG.get("hashes_algorithms", [])]
 PROBABILISTIC_ORDER = bool(CONFIG.get("probabilistic_order", False))
 MARKOV_LANG = CONFIG.get("markov_lang", "english")
 
+# local language model settings
+LLM_ENABLED = bool(CONFIG.get("llm_enabled", False))
+LLM_MODEL_PATH = CONFIG.get("llm_model_path", "")
+if LLM_ENABLED and LLM_MODEL_PATH:
+    os.environ["LLM_MODEL_PATH"] = LLM_MODEL_PATH
+else:
+    os.environ.pop("LLM_MODEL_PATH", None)
+
+import orchestrator_agent
+
 
 def save_config():
     """Persist the CONFIG dictionary to disk."""
     try:
         with open(CONFIG_FILE, "w") as f:
             json.dump(CONFIG, f, indent=2)
+        if CONFIG.get("llm_enabled") and CONFIG.get("llm_model_path"):
+            os.environ["LLM_MODEL_PATH"] = CONFIG["llm_model_path"]
+        else:
+            os.environ.pop("LLM_MODEL_PATH", None)
     except Exception as e:
         log_error("server", "system", "S740", "Failed to save config", e)
 
