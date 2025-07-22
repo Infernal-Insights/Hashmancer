@@ -42,3 +42,16 @@ also supply `--server-ip` to skip auto-discovery.
 Both the server and worker load their private signing keys once at module import
 time.  The `cryptography` library returns immutable key objects, so concurrent
 threads can safely call the signing helpers without additional locking.
+
+## Example configuration
+
+Settings for the server are loaded from `~/.hashmancer/server_config.json`.
+To enable the optional language model orchestrator and provide the model path
+add these fields:
+
+```json
+{
+  "llm_enabled": true,
+  "llm_model_path": "/opt/models/distilgpt2"
+}
+```
