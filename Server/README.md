@@ -126,6 +126,7 @@ performance over time.
 | POST   | `/submit_founds`    | Submit cracked hashes (cached)      |
 | POST   | `/submit_no_founds` | Report a finished batch with none   |
 | POST   | `/upload_restore`   | Upload a `.restore` file from a worker |
+| POST   | `/import_hashes`    | Import a CSV of hashes to queue      |
 | GET    | `/wordlists`        | List available wordlists            |
 | GET    | `/masks`            | List available masks                |
 | GET    | `/rules`            | List available hashcat rules        |
@@ -133,6 +134,22 @@ performance over time.
 | GET    | `/hashrate`         | Aggregate hashrate of all workers   |
 | POST   | `/worker_status`    | Update a worker's status (optional signature) |
 | POST   | `/submit_benchmark` | Submit benchmark results            |
+
+---
+
+### CSV format for `/import_hashes`
+
+Upload a CSV containing the following columns:
+`hash`, `mask`, `wordlist`, `target`, and `hash_mode`.
+`hash_mode` numbers follow [hashcat's list](https://hashcat.net/wiki/doku.php?id=example_hashes)
+(also available on the portal).
+
+Example:
+
+```csv
+hash,mask,wordlist,target,hash_mode
+d41d8cd98f00b204e9800998ecf8427e,?a?a?a?a,rockyou.txt,example.com,0
+```
 
 ---
 
