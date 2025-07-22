@@ -193,6 +193,10 @@ into either a high- or low-bandwidth queue.  Queue lengths and the number
 of workers are used to keep load balanced so tasks flow smoothly to
 available GPUs.
 
+An optional `LLMOrchestrator` component can load a local language model via
+`transformers` to suggest batch sizes and choose between the high and low
+bandwidth queues. Set `LLM_MODEL_PATH` in the environment to enable it.
+
 ---
 
 ## 🚀 Hashmancer Agent

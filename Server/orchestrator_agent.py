@@ -14,6 +14,18 @@ from pattern_stats import generate_mask, TOKEN_RE
 from pattern_utils import is_valid_word
 from darkling import charsets
 
+try:  # optional local LLM orchestrator
+    from llm_orchestrator import LLMOrchestrator  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    LLMOrchestrator = None
+
+_LLM = None
+if LLMOrchestrator and os.getenv("LLM_MODEL_PATH"):
+    try:
+        _LLM = LLMOrchestrator(os.getenv("LLM_MODEL_PATH"))
+    except Exception as e:  # pragma: no cover - optional component
+        logging.warning("LLMOrchestrator disabled: %s", e)
+
 JOB_STREAM = os.getenv("JOB_STREAM", "jobs")
 HTTP_GROUP = os.getenv("HTTP_GROUP", "http-workers")
 LOW_BW_JOB_STREAM = os.getenv("LOW_BW_JOB_STREAM", "darkling-jobs")
@@ -275,14 +287,61 @@ def dispatch_batches(lang: str = "English"):
                 "status": "queued",
             }
 
-            # route job depending on attack type
-            if attack == "mask" and darkling and pending_low < backlog_target:
-                task_id = str(uuid.uuid4())
+            use_llm = _LLM is not None
+
+            if use_llm:
+                try:
+                    stream_choice = _LLM.choose_job_stream(job_data, pending_high, pending_low)
+                except Exception:  # pragma: no cover - optional component
+                    stream_choice = "high"
+                try:
+                    start, end = _LLM.suggest_batch_size(job_data)
+                    job_data.update({"start": start, "end": end})
+                except Exception:
+                    pass
+            else:
+                if attack == "mask" and darkling and pending_low < backlog_target:
+                    stream_choice = "low"
+                else:
+                    stream_choice = "high"
+
+            if stream_choice == "low":
+                if attack != "mask":
+                    # transform into a basic mask attack for darkling workers
+                    mask_length = 8
+                    if batch.get("wordlist"):
+                        try:
+                            lengths = []
+                            with open(batch["wordlist"], "r", encoding="utf-8", errors="ignore") as f:
+                                for i, line in enumerate(f):
+                                    if i >= 100:
+                                        break
+                                    word = line.strip()
+                                    if is_valid_word(word):
+                                        lengths.append(len(word))
+                            if lengths:
+                                mask_length = round(sum(lengths) / len(lengths))
+                        except Exception:
+                            pass
+
+                    pattern = generate_mask(mask_length)
+                    tokens = TOKEN_RE.findall(pattern)
+                    mask = "".join(TOKEN_TO_ID.get(t, "?1") for t in tokens)
+                    job_data.update({
+                        "mask": mask,
+                        "wordlist": "",
+                        "wordlist_key": "",
+                        "attack_mode": "mask",
+                    })
+
                 cs_map = build_mask_charsets(lang)
-                keyspace = estimate_keyspace(job_data["mask"], cs_map)
+                job_data["mask_charsets"] = json.dumps(cs_map)
+                keyspace = estimate_keyspace(job_data.get("mask", ""), cs_map)
                 rate = average_benchmark_rate()
-                start, end = compute_batch_range(rate, keyspace)
-                job_data.update({"start": start, "end": end})
+                if not use_llm:
+                    start, end = compute_batch_range(rate, keyspace)
+                    job_data.update({"start": start, "end": end})
+                task_id = str(uuid.uuid4())
                 r.hset(f"job:{task_id}", mapping=job_data)
                 r.expire(f"job:{task_id}", 3600)
                 r.xadd(LOW_BW_JOB_STREAM, {"job_id": task_id})
@@ -295,7 +354,7 @@ def dispatch_batches(lang: str = "English"):
             r.xadd(JOB_STREAM, {"job_id": task_id})
             pending_high += 1
 
-            if darkling and attack != "mask" and pending_low < backlog_target:
+            if not use_llm and darkling and attack != "mask" and pending_low < backlog_target:
                 # transform into a basic mask attack for darkling workers
                 d_id = str(uuid.uuid4())
                 transformed = job_data.copy()
