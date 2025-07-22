@@ -197,6 +197,16 @@ An optional `LLMOrchestrator` component can load a local language model via
 `transformers` to suggest batch sizes and choose between the high and low
 bandwidth queues. Set `LLM_MODEL_PATH` in the environment to enable it.
 
+To enable it via configuration instead, add these fields to
+`~/.hashmancer/server_config.json`:
+
+```json
+{
+  "llm_enabled": true,
+  "llm_model_path": "/opt/models/distilgpt2"
+}
+```
+
 ---
 
 ## 🚀 Hashmancer Agent
