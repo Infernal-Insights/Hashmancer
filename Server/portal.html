@@ -103,6 +103,13 @@ body::before {
 <button onclick="uploadDict()">Upload</button>
 </section>
 
+<section id="import-hashes">
+<h2>Import Hashes</h2>
+<input type="file" id="hash-file">
+<input type="number" id="hash-mode">
+<button onclick="uploadHashes()">Upload</button>
+</section>
+
 <section id="masks">
 <h2>Masks</h2>
 <ul id="mask-list"></ul>
@@ -234,6 +241,20 @@ async function uploadRestore(){
   await fetch('/upload_restore',{method:'POST',body:fd});
   document.getElementById('restore-upload').value='';
   loadRestores();
+}
+
+async function uploadHashes(){
+  const file=document.getElementById('hash-file').files[0];
+  if(!file) return;
+  const mode=document.getElementById('hash-mode').value.trim();
+  const fd=new FormData();
+  fd.append('file',file);
+  if(mode) fd.append('hash_mode',mode);
+  await fetch('/import_hashes',{method:'POST',body:fd});
+  document.getElementById('hash-file').value='';
+  document.getElementById('hash-mode').value='';
+  updateMetrics();
+  loadJobs();
 }
 
 async function loadAllFounds(){
