@@ -164,7 +164,19 @@ body::before {
   <label><input type="checkbox" id="prob-order" onchange="updateProbOrder()"> Probabilistic Ordering</label>
 </div>
 <div>Current Language: <span id="current-markov-lang"></span></div>
-<div>Probabilistic Order: <span id="current-prob-order"></span></div>
+  <div>Probabilistic Order: <span id="current-prob-order"></span></div>
+</section>
+
+<section id="llm-training">
+<h2>LLM Training</h2>
+<div>
+  <input type="text" id="llm-dataset" placeholder="dataset path">
+  <input type="text" id="llm-base-model" placeholder="base model path">
+  <input type="number" id="llm-epochs" placeholder="epochs" value="1">
+  <input type="number" step="0.0001" id="llm-lr" placeholder="learning rate" value="0.0001">
+  <input type="text" id="llm-output" placeholder="output directory">
+  <button onclick="trainLLM()">Train LLM</button>
+</div>
 </section>
 
 <script>
@@ -382,6 +394,19 @@ async function changeMarkovLang(){
   const lang=document.getElementById('markov-language').value;
   await fetch('/markov_lang',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lang})});
   updateMetrics();
+}
+
+async function trainLLM(){
+  const dataset=document.getElementById('llm-dataset').value.trim();
+  const model=document.getElementById('llm-base-model').value.trim();
+  const epochs=parseInt(document.getElementById('llm-epochs').value,10)||0;
+  const learning_rate=parseFloat(document.getElementById('llm-lr').value)||0;
+  const output_dir=document.getElementById('llm-output').value.trim();
+  await fetch('/train_llm',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({dataset_path:dataset,base_model_path:model,epochs,learning_rate,output_dir})
+  });
 }
 
 function tick(){
