@@ -86,6 +86,8 @@ MARKOV_LANG = CONFIG.get("markov_lang", "english")
 # local language model settings
 LLM_ENABLED = bool(CONFIG.get("llm_enabled", False))
 LLM_MODEL_PATH = CONFIG.get("llm_model_path", "")
+
+# propagate the model path for orchestrator_agent if enabled
 if LLM_ENABLED and LLM_MODEL_PATH:
     os.environ["LLM_MODEL_PATH"] = LLM_MODEL_PATH
 else:
@@ -97,10 +99,15 @@ import orchestrator_agent
 def save_config():
     """Persist the CONFIG dictionary to disk."""
     try:
+        # ensure current LLM settings are written to disk
+        CONFIG["llm_enabled"] = bool(LLM_ENABLED)
+        CONFIG["llm_model_path"] = LLM_MODEL_PATH
+
         with open(CONFIG_FILE, "w") as f:
             json.dump(CONFIG, f, indent=2)
-        if CONFIG.get("llm_enabled") and CONFIG.get("llm_model_path"):
-            os.environ["LLM_MODEL_PATH"] = CONFIG["llm_model_path"]
+
+        if LLM_ENABLED and LLM_MODEL_PATH:
+            os.environ["LLM_MODEL_PATH"] = LLM_MODEL_PATH
         else:
             os.environ.pop("LLM_MODEL_PATH", None)
     except Exception as e:
