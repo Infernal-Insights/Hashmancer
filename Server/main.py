@@ -210,7 +210,7 @@ def get_flash_settings(model: str) -> dict:
     return data
 
 
-origins = ["*"]
+origins = CONFIG.get("allowed_origins", ["*"])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
