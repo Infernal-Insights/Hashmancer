@@ -77,16 +77,37 @@ class DummyRedis:
 
 def test_train_markov_invokes_processor(monkeypatch, tmp_path):
     called = {}
+
+    def fake_to_thread(func, *a, **kw):
+        called['func'] = func
+        called['args'] = a
+        called['kw'] = kw
+
+        async def dummy():
+            called['ran'] = True
+        return dummy()
+
+    monkeypatch.setattr(main.asyncio, 'to_thread', fake_to_thread)
+    orig_create = asyncio.create_task
+
+    def fake_create(coro):
+        called['task'] = coro
+        return orig_create(coro)
+
+    monkeypatch.setattr(main.asyncio, 'create_task', fake_create)
+
     def fake_process(dir_path, lang='english'):
         called['dir'] = dir_path
         called['lang'] = lang
+
     monkeypatch.setattr(main, 'WORDLISTS_DIR', tmp_path)
     monkeypatch.setattr(main, 'learn_trends', types.SimpleNamespace(process_wordlists=fake_process))
     req = type('Req', (), {'lang': 'french', 'directory': None})
     resp = asyncio.run(main.train_markov(req()))
-    assert resp['status'] == 'ok'
-    assert called['dir'] == tmp_path
-    assert called['lang'] == 'french'
+    assert resp['status'] == 'scheduled'
+    assert called['func'] == fake_process
+    assert called['args'] == (tmp_path,)
+    assert called['kw'] == {'lang': 'french'}
 
 
 def test_update_probabilistic_order(monkeypatch):
