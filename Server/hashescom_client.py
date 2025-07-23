@@ -1,7 +1,14 @@
-import requests
+import asyncio
 import os
 import json
 from pathlib import Path
+
+import requests
+
+try:
+    import aiohttp
+except Exception:  # pragma: no cover - fallback when aiohttp unavailable
+    aiohttp = None
 
 # Prefer an environment variable but fall back to the server config
 CONFIG_FILE = Path.home() / ".hashmancer" / "server_config.json"
@@ -20,20 +27,35 @@ def _load_api_key() -> str | None:
 HASHES_API = _load_api_key()
 
 
-def fetch_jobs():
-    try:
-        url = "https://hashes.com/en/api/jobs"
-        if HASHES_API:
-            url += f"?key={HASHES_API}"
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        if not data.get("success"):
-            return []
-        return data["list"]
-    except requests.HTTPError as e:
-        print(f"[❌] Hashes.com fetch error: {e}")
+async def _fetch_jobs_async(url: str) -> list:
+    assert aiohttp is not None
+    timeout = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.get(url) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+    if not data.get("success"):
         return []
+    return data["list"]
+
+
+def _fetch_jobs_sync(url: str) -> list:
+    resp = requests.get(url, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("success"):
+        return []
+    return data["list"]
+
+
+async def fetch_jobs() -> list:
+    url = "https://hashes.com/en/api/jobs"
+    if HASHES_API:
+        url += f"?key={HASHES_API}"
+    try:
+        if aiohttp is not None:
+            return await _fetch_jobs_async(url)
+        return await asyncio.to_thread(_fetch_jobs_sync, url)
     except Exception as e:
         print(f"[❌] Hashes.com fetch error: {e}")
         return []

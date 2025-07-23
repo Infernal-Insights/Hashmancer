@@ -76,11 +76,14 @@ def test_fetch_and_store_jobs(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(main, 'r', fake)
     monkeypatch.setattr(main, 'HASHES_ALGORITHMS', ['md5'])
-    monkeypatch.setattr(hashescom_client, 'fetch_jobs', lambda: [{
-        'id': 8,
-        'algorithmName': 'MD5',
-        'currency': 'BTC',
-        'pricePerHash': '1'
-    }])
+    async def fake_fetch_jobs():
+        return [{
+            'id': 8,
+            'algorithmName': 'MD5',
+            'currency': 'BTC',
+            'pricePerHash': '1'
+        }]
+
+    monkeypatch.setattr(hashescom_client, 'fetch_jobs', fake_fetch_jobs)
     asyncio.run(run_once())
     assert 'hashes_job:8' in fake.store
