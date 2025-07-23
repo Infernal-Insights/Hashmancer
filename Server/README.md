@@ -289,6 +289,19 @@ You can also login through the built-in HTML form by visiting `/login_page` in a
 browser. Enter the passkey and you will be redirected to the portal once the
 `session` cookie is set.
 
+### Allowed origins
+
+Specify a list of origins permitted for CORS requests by adding
+`"allowed_origins"` to `~/.hashmancer/server_config.json`:
+
+```json
+{
+  "allowed_origins": ["https://example.com"]
+}
+```
+
+If omitted, all origins are accepted.
+
 ## 🌐 Reverse Proxy Setup
 
 When exposing Hashmancer to the internet it's best to place a TLS-enabled
