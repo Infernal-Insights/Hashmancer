@@ -69,12 +69,32 @@ import main
 
 def test_train_llm_invokes_helper(monkeypatch, tmp_path):
     called = {}
+
+    def fake_to_thread(func, *a, **kw):
+        called['func'] = func
+        called['args'] = a
+        called['kw'] = kw
+
+        async def dummy():
+            called['ran'] = True
+        return dummy()
+
+    monkeypatch.setattr(main.asyncio, 'to_thread', fake_to_thread)
+    orig_create = asyncio.create_task
+
+    def fake_create(coro):
+        called['task'] = coro
+        return orig_create(coro)
+
+    monkeypatch.setattr(main.asyncio, 'create_task', fake_create)
+
     def fake_train(dataset, model, epochs, lr, out_dir):
         called['dataset'] = dataset
         called['model'] = model
         called['epochs'] = epochs
         called['lr'] = lr
         called['out'] = out_dir
+
     monkeypatch.setattr(main, '_train_llm', types.SimpleNamespace(train_model=fake_train))
     req = type('Req', (), {
         'dataset': str(tmp_path / 'data.txt'),
@@ -84,9 +104,6 @@ def test_train_llm_invokes_helper(monkeypatch, tmp_path):
         'output_dir': str(tmp_path / 'out')
     })
     resp = asyncio.run(main.train_llm_endpoint(req()))
-    assert resp['status'] == 'ok'
-    assert called['dataset'] == tmp_path / 'data.txt'
-    assert called['model'] == 'modelA'
-    assert called['epochs'] == 3
-    assert called['lr'] == 0.001
-    assert called['out'] == tmp_path / 'out'
+    assert resp['status'] == 'scheduled'
+    assert called['func'] == fake_train
+    assert called['args'] == (tmp_path / 'data.txt', 'modelA', 3, 0.001, tmp_path / 'out')

@@ -1069,8 +1069,10 @@ async def train_markov(req: TrainMarkovRequest):
     """Process wordlists to build Markov statistics."""
     directory = Path(req.directory) if req.directory else WORDLISTS_DIR
     try:
-        learn_trends.process_wordlists(directory, lang=req.lang)
-        return {"status": "ok"}
+        asyncio.create_task(
+            asyncio.to_thread(learn_trends.process_wordlists, directory, lang=req.lang)
+        )
+        return {"status": "scheduled"}
     except Exception as e:
         log_error("server", "system", "S735", "Failed to train Markov", e)
         raise HTTPException(status_code=500, detail="training failed")
@@ -1084,14 +1086,17 @@ async def train_llm_endpoint(req: TrainLLMRequest):
     try:
         if _train_llm is None:
             raise RuntimeError("transformers not available")
-        _train_llm.train_model(
-            dataset,
-            req.base_model,
-            req.epochs,
-            req.learning_rate,
-            out_dir,
+        asyncio.create_task(
+            asyncio.to_thread(
+                _train_llm.train_model,
+                dataset,
+                req.base_model,
+                req.epochs,
+                req.learning_rate,
+                out_dir,
+            )
         )
-        return {"status": "ok"}
+        return {"status": "scheduled"}
     except Exception as e:
         log_error("server", "system", "S741", "Failed to train LLM", e)
         raise HTTPException(status_code=500, detail="training failed")
