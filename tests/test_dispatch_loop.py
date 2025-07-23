@@ -65,6 +65,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Ser
 
 import main
 import orchestrator_agent
+import redis_manager
 
 class FakeRedis:
     def __init__(self):
@@ -72,6 +73,7 @@ class FakeRedis:
         self.store = {'batch:1': {'hashes': '["h"]', 'mask': '?d?d'}}
         self.jobs = {}
         self.streams = []
+        self.lists = {}
     def rpop(self, name):
         return self.queue.pop(0) if self.queue else None
     def hgetall(self, key):
@@ -82,6 +84,12 @@ class FakeRedis:
         pass
     def xadd(self, stream, mapping):
         self.streams.append((stream, mapping))
+    def rpush(self, name, value):
+        self.lists.setdefault(name, []).append(value)
+    def lrem(self, name, count, value):
+        lst = self.lists.get(name, [])
+        while value in lst:
+            lst.remove(value)
     def scan_iter(self, pattern):
         return []
 
@@ -102,6 +110,7 @@ def run_once():
 def test_dispatch_loop_queues_job(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(orchestrator_agent, 'r', fake)
+    monkeypatch.setattr(redis_manager, 'r', fake)
     monkeypatch.setattr(orchestrator_agent, 'compute_backlog_target', lambda: 1)
     monkeypatch.setattr(orchestrator_agent, 'pending_count', lambda *a, **k: 0)
     monkeypatch.setattr(orchestrator_agent, 'any_darkling_workers', lambda: False)
@@ -119,6 +128,7 @@ def test_dispatch_loop_queues_job(monkeypatch):
 def test_dispatch_loop_routes_low_bw(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(orchestrator_agent, 'r', fake)
+    monkeypatch.setattr(redis_manager, 'r', fake)
     monkeypatch.setattr(orchestrator_agent, 'compute_backlog_target', lambda: 1)
     monkeypatch.setattr(orchestrator_agent, 'pending_count', lambda *a, **k: 0)
     monkeypatch.setattr(orchestrator_agent, 'any_darkling_workers', lambda: True)

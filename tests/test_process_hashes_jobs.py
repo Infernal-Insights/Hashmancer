@@ -74,6 +74,7 @@ class FakeRedis:
         self.store = {}
         self.queue = []
         self.lists = []
+        self.sets = {}
 
     def hset(self, key, mapping=None, **kwargs):
         self.store.setdefault(key, {}).update(mapping or {})
@@ -86,6 +87,15 @@ class FakeRedis:
 
     def rpush(self, name, value):
         self.lists.append((name, value))
+
+    def sadd(self, key, value):
+        self.sets.setdefault(key, set()).add(value)
+
+    def smembers(self, key):
+        return self.sets.get(key, set())
+
+    def lrem(self, name, count, value):
+        pass
 
     def hget(self, key, field):
         return self.store.get(key, {}).get(field)
@@ -117,6 +127,8 @@ def test_process_hashes_jobs(monkeypatch):
     monkeypatch.setattr(main, 'r', fake)
     monkeypatch.setattr(redis_manager, 'r', fake)
     monkeypatch.setattr(redis_manager.uuid, 'uuid4', lambda: UUID('11111111-1111-1111-1111-111111111111'))
+    monkeypatch.setattr(redis_manager.orchestrator_agent, 'build_mask_charsets', lambda: {})
+    monkeypatch.setattr(redis_manager.orchestrator_agent, 'estimate_keyspace', lambda m, c: 10)
 
     fake.store['hashes_job:1'] = {
         'hashes': json.dumps(['a', 'b']),
@@ -138,6 +150,8 @@ def test_process_hashes_known(monkeypatch, tmp_path):
     monkeypatch.setattr(main, 'r', fake)
     monkeypatch.setattr(redis_manager, 'r', fake)
     monkeypatch.setattr(redis_manager.uuid, 'uuid4', lambda: UUID('22222222-2222-2222-2222-222222222222'))
+    monkeypatch.setattr(redis_manager.orchestrator_agent, 'build_mask_charsets', lambda: {})
+    monkeypatch.setattr(redis_manager.orchestrator_agent, 'estimate_keyspace', lambda m, c: 10)
 
     md5 = '5d41402abc4b2a76b9719d911017c592'
     fake.store['found:map'] = {md5: 'hello'}

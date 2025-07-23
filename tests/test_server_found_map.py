@@ -64,6 +64,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "Server"))
 
 import main
+import redis_manager
 
 class FakeRedis:
     def __init__(self):
@@ -71,6 +72,8 @@ class FakeRedis:
         self.lists = []
     def rpush(self, name, value):
         self.lists.append((name, value))
+    def lrem(self, name, count, value):
+        pass
     def hgetall(self, key):
         return {}
     def xack(self, *a, **kw):
@@ -95,6 +98,7 @@ async def call():
 def test_submit_founds_maps(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(main, "r", fake)
+    monkeypatch.setattr(redis_manager, "r", fake)
     monkeypatch.setattr(main, "verify_signature", lambda a, b, c: True)
     tmp = Path("/tmp/founds.txt")
     if tmp.exists():

@@ -25,7 +25,8 @@ fastapi_stub.File = lambda *a, **kw: None
 fastapi_stub.WebSocket = object
 fastapi_stub.WebSocketDisconnect = type("WebSocketDisconnect", (), {})
 class HTTPException(Exception):
-    pass
+    def __init__(self, *a, **kw):
+        super().__init__(*a)
 fastapi_stub.HTTPException = HTTPException
 sys.modules.setdefault("fastapi", fastapi_stub)
 
@@ -85,18 +86,29 @@ class FakeRedis:
     def __init__(self):
         self.store = {}
         self.queue = []
+        self.sets = {}
     def hset(self, key, mapping=None, **kwargs):
         self.store[key] = dict(mapping or {})
     def expire(self, key, ttl):
         pass
     def lpush(self, name, value):
         self.queue.insert(0, value)
+    def sadd(self, key, value):
+        self.sets.setdefault(key, set()).add(value)
+    def smembers(self, key):
+        return self.sets.get(key, set())
+    def rpush(self, name, value):
+        self.queue.append(value)
+    def lrem(self, name, count, value):
+        pass
 
 
 def test_import_hashes(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(main, 'r', fake)
     monkeypatch.setattr(redis_manager, 'r', fake)
+    monkeypatch.setattr(redis_manager.orchestrator_agent, 'build_mask_charsets', lambda: {})
+    monkeypatch.setattr(redis_manager.orchestrator_agent, 'estimate_keyspace', lambda m, c: 10)
     ids = [UUID('11111111-1111-1111-1111-111111111111'), UUID('22222222-2222-2222-2222-222222222222')]
     def fake_uuid():
         return ids.pop(0)

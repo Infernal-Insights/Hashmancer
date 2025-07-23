@@ -566,6 +566,14 @@ async def submit_founds(payload: dict):
         if msg_id:
             r.xack(stream, group, msg_id)
 
+        try:
+            start = int(info.get("start", 0))
+            end = int(info.get("end", 0))
+            if start or end:
+                redis_manager.complete_range(payload["batch_id"], start, end)
+        except Exception:
+            pass
+
         r.hset(f"worker:{payload['worker_id']}", "status", "idle")
         return {"status": "ok", "received": len(payload["founds"])}
     except redis.exceptions.RedisError as e:
@@ -595,6 +603,14 @@ async def submit_no_founds(payload: dict):
         group = HTTP_GROUP if stream == JOB_STREAM else LOW_BW_GROUP
         if msg_id:
             r.xack(stream, group, msg_id)
+
+        try:
+            start = int(info.get("start", 0))
+            end = int(info.get("end", 0))
+            if start or end:
+                redis_manager.complete_range(payload["batch_id"], start, end)
+        except Exception:
+            pass
 
         r.hset(f"worker:{payload['worker_id']}", "status", "idle")
         return {"status": "ok"}

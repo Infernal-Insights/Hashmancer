@@ -87,6 +87,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "Server"))
 
 import main
+import redis_manager
 
 
 class FakeRedis:
@@ -120,10 +121,17 @@ class FakeRedis:
             self.store.setdefault(key, {}).update(mapping or kwargs)
 
     def rpush(self, *a, **kw):
-        pass
+        name = a[0]
+        value = a[1] if len(a) > 1 else None
+        self.store.setdefault(name, []).append(value)
 
     def ltrim(self, *a, **kw):
         pass
+
+    def lrem(self, name, count, value):
+        lst = self.store.get(name, [])
+        while value in lst:
+            lst.remove(value)
 
 
 def test_get_batch_returns_batch_id(monkeypatch):
@@ -131,6 +139,7 @@ def test_get_batch_returns_batch_id(monkeypatch):
     fake.store["job:job1"] = {"batch_id": "batch1"}
     fake.store["worker:worker"] = {"low_bw_engine": "hashcat"}
     monkeypatch.setattr(main, "r", fake)
+    monkeypatch.setattr(redis_manager, "r", fake)
     monkeypatch.setattr(main, "verify_signature", lambda a, b, c: True)
 
     resp = asyncio.run(main.get_batch("worker", "sig"))
