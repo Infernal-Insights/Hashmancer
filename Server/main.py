@@ -324,7 +324,7 @@ async def fetch_and_store_jobs():
     try:
         from hashescom_client import fetch_jobs
 
-        jobs = fetch_jobs()
+        jobs = await fetch_jobs()
         for job in jobs:
             algo = str(job.get("algorithmName", "")).lower()
             if HASHES_ALGORITHMS and algo not in HASHES_ALGORITHMS:
