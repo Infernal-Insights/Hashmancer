@@ -13,6 +13,7 @@ from event_logger import log_error
 from pattern_stats import generate_mask, TOKEN_RE
 from pattern_utils import is_valid_word
 from darkling import charsets
+import redis_manager
 
 try:  # optional local LLM orchestrator
     from llm_orchestrator import LLMOrchestrator  # type: ignore
@@ -344,6 +345,8 @@ def dispatch_batches(lang: str = "English"):
                 task_id = str(uuid.uuid4())
                 r.hset(f"job:{task_id}", mapping=job_data)
                 r.expire(f"job:{task_id}", 3600)
+                if "start" in job_data and "end" in job_data:
+                    redis_manager.queue_range(batch_id, int(job_data["start"]), int(job_data["end"]))
                 r.xadd(LOW_BW_JOB_STREAM, {"job_id": task_id})
                 pending_low += 1
                 continue
@@ -351,6 +354,8 @@ def dispatch_batches(lang: str = "English"):
             task_id = str(uuid.uuid4())
             r.hset(f"job:{task_id}", mapping=job_data)
             r.expire(f"job:{task_id}", 3600)
+            if "start" in job_data and "end" in job_data:
+                redis_manager.queue_range(batch_id, int(job_data["start"]), int(job_data["end"]))
             r.xadd(JOB_STREAM, {"job_id": task_id})
             pending_high += 1
 
@@ -393,6 +398,7 @@ def dispatch_batches(lang: str = "English"):
                 transformed.update({"start": start, "end": end})
                 r.hset(f"job:{d_id}", mapping=transformed)
                 r.expire(f"job:{d_id}", 3600)
+                redis_manager.queue_range(batch_id, int(start), int(end))
                 r.xadd(LOW_BW_JOB_STREAM, {"job_id": d_id})
                 pending_low += 1
     except redis.exceptions.RedisError as e:

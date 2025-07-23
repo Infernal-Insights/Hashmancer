@@ -5,6 +5,7 @@ ROOT = os.path.dirname(os.path.dirname(__file__))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "Server"))
 import json
+import redis_manager
 
 import orchestrator_agent
 
@@ -16,6 +17,7 @@ class FakeRedis:
         self.info = info
         self.raise_err = raise_err
         self.group_created = False
+        self.lists = {}
 
     def xpending(self, stream, group):
         if self.raise_err:
@@ -24,6 +26,14 @@ class FakeRedis:
 
     def xgroup_create(self, stream, group, id="0", mkstream=True):
         self.group_created = True
+
+    def rpush(self, name, value):
+        self.lists.setdefault(name, []).append(value)
+
+    def lrem(self, name, count, value):
+        lst = self.lists.get(name, [])
+        while value in lst:
+            lst.remove(value)
 
 
 def test_compute_backlog_target(monkeypatch):
@@ -84,6 +94,7 @@ def test_darkling_transformed_mask(monkeypatch, tmp_path):
     fake = DR()
 
     monkeypatch.setattr(orchestrator_agent, "r", fake)
+    monkeypatch.setattr(redis_manager, "r", fake)
     monkeypatch.setattr(orchestrator_agent, "compute_backlog_target", lambda: 1)
     monkeypatch.setattr(orchestrator_agent, "pending_count", lambda *a, **k: 0)
     monkeypatch.setattr(orchestrator_agent, "any_darkling_workers", lambda: True)
@@ -143,6 +154,7 @@ def test_dispatch_skips_cracked(monkeypatch):
     fake = FR()
 
     monkeypatch.setattr(orchestrator_agent, "r", fake)
+    monkeypatch.setattr(redis_manager, "r", fake)
     monkeypatch.setattr(orchestrator_agent, "compute_backlog_target", lambda: 1)
     monkeypatch.setattr(orchestrator_agent, "pending_count", lambda *a, **k: 0)
     monkeypatch.setattr(orchestrator_agent, "any_darkling_workers", lambda: False)

@@ -7,6 +7,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "Server"))
 
 import orchestrator_agent
+import redis_manager
 
 # ensure redis exceptions are simple
 orchestrator_agent.redis.exceptions.ResponseError = Exception
@@ -30,6 +31,7 @@ class FakeRedis:
         self.store = {"batch:1": {"hashes": json.dumps(["h"]), "mask": "?d?d"}}
         self.jobs = {}
         self.streams = []
+        self.lists = {}
 
     def rpop(self, name):
         return self.queue.pop(0) if self.queue else None
@@ -46,6 +48,14 @@ class FakeRedis:
     def xadd(self, stream, mapping):
         self.streams.append((stream, mapping))
 
+    def rpush(self, name, value):
+        self.lists.setdefault(name, []).append(value)
+
+    def lrem(self, name, count, value):
+        lst = self.lists.get(name, [])
+        while value in lst:
+            lst.remove(value)
+
     def scan_iter(self, pattern):
         return []
 
@@ -53,6 +63,7 @@ class FakeRedis:
 def setup(monkeypatch, queue, size):
     fake = FakeRedis()
     monkeypatch.setattr(orchestrator_agent, "r", fake)
+    monkeypatch.setattr(redis_manager, "r", fake)
     monkeypatch.setattr(orchestrator_agent, "_LLM", StubLLM(queue, size))
     monkeypatch.setattr(orchestrator_agent, "compute_backlog_target", lambda: 1)
     monkeypatch.setattr(orchestrator_agent, "pending_count", lambda *a, **k: 0)
