@@ -190,6 +190,12 @@ function applyMetrics(data){
   document.getElementById('current-markov-lang').textContent = data.markov_lang || '';
   document.getElementById('prob-order').checked = !!data.probabilistic_order;
   document.getElementById('markov-language').value = data.markov_lang || 'english';
+  if(data.llm_train_epochs!==undefined){
+    document.getElementById('llm-epochs').value = data.llm_train_epochs;
+  }
+  if(data.llm_train_learning_rate!==undefined){
+    document.getElementById('llm-lr').value = data.llm_train_learning_rate;
+  }
 }
 async function updateMetrics(){
   const res = await fetch('/server_status');

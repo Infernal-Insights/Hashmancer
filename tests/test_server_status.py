@@ -96,3 +96,15 @@ def test_server_status_reports_system_metrics(monkeypatch):
     assert 'backlog_target' in status
     assert 'pending_jobs' in status
     assert 'queued_batches' in status
+
+
+def test_server_status_reports_llm_defaults(monkeypatch):
+    fake = DummyRedis()
+    monkeypatch.setattr(main, 'r', fake)
+    monkeypatch.setattr(main, 'LLM_TRAIN_EPOCHS', 4)
+    monkeypatch.setattr(main, 'LLM_TRAIN_LEARNING_RATE', 0.003)
+    monkeypatch.setattr(main.orchestrator_agent, 'compute_backlog_target', lambda: 0)
+    monkeypatch.setattr(main.orchestrator_agent, 'pending_count', lambda: 0)
+    status = asyncio.run(main.server_status())
+    assert status['llm_train_epochs'] == 4
+    assert status['llm_train_learning_rate'] == 0.003

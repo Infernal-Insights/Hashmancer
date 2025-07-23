@@ -47,11 +47,13 @@ threads can safely call the signing helpers without additional locking.
 
 Settings for the server are loaded from `~/.hashmancer/server_config.json`.
 To enable the optional language model orchestrator and provide the model path
-add these fields:
+add these fields along with default training parameters:
 
 ```json
 {
   "llm_enabled": true,
-  "llm_model_path": "/opt/models/distilgpt2"
+  "llm_model_path": "/opt/models/distilgpt2",
+  "llm_train_epochs": 1,
+  "llm_train_learning_rate": 0.0001
 }
 ```

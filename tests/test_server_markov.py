@@ -118,8 +118,12 @@ def test_server_status_includes_settings(monkeypatch):
     monkeypatch.setattr(main, 'r', fake)
     monkeypatch.setattr(main, 'PROBABILISTIC_ORDER', True)
     monkeypatch.setattr(main, 'MARKOV_LANG', 'spanish')
+    monkeypatch.setattr(main, 'LLM_TRAIN_EPOCHS', 2)
+    monkeypatch.setattr(main, 'LLM_TRAIN_LEARNING_RATE', 0.002)
     monkeypatch.setattr(main.orchestrator_agent, 'compute_backlog_target', lambda: 5)
     monkeypatch.setattr(main.orchestrator_agent, 'pending_count', lambda: 2)
     status = asyncio.run(main.server_status())
     assert status['probabilistic_order'] is True
     assert status['markov_lang'] == 'spanish'
+    assert status['llm_train_epochs'] == 2
+    assert status['llm_train_learning_rate'] == 0.002
