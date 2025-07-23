@@ -83,7 +83,7 @@ def test_train_llm_invokes_helper(monkeypatch, tmp_path):
         'learning_rate': 0.001,
         'output_dir': str(tmp_path / 'out')
     })
-    resp = asyncio.run(main.train_llm_endpoint(req()))
+    resp = asyncio.run(main.train_llm(req()))
     assert resp['status'] == 'ok'
     assert called['dataset'] == tmp_path / 'data.txt'
     assert called['model'] == 'modelA'
