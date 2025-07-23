@@ -203,7 +203,9 @@ To enable it via configuration instead, add these fields to
 ```json
 {
   "llm_enabled": true,
-  "llm_model_path": "/opt/models/distilgpt2"
+  "llm_model_path": "/opt/models/distilgpt2",
+  "llm_train_epochs": 1,
+  "llm_train_learning_rate": 0.0001
 }
 ```
 

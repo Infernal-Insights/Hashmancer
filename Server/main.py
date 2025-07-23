@@ -90,6 +90,8 @@ MARKOV_LANG = CONFIG.get("markov_lang", "english")
 # local language model settings
 LLM_ENABLED = bool(CONFIG.get("llm_enabled", False))
 LLM_MODEL_PATH = CONFIG.get("llm_model_path", "")
+LLM_TRAIN_EPOCHS = int(CONFIG.get("llm_train_epochs", 1))
+LLM_TRAIN_LEARNING_RATE = float(CONFIG.get("llm_train_learning_rate", 0.0001))
 
 # propagate the model path for orchestrator_agent if enabled
 if LLM_ENABLED and LLM_MODEL_PATH:
@@ -106,6 +108,8 @@ def save_config():
         # ensure current LLM settings are written to disk
         CONFIG["llm_enabled"] = bool(LLM_ENABLED)
         CONFIG["llm_model_path"] = LLM_MODEL_PATH
+        CONFIG["llm_train_epochs"] = int(LLM_TRAIN_EPOCHS)
+        CONFIG["llm_train_learning_rate"] = float(LLM_TRAIN_LEARNING_RATE)
 
         with open(CONFIG_FILE, "w") as f:
             json.dump(CONFIG, f, indent=2)
@@ -681,6 +685,8 @@ async def server_status():
             "low_bw_engine": LOW_BW_ENGINE,
             "probabilistic_order": PROBABILISTIC_ORDER,
             "markov_lang": MARKOV_LANG,
+            "llm_train_epochs": LLM_TRAIN_EPOCHS,
+            "llm_train_learning_rate": LLM_TRAIN_LEARNING_RATE,
             "cpu_usage": None,
             "memory_utilization": None,
             "disk_space": None,
