@@ -70,7 +70,7 @@ This will:
 - Configure Redis and logging
 - Install a systemd service
 - Optionally enable a UDP broadcast so workers can auto-discover the server
-- Generate a random portal passkey and show it at the end
+- Generate a random portal passkey and an initial admin token
 
 3. Start the server (if not done via systemd):
 
@@ -275,6 +275,19 @@ setup finishes. If you ever need to generate a new key manually run:
 ```bash
 python3 -c 'from Server.setup import generate_passkey; generate_passkey()'
 ```
+
+During setup an `initial_admin_token` is also generated. Use this token once to
+log in and set your admin username and password:
+
+```bash
+curl -X POST -H 'Content-Type: application/json' \
+     -d '{"passkey": "<initial token>", "username": "admin", "password": "secret"}' \
+     http://localhost:8000/login
+```
+
+The credentials will be hashed with Argon2 and stored in
+`~/.hashmancer/server_config.json`. After they're saved the temporary token is
+removed.
 
 After setup, send the passkey to `/login` to obtain a session token:
 
