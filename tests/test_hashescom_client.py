@@ -1,5 +1,6 @@
 import os
 import sys
+import asyncio
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -38,3 +39,36 @@ def test_upload_founds_failure(monkeypatch, tmp_path):
     sample.write_text("hash:pass")
 
     assert not hashescom_client.upload_founds(0, str(sample))
+
+
+def test_fetch_jobs_sync_headers(monkeypatch):
+    seen = {}
+
+    def mock_get(url, timeout=None, headers=None):
+        seen['url'] = url
+        seen['headers'] = headers
+        return DummyResp({"success": True, "list": [1]})
+
+    monkeypatch.setattr(hashescom_client.requests, "get", mock_get)
+
+    result = hashescom_client._fetch_jobs_sync("http://example", {"X-Api-Key": "k"})
+    assert result == [1]
+    assert seen['headers'] == {"X-Api-Key": "k"}
+
+
+def test_fetch_jobs_passes_header(monkeypatch):
+    captured = {}
+
+    def fake_sync(url, headers=None):
+        captured['url'] = url
+        captured['headers'] = headers
+        return []
+
+    monkeypatch.setattr(hashescom_client, "_fetch_jobs_sync", fake_sync)
+    monkeypatch.setattr(hashescom_client, "aiohttp", None)
+    monkeypatch.setattr(hashescom_client, "HASHES_API", "abc")
+
+    asyncio.run(hashescom_client.fetch_jobs())
+
+    assert captured['url'] == "https://hashes.com/en/api/jobs"
+    assert captured['headers'] == {"X-Api-Key": "abc"}
