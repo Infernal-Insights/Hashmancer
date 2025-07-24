@@ -26,6 +26,11 @@ import argparse
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+REDIS_SSL = os.getenv("REDIS_SSL", "0")
+REDIS_SSL_CERT = os.getenv("REDIS_SSL_CERT")
+REDIS_SSL_KEY = os.getenv("REDIS_SSL_KEY")
+REDIS_SSL_CA_CERT = os.getenv("REDIS_SSL_CA_CERT")
 SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
 STATUS_INTERVAL = int(os.getenv("STATUS_INTERVAL", "30"))
 
@@ -37,10 +42,31 @@ if CONFIG_FILE.exists():
         SERVER_URL = os.getenv("SERVER_URL", cfg.get("server_url", SERVER_URL))
         REDIS_HOST = os.getenv("REDIS_HOST", cfg.get("redis_host", REDIS_HOST))
         REDIS_PORT = int(os.getenv("REDIS_PORT", cfg.get("redis_port", REDIS_PORT)))
+        REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", cfg.get("redis_password", REDIS_PASSWORD))
+        REDIS_SSL = os.getenv("REDIS_SSL", str(cfg.get("redis_ssl", REDIS_SSL)))
+        REDIS_SSL_CERT = os.getenv("REDIS_SSL_CERT", cfg.get("redis_ssl_cert", REDIS_SSL_CERT))
+        REDIS_SSL_KEY = os.getenv("REDIS_SSL_KEY", cfg.get("redis_ssl_key", REDIS_SSL_KEY))
+        REDIS_SSL_CA_CERT = os.getenv("REDIS_SSL_CA_CERT", cfg.get("redis_ssl_ca_cert", REDIS_SSL_CA_CERT))
     except Exception:
         pass
 
-r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+redis_opts: dict[str, str | int | bool] = {
+    "host": REDIS_HOST,
+    "port": REDIS_PORT,
+    "decode_responses": True,
+}
+if REDIS_PASSWORD:
+    redis_opts["password"] = REDIS_PASSWORD
+if str(REDIS_SSL).lower() in {"1", "true", "yes"}:
+    redis_opts["ssl"] = True
+    if REDIS_SSL_CA_CERT:
+        redis_opts["ssl_ca_certs"] = REDIS_SSL_CA_CERT
+    if REDIS_SSL_CERT:
+        redis_opts["ssl_certfile"] = REDIS_SSL_CERT
+    if REDIS_SSL_KEY:
+        redis_opts["ssl_keyfile"] = REDIS_SSL_KEY
+
+r = redis.Redis(**redis_opts)
 
 
 def _redis_write(func, *args, **kwargs):
