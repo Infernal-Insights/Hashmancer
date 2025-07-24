@@ -33,6 +33,7 @@ import hashlib
 import csv
 import io
 import tempfile
+from filelock import FileLock
 
 from waifus import assign_waifu
 from auth_utils import verify_signature, verify_signature_with_key
@@ -578,9 +579,11 @@ async def submit_founds(payload: dict):
                 continue
             r.hset("found:map", hash_str, password)
         try:
-            with FOUNDS_FILE.open("a", encoding="utf-8") as fh:
-                for line in payload["founds"]:
-                    fh.write(line + "\n")
+            lock = FileLock(str(FOUNDS_FILE) + ".lock")
+            with lock:
+                with FOUNDS_FILE.open("a", encoding="utf-8") as fh:
+                    for line in payload["founds"]:
+                        fh.write(line + "\n")
         except Exception:
             pass
 
