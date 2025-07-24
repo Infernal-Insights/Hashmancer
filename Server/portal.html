@@ -51,6 +51,7 @@ body::before {
 <body>
 <h1>Hashmancer Portal</h1>
 <button onclick="location.href='/glyph'">Open Glyph</button>
+<button onclick="logout()">Logout</button>
 <div id="login-overlay">
   <h2>Portal Login</h2>
   <input type="password" id="passkey" placeholder="passkey">
@@ -456,6 +457,15 @@ async function submitPasskey(){
   }else{
     document.getElementById('login-error').textContent='Invalid passkey';
   }
+}
+
+function logout(){
+  const m=document.cookie.match(/(?:^|; )session=([^;]+)/);
+  if(m){
+    fetch('/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:m[1]})});
+  }
+  document.cookie='session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  location.reload();
 }
 
 const origFetch=window.fetch;

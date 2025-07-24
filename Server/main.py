@@ -271,6 +271,21 @@ async def login(req: LoginRequest):
     return {"status": "ok", "cookie": token}
 
 
+class LogoutRequest(BaseModel):
+    token: str
+
+
+@app.post("/logout")
+async def logout(req: LogoutRequest):
+    """Invalidate a session token."""
+    try:
+        session_id = req.token.split("|")[0]
+        r.delete(f"session:{session_id}")
+    except Exception:
+        pass
+    return {"status": "ok", "cookie": ""}
+
+
 class RegisterWorkerRequest(BaseModel):
     worker_id: str
     signature: str

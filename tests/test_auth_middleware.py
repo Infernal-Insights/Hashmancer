@@ -141,6 +141,9 @@ class FakeRedis:
     def exists(self, key):
         return key in self.store
 
+    def delete(self, key):
+        self.store.pop(key, None)
+
 
 class FakeWebSocket:
     def __init__(self):
@@ -163,6 +166,44 @@ def test_portal_auth_denies_without_key(monkeypatch):
     app = FakeApp()
     mw = main.PortalAuthMiddleware(app, key="secret")
     scope = {"type": "http", "path": "/portal", "headers": [(b"x-api-key", b"bad")]} 
+
+    asyncio.run(mw(scope, lambda: None, send))
+
+    assert not app.called
+    assert events and events[0]["status"] == 401
+
+
+def test_logout_revokes_session(monkeypatch):
+    fake_r = FakeRedis()
+    monkeypatch.setattr(main, "r", fake_r)
+    monkeypatch.setitem(main.CONFIG, "portal_passkey", "pass")
+    monkeypatch.setattr(main, "PORTAL_PASSKEY", "pass")
+
+    class Req:
+        passkey = "pass"
+
+    resp = asyncio.run(main.login(Req()))
+    token = resp["cookie"]
+
+    class LReq:
+        pass
+
+    lreq = LReq()
+    lreq.token = token
+    asyncio.run(main.logout(lreq))
+
+    events = []
+
+    async def send(evt):
+        events.append(evt)
+
+    app = FakeApp()
+    mw = main.PortalAuthMiddleware(app, key="apikey")
+    scope = {
+        "type": "http",
+        "path": "/portal",
+        "headers": [(b"cookie", f"session={token}".encode())],
+    }
 
     asyncio.run(mw(scope, lambda: None, send))
 

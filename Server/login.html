@@ -16,6 +16,7 @@ button { margin-top:4px; }
 <h1>Portal Login</h1>
 <input type="password" id="passkey" placeholder="passkey">
 <button onclick="submitPasskey()">Login</button>
+<button onclick="logout()">Logout</button>
 <div id="login-error" style="color:red;margin-top:4px;"></div>
 <script>
 async function submitPasskey(){
@@ -29,6 +30,15 @@ async function submitPasskey(){
   }else{
     document.getElementById('login-error').textContent='Invalid passkey';
   }
+}
+
+function logout(){
+  const m=document.cookie.match(/(?:^|; )session=([^;]+)/);
+  if(m){
+    fetch('/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:m[1]})});
+  }
+  document.cookie='session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  location.reload();
 }
 </script>
 </body>
