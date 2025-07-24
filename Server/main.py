@@ -42,10 +42,22 @@ from ascii_logo import print_logo
 from pattern_to_mask import get_top_masks
 import psutil
 import wordlist_db
+from typing import Any
+from collections.abc import Coroutine
 
 app = FastAPI()
 
 r = get_redis()
+
+# store references to background tasks so they can be cancelled
+BACKGROUND_TASKS: list[asyncio.Task] = []
+
+
+def create_background_task(coro: Coroutine[Any, Any, Any]) -> asyncio.Task:
+    """Create a task and track it for cleanup on shutdown."""
+    task = asyncio.create_task(coro)
+    BACKGROUND_TASKS.append(task)
+    return task
 
 JOB_STREAM = os.getenv("JOB_STREAM", "jobs")
 HTTP_GROUP = os.getenv("HTTP_GROUP", "http-workers")
@@ -447,10 +459,19 @@ async def dispatch_loop():
 async def start_broadcast():
     print_logo()
     if BROADCAST_ENABLED:
-        asyncio.create_task(broadcast_presence())
-    asyncio.create_task(poll_hashes_jobs())
-    asyncio.create_task(process_hashes_jobs())
-    asyncio.create_task(dispatch_loop())
+        create_background_task(broadcast_presence())
+    create_background_task(poll_hashes_jobs())
+    create_background_task(process_hashes_jobs())
+    create_background_task(dispatch_loop())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cancel all background tasks and wait for them to finish."""
+    for task in BACKGROUND_TASKS:
+        task.cancel()
+    await asyncio.gather(*BACKGROUND_TASKS, return_exceptions=True)
+    BACKGROUND_TASKS.clear()
 
 
 @app.post("/register_worker")
@@ -1157,7 +1178,7 @@ async def train_markov(req: TrainMarkovRequest):
     """Process wordlists to build Markov statistics."""
     directory = Path(req.directory) if req.directory else WORDLISTS_DIR
     try:
-        asyncio.create_task(
+        create_background_task(
             asyncio.to_thread(learn_trends.process_wordlists, directory, lang=req.lang)
         )
         return {"status": "scheduled"}
@@ -1174,7 +1195,7 @@ async def train_llm_endpoint(req: TrainLLMRequest):
     try:
         if _train_llm is None:
             raise RuntimeError("transformers not available")
-        asyncio.create_task(
+        create_background_task(
             asyncio.to_thread(
                 _train_llm.train_model,
                 dataset,
