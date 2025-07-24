@@ -3,6 +3,7 @@ import sys
 import os
 import types
 import json
+import pytest
 
 # Stub modules as in other server tests
 fastapi_stub = types.ModuleType("fastapi")
@@ -73,7 +74,9 @@ class FakeUploadFile:
         self.filename = name
         self._data = data
         self._idx = 0
+        self.calls = []
     async def read(self, n=-1):
+        self.calls.append(n)
         if self._idx >= len(self._data):
             return b""
         if n < 0:
@@ -124,3 +127,26 @@ def test_import_hashes(monkeypatch):
     assert batch['mask'] == '?a'
     assert batch['wordlist'] == 'wl.txt'
     assert batch['hash_mode'] == '1000'
+
+
+def test_import_hashes_large_file(monkeypatch):
+    monkeypatch.setattr(main, 'MAX_IMPORT_SIZE', 100)
+    data = b'hash,mask,wordlist,target\n' + b'h,,,' * 40
+    file = FakeUploadFile('big.csv', data)
+    with pytest.raises(main.HTTPException):
+        asyncio.run(main.import_hashes(file, '0'))
+
+
+def test_import_hashes_reads_chunks(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(main, 'r', fake)
+    monkeypatch.setattr(redis_manager, 'r', fake)
+    monkeypatch.setattr(redis_manager.orchestrator_agent, 'build_mask_charsets', lambda: {})
+    monkeypatch.setattr(redis_manager.orchestrator_agent, 'estimate_keyspace', lambda m, c: 10)
+    monkeypatch.setattr(main, 'log_error', lambda *a, **k: None)
+    monkeypatch.setattr(main, 'MAX_IMPORT_SIZE', 8192)
+    lines = [b'h%d,,,' % i for i in range(200)]
+    data = b'hash,mask,wordlist,target\n' + b'\n'.join(lines) + b'\n'
+    file = FakeUploadFile('hashes.csv', data)
+    asyncio.run(main.import_hashes(file, '0'))
+    assert len([c for c in file.calls if c != -1]) > 1

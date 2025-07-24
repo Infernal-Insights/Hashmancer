@@ -70,6 +70,9 @@ PORTAL_KEY = CONFIG.get("portal_key")
 PORTAL_PASSKEY = CONFIG.get("portal_passkey")
 SESSION_TTL = 3600  # seconds
 
+# maximum allowed bytes for /import_hashes uploads
+MAX_IMPORT_SIZE = int(CONFIG.get("max_import_size", 1_048_576))  # 1 MB
+
 # select which cracking engine low bandwidth workers should use. The
 # specialized option is called "darkling".
 LOW_BW_ENGINE = CONFIG.get("low_bw_engine", "hashcat")
@@ -1021,14 +1024,52 @@ async def upload_wordlist(file: UploadFile = File(...)):
 async def import_hashes(file: UploadFile = File(...), hash_mode: str = "0"):
     """Parse a CSV of hashes and queue cracking batches."""
     try:
-        data = await file.read()
-        reader = csv.DictReader(io.StringIO(data.decode()))
         queued: list[str] = []
         errors: list[str] = []
-        for i, row in enumerate(reader, start=1):
+        total = 0
+        buffer = b""
+
+        # read CSV header
+        while True:
+            chunk = await file.read(4096)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_IMPORT_SIZE:
+                raise HTTPException(400, "file too large")
+            buffer += chunk
+            if b"\n" in buffer:
+                break
+        if b"\n" not in buffer:
+            raise HTTPException(400, "invalid csv")
+        header_line, buffer = buffer.split(b"\n", 1)
+        fieldnames = next(csv.reader([header_line.decode()]))
+        line_num = 0
+
+        async def iter_lines():
+            nonlocal buffer, total
+            while True:
+                while b"\n" in buffer:
+                    line, buffer = buffer.split(b"\n", 1)
+                    yield line.decode()
+                chunk = await file.read(4096)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_IMPORT_SIZE:
+                    raise HTTPException(400, "file too large")
+                buffer += chunk
+            if buffer:
+                yield buffer.decode()
+
+        async for line in iter_lines():
+            line_num += 1
+            if not line.strip():
+                continue
+            row = next(csv.DictReader([line], fieldnames=fieldnames))
             h = (row.get("hash") or "").strip()
             if not h:
-                errors.append(f"line {i}: missing hash")
+                errors.append(f"line {line_num}: missing hash")
                 continue
             mask = (row.get("mask") or "").strip()
             wordlist = (row.get("wordlist") or "").strip()
@@ -1039,8 +1080,10 @@ async def import_hashes(file: UploadFile = File(...), hash_mode: str = "0"):
             if batch_id:
                 queued.append(batch_id)
             else:
-                errors.append(f"line {i}: redis error")
+                errors.append(f"line {line_num}: redis error")
         return {"queued": len(queued), "errors": errors}
+    except HTTPException:
+        raise
     except Exception as e:
         log_error("server", "system", "S726", "Failed to import hashes", e)
         raise HTTPException(status_code=500, detail="import failed")
