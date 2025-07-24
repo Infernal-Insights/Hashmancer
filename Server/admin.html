@@ -18,6 +18,7 @@ pre { background:#111; color:#0f0; padding:5px; overflow:auto; max-height:200px;
 </head>
 <body>
 <h1>Hashmancer Admin</h1>
+<button onclick="logout()">Logout</button>
 
 <section id="dicts">
 <h2>Dictionaries</h2>
@@ -167,6 +168,15 @@ async function loadJobs() {
     tr.appendChild(idTd);tr.appendChild(statusTd);tr.appendChild(modeTd);
     tbody.appendChild(tr);
   }
+}
+
+function logout(){
+  const m=document.cookie.match(/(?:^|; )session=([^;]+)/);
+  if(m){
+    fetch('/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:m[1]})});
+  }
+  document.cookie='session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  location.reload();
 }
 
 function tick(){

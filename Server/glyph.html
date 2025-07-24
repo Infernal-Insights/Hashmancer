@@ -47,6 +47,7 @@ canvas {
 </head>
 <body>
 <h1>Glyph Dashboard</h1>
+<button onclick="logout()">Logout</button>
 <div class="section">Workers: <span id="workers">0</span></div>
 <div class="section">Queue Length: <span id="queue">0</span></div>
 <div class="section">Found Results: <span id="results">0</span></div>
@@ -145,6 +146,15 @@ async function loadWorkers() {
         tr.appendChild(actionTd);
         tbody.appendChild(tr);
     }
+}
+
+function logout(){
+    const m = document.cookie.match(/(?:^|; )session=([^;]+)/);
+    if(m){
+        fetch('/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:m[1]})});
+    }
+    document.cookie='session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    location.reload();
 }
 
 function tick() {
