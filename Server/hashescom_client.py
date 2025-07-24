@@ -27,11 +27,11 @@ def _load_api_key() -> str | None:
 HASHES_API = _load_api_key()
 
 
-async def _fetch_jobs_async(url: str) -> list:
+async def _fetch_jobs_async(url: str, headers: dict | None = None) -> list:
     assert aiohttp is not None
     timeout = aiohttp.ClientTimeout(total=10)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.get(url) as resp:
+        async with session.get(url, headers=headers) as resp:
             resp.raise_for_status()
             data = await resp.json()
     if not data.get("success"):
@@ -39,8 +39,8 @@ async def _fetch_jobs_async(url: str) -> list:
     return data["list"]
 
 
-def _fetch_jobs_sync(url: str) -> list:
-    resp = requests.get(url, timeout=10)
+def _fetch_jobs_sync(url: str, headers: dict | None = None) -> list:
+    resp = requests.get(url, timeout=10, headers=headers)
     resp.raise_for_status()
     data = resp.json()
     if not data.get("success"):
@@ -50,12 +50,11 @@ def _fetch_jobs_sync(url: str) -> list:
 
 async def fetch_jobs() -> list:
     url = "https://hashes.com/en/api/jobs"
-    if HASHES_API:
-        url += f"?key={HASHES_API}"
+    headers = {"X-Api-Key": HASHES_API} if HASHES_API else None
     try:
         if aiohttp is not None:
-            return await _fetch_jobs_async(url)
-        return await asyncio.to_thread(_fetch_jobs_sync, url)
+            return await _fetch_jobs_async(url, headers)
+        return await asyncio.to_thread(_fetch_jobs_sync, url, headers)
     except Exception as e:
         print(f"[❌] Hashes.com fetch error: {e}")
         return []
