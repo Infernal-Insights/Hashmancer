@@ -32,6 +32,7 @@ import hmac
 import hashlib
 import csv
 import io
+import tempfile
 
 from waifus import assign_waifu
 from auth_utils import verify_signature, verify_signature_with_key
@@ -39,6 +40,7 @@ from pydantic import BaseModel
 from ascii_logo import print_logo
 from pattern_to_mask import get_top_masks
 import psutil
+import wordlist_db
 
 app = FastAPI()
 
@@ -61,6 +63,12 @@ MASKS_DIR = Path(CONFIG.get("masks_dir", "/opt/hashmancer/masks"))
 RULES_DIR = Path(CONFIG.get("rules_dir", "/opt/hashmancer/rules"))
 RESTORE_DIR = Path(CONFIG.get("restore_dir", "/opt/hashmancer/restores"))
 STORAGE_DIR = Path(CONFIG.get("storage_path", "/opt/hashmancer"))
+WORDLIST_DB_PATH = Path(
+    CONFIG.get(
+        "wordlist_db_path",
+        str(Path.home() / ".hashmancer" / "wordlists.db"),
+    )
+)
 FOUNDS_FILE = STORAGE_DIR / "founds.txt"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1002,20 +1010,39 @@ async def flash_result(res: FlashResult):
 
 @app.post("/upload_wordlist")
 async def upload_wordlist(file: UploadFile = File(...)):
-    """Upload a new dictionary file to WORDLISTS_DIR."""
+    """Stream a dictionary upload directly into the SQLite database."""
+    conn = None
     try:
         filename = Path(file.filename).name
-        dest = (WORDLISTS_DIR / filename).resolve()
-        if dest.parent != WORDLISTS_DIR.resolve():
-            raise HTTPException(status_code=400, detail="invalid filename")
-        with dest.open("wb") as f:
+        with tempfile.NamedTemporaryFile() as tmp:
+            size = 0
             while True:
                 chunk = await file.read(4096)
                 if not chunk:
                     break
-                f.write(chunk)
+                tmp.write(chunk)
+                size += len(chunk)
+            tmp.flush()
+            tmp.seek(0)
+            conn = wordlist_db.connect()
+            cur = conn.execute(
+                "INSERT OR REPLACE INTO wordlists(name, data) VALUES(?, zeroblob(?))",
+                (filename, size),
+            )
+            rowid = cur.lastrowid
+            blob = conn.blobopen("wordlists", "data", rowid, readonly=False)
+            while True:
+                chunk = tmp.read(4096)
+                if not chunk:
+                    break
+                blob.write(chunk)
+            blob.close()
+            conn.commit()
+            conn.close()
         return {"status": "ok"}
     except Exception as e:
+        if conn:
+            conn.close()
         log_error("server", "system", "S720", "Failed to upload wordlist", e)
         raise HTTPException(status_code=500, detail="upload failed")
 

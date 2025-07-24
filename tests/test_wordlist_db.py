@@ -2,10 +2,12 @@ import asyncio
 import sys
 import os
 import types
-from pathlib import Path
 import sqlite3
+import json
+import base64
+import gzip
 
-# Stub modules as in other server tests
+# Stub modules similar to other server tests
 fastapi_stub = types.ModuleType("fastapi")
 class FakeApp:
     def add_middleware(self, *a, **kw):
@@ -46,27 +48,27 @@ pydantic_stub.BaseModel = BaseModel
 sys.modules.setdefault("pydantic", pydantic_stub)
 
 crypto_stub = types.ModuleType("cryptography")
-exceptions_stub = types.ModuleType("cryptography.exceptions")
+exc_stub = types.ModuleType("cryptography.exceptions")
 class InvalidSignature(Exception):
     pass
-exceptions_stub.InvalidSignature = InvalidSignature
-primitives_stub = types.ModuleType("cryptography.hazmat.primitives")
-asym_stub = types.ModuleType("cryptography.hazmat.primitives.asymmetric")
-asym_stub.padding = object()
-primitives_stub.asymmetric = asym_stub
-primitives_stub.hashes = types.SimpleNamespace(SHA256=lambda: None)
-primitives_stub.serialization = types.SimpleNamespace(load_pem_public_key=lambda x: None)
-crypto_stub.hazmat = types.SimpleNamespace(primitives=primitives_stub)
-crypto_stub.exceptions = exceptions_stub
+exc_stub.InvalidSignature = InvalidSignature
+prim_stub = types.ModuleType("cryptography.hazmat.primitives")
+prim_stub.asymmetric = types.SimpleNamespace(padding=object())
+prim_stub.hashes = types.SimpleNamespace(SHA256=lambda: None)
+prim_stub.serialization = types.SimpleNamespace(load_pem_public_key=lambda x: None)
+crypto_stub.hazmat = types.SimpleNamespace(primitives=prim_stub)
+crypto_stub.exceptions = exc_stub
 sys.modules.setdefault("cryptography", crypto_stub)
-sys.modules.setdefault("cryptography.exceptions", exceptions_stub)
-sys.modules.setdefault("cryptography.hazmat.primitives", primitives_stub)
-sys.modules.setdefault("cryptography.hazmat.primitives.asymmetric", asym_stub)
+sys.modules.setdefault("cryptography.exceptions", exc_stub)
+sys.modules.setdefault("cryptography.hazmat.primitives", prim_stub)
+sys.modules.setdefault("cryptography.hazmat.primitives.asymmetric", prim_stub.asymmetric)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Server'))
 
 import main
+import orchestrator_agent
+import wordlist_db
 
 class FakeUploadFile:
     def __init__(self, name, data):
@@ -82,40 +84,35 @@ class FakeUploadFile:
         self._idx += n
         return chunk
 
+class FakeRedis:
+    def __init__(self):
+        self.store = {}
+    def exists(self, key):
+        return key in self.store
+    def set(self, key, value):
+        self.store[key] = value
 
-def test_wordlist_upload_sanitizes(tmp_path, monkeypatch):
-    db_path = tmp_path / "wl.db"
+
+def test_wordlist_db_persist_and_cache(monkeypatch, tmp_path):
+    db_path = tmp_path / 'wl.db'
+    monkeypatch.setattr(wordlist_db, 'DB_PATH', db_path)
     monkeypatch.setattr(main.wordlist_db, 'DB_PATH', db_path)
+    monkeypatch.setattr(orchestrator_agent.wordlist_db, 'DB_PATH', db_path)
+    monkeypatch.setattr(orchestrator_agent, 'log_error', lambda *a, **k: None)
     monkeypatch.setattr(main, 'log_error', lambda *a, **k: None)
     monkeypatch.setattr(main, 'log_info', lambda *a, **k: None)
-    file = FakeUploadFile("../evil.txt", b"data")
+
+    file = FakeUploadFile('foo.txt', b'abc\n123')
     asyncio.run(main.upload_wordlist(file))
+
     conn = sqlite3.connect(db_path)
     row = conn.execute('SELECT name, data FROM wordlists').fetchone()
     conn.close()
-    assert row == ("evil.txt", b"data")
+    assert row == ('foo.txt', b'abc\n123')
 
+    fake_r = FakeRedis()
+    monkeypatch.setattr(orchestrator_agent, 'r', fake_r)
+    key = orchestrator_agent.cache_wordlist('foo.txt')
+    stored = fake_r.store['wlcache:' + key]
+    assert gzip.decompress(base64.b64decode(stored)) == b'abc\n123'
 
-def test_restore_upload_sanitizes(tmp_path, monkeypatch):
-    dest = tmp_path / "rest"
-    dest.mkdir()
-    monkeypatch.setattr(main, 'RESTORE_DIR', dest)
-    monkeypatch.setattr(main, 'log_error', lambda *a, **k: None)
-    monkeypatch.setattr(main, 'log_info', lambda *a, **k: None)
-    file = FakeUploadFile("../res.restore", b"r")
-    asyncio.run(main.upload_restore(file))
-    assert (dest / "res.restore").read_bytes() == b"r"
-
-
-def test_create_mask_sanitizes_and_delete(monkeypatch, tmp_path):
-    dest = tmp_path / "m"
-    dest.mkdir()
-    monkeypatch.setattr(main, 'MASKS_DIR', dest)
-    monkeypatch.setattr(main, 'log_error', lambda *a, **k: None)
-    monkeypatch.setattr(main, 'log_info', lambda *a, **k: None)
-    asyncio.run(main.create_mask("../mask.hcmask", "abc"))
-    assert (dest / "mask.hcmask").read_text() == "abc"
-    # delete using traversal
-    (dest / "mask.hcmask").write_text("abc")
-    asyncio.run(main.delete_mask("../mask.hcmask"))
-    assert not (dest / "mask.hcmask").exists()

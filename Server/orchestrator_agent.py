@@ -6,10 +6,12 @@ import uuid
 import redis
 import base64
 import gzip
+import zlib
 import hashlib
 import re
 from redis_utils import get_redis
 from event_logger import log_error
+import wordlist_db
 from pattern_stats import generate_mask, TOKEN_RE
 from pattern_utils import is_valid_word
 from darkling import charsets
@@ -168,9 +170,15 @@ def cache_wordlist(path: str) -> str:
     redis_key = f"wlcache:{key}"
     try:
         if not r.exists(redis_key):
-            with open(path, "rb") as f:
-                data = gzip.compress(f.read())
-            r.set(redis_key, base64.b64encode(data).decode())
+            name = os.path.basename(path)
+            comp = zlib.compressobj(wbits=31)
+            buf = bytearray()
+            for chunk in wordlist_db.stream_wordlist(name):
+                if not chunk:
+                    break
+                buf.extend(comp.compress(chunk))
+            buf.extend(comp.flush())
+            r.set(redis_key, base64.b64encode(bytes(buf)).decode())
     except Exception as e:
         log_error("orchestrator", "system", "SCACHE", "Failed to cache wordlist", e)
     return key

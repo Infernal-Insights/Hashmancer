@@ -120,6 +120,11 @@ def configure():
         os.path.join(base_dir, "rules"),
     )
 
+    wordlist_db_path = prompt(
+        "SQLite DB path for uploaded wordlists",
+        os.path.join(base_dir, "wordlists.db"),
+    )
+
     storage_path = prompt("Storage location for logs, exports, etc", "/data/hashmancer")
 
     system_role = prompt(
@@ -145,6 +150,7 @@ def configure():
         "wordlists_dir": wordlists_dir,
         "masks_dir": masks_dir,
         "rules_dir": rules_dir,
+        "wordlist_db_path": wordlist_db_path,
         "storage_path": storage_path,
         "role": system_role,
         "redis_memory_mb": int(redis_memory),
