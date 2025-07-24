@@ -2,9 +2,13 @@ import os
 import time
 import threading
 import redis
+
+try:
+    from redis.exceptions import RedisError
+except Exception:  # fallback for bundled stub
+    from redis import RedisError
 import requests
 import json
-import random
 import subprocess
 import base64
 import gzip
@@ -17,6 +21,14 @@ REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+
+
+def _safe_redis_call(func, *args, default=None, **kwargs):
+    try:
+        return func(*args, **kwargs)
+    except RedisError:
+        return default
+
 
 # Maximum number of digests the darkling engine can accept in a single
 # launch.  This must match the constant defined in the CUDA/CL sources.
@@ -92,7 +104,7 @@ class GPUSidecar(threading.Thread):
         if isinstance(limit, str) and "%" in limit:
             value = limit.strip().rstrip("%")
             sign = ""
-            if value.startswith(('+', '-')):
+            if value.startswith(("+", "-")):
                 sign, value = value[0], value[1:]
             commands = [["rocm-smi", "-d", index, "--setpoweroverdrive", sign + value]]
         else:
@@ -152,17 +164,22 @@ class GPUSidecar(threading.Thread):
         self.hashrate = 0.0
         self.progress = 0.0
 
-        r.hset(f"job:{job_id}", mapping=batch)
+        _safe_redis_call(r.hset, f"job:{job_id}", mapping=batch)
 
         if self.gpu.get("pci_width", 16) <= 4:
-            r.hset(
+            _safe_redis_call(
+                r.hset,
                 f"vram:{self.gpu['uuid']}:{job_id}",
                 mapping={"payload": json.dumps(batch)},
             )
             if batch.get("wordlist"):
                 try:
                     with open(batch["wordlist"], "rb") as f:
-                        r.set(f"vram:{self.gpu['uuid']}:{job_id}:wordlist", f.read())
+                        _safe_redis_call(
+                            r.set,
+                            f"vram:{self.gpu['uuid']}:{job_id}:wordlist",
+                            f.read(),
+                        )
                 except Exception:
                     pass
 
@@ -196,9 +213,7 @@ class GPUSidecar(threading.Thread):
             endpoint = "submit_no_founds"
 
         try:
-            requests.post(
-                f"{self.server_url}/{endpoint}", json=payload, timeout=10
-            )
+            requests.post(f"{self.server_url}/{endpoint}", json=payload, timeout=10)
         except Exception as e:
             print(f"Result submission failed: {e}")
 
@@ -232,12 +247,10 @@ class GPUSidecar(threading.Thread):
 
         wordlist_path = batch.get("wordlist")
         if not wordlist_path and batch.get("wordlist_key"):
-            data_b64 = r.get(f"wlcache:{batch['wordlist_key']}")
+            data_b64 = _safe_redis_call(r.get, f"wlcache:{batch['wordlist_key']}")
             if data_b64:
                 tmp = Path(f"/tmp/{batch_id}.wl")
-                tmp.write_bytes(
-                    gzip.decompress(base64.b64decode(data_b64.encode()))
-                )
+                tmp.write_bytes(gzip.decompress(base64.b64decode(data_b64.encode())))
                 wordlist_path = str(tmp)
 
         mask_charsets = batch.get("mask_charsets")
@@ -325,7 +338,11 @@ class GPUSidecar(threading.Thread):
 
         founds = []
         if outfile.is_file():
-            founds = [line.strip() for line in outfile.read_text().splitlines() if line.strip()]
+            founds = [
+                line.strip()
+                for line in outfile.read_text().splitlines()
+                if line.strip()
+            ]
 
         if proc.returncode != 0 and restore.is_file():
             try:
@@ -342,7 +359,11 @@ class GPUSidecar(threading.Thread):
             hash_file.unlink(missing_ok=True)
             outfile.unlink(missing_ok=True)
             restore.unlink(missing_ok=True)
-            if wordlist_path and wordlist_path.startswith("/tmp/") and wordlist_path.endswith(".wl"):
+            if (
+                wordlist_path
+                and wordlist_path.startswith("/tmp/")
+                and wordlist_path.endswith(".wl")
+            ):
                 Path(wordlist_path).unlink(missing_ok=True)
         except Exception:
             pass
@@ -360,6 +381,7 @@ class GPUSidecar(threading.Thread):
         installed separately. It accepts the same arguments as hashcat so the
         batch formatting is identical.
         """
+
         def _count_mask(mask: str) -> int:
             count = 0
             i = 0
@@ -469,9 +491,7 @@ def run_hashcat_benchmark(gpu: dict, engine: str = "hashcat") -> dict[str, float
     for mode, name in modes:
         cmd = [engine, "--benchmark", "-m", str(mode), "-d", index]
         try:
-            output = subprocess.check_output(
-                cmd, stderr=subprocess.STDOUT, text=True
-            )
+            output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
         except Exception as e:
             print(f"Benchmark failed for {gpu.get('uuid')} mode {mode}: {e}")
             results[name] = 0.0

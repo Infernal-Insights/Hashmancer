@@ -4,6 +4,11 @@ import subprocess
 import time
 import uuid
 import redis
+
+try:
+    from redis.exceptions import RedisError
+except Exception:  # fallback for bundled stub
+    from redis import RedisError
 import requests
 from pathlib import Path
 import glob
@@ -17,6 +22,7 @@ from .gpu_sidecar import (
 from .bios_flasher import GPUFlashManager
 from .crypto_utils import load_public_key_pem, sign_message
 from ascii_logo import print_logo
+import argparse
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
@@ -35,6 +41,17 @@ if CONFIG_FILE.exists():
         pass
 
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+
+
+def _redis_write(func, *args, **kwargs):
+    """Perform a Redis write with retry and backoff."""
+    delay = 0.5
+    while True:
+        try:
+            return func(*args, **kwargs)
+        except RedisError:
+            time.sleep(delay)
+            delay = min(delay * 2, 30)
 
 
 def detect_gpus() -> list[dict]:
@@ -177,13 +194,15 @@ def get_gpu_temps() -> list[int]:
 def register_worker(worker_id: str, gpus: list[dict]):
     ip = socket.gethostbyname(socket.gethostname())
     ts = int(time.time())
-    r.hset(
+    _redis_write(
+        r.hset,
         f"worker:{worker_id}",
         mapping={"ip": ip, "status": "idle", "last_seen": ts},
     )
-    r.sadd("workers", worker_id)
+    _redis_write(r.sadd, "workers", worker_id)
     for g in gpus:
-        r.hset(
+        _redis_write(
+            r.hset,
             f"gpu:{g['uuid']}",
             mapping={
                 "model": g["model"],
@@ -193,7 +212,7 @@ def register_worker(worker_id: str, gpus: list[dict]):
                 "worker": worker_id,
             },
         )
-        r.sadd(f"worker:{worker_id}:gpus", g["uuid"])
+        _redis_write(r.sadd, f"worker:{worker_id}:gpus", g["uuid"])
 
     payload = {
         "worker_id": worker_id,
@@ -214,12 +233,9 @@ def register_worker(worker_id: str, gpus: list[dict]):
         name = None
 
     if name:
-        r.set("worker_name", name)
+        _redis_write(r.set, "worker_name", name)
 
     return name
-
-
-import argparse
 
 
 def main(argv: list[str] | None = None):
@@ -235,7 +251,7 @@ def main(argv: list[str] | None = None):
 
     probabilistic_order = False
     markov_lang = "english"
-    
+
     print_logo()
     worker_id = os.getenv("WORKER_ID", str(uuid.uuid4()))
     gpus = detect_gpus()
@@ -257,7 +273,10 @@ def main(argv: list[str] | None = None):
 
     for gpu in gpus:
         engine = "hashcat"
-        if gpu.get("pci_link_width", gpu.get("pci_width", 16)) <= 4 and low_bw_engine == "darkling":
+        if (
+            gpu.get("pci_link_width", gpu.get("pci_width", 16)) <= 4
+            and low_bw_engine == "darkling"
+        ):
             engine = "darkling-engine"
             rates = run_darkling_benchmark(gpu)
         else:
@@ -270,9 +289,7 @@ def main(argv: list[str] | None = None):
             "signature": sign_message(name),
         }
         try:
-            requests.post(
-                f"{SERVER_URL}/submit_benchmark", json=payload, timeout=10
-            )
+            requests.post(f"{SERVER_URL}/submit_benchmark", json=payload, timeout=10)
         except Exception as e:
             print(f"Failed to submit benchmark for {gpu.get('uuid')}: {e}")
 
@@ -334,4 +351,5 @@ def main(argv: list[str] | None = None):
 
 if __name__ == "__main__":
     import sys
+
     main(sys.argv[1:])
