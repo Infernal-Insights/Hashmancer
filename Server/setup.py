@@ -161,6 +161,8 @@ def configure():
 
     passkey = generate_passkey()
     config["portal_passkey"] = passkey
+    initial_token = secrets.token_hex(16)
+    config["initial_admin_token"] = initial_token
 
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=2)
@@ -174,6 +176,7 @@ def configure():
     print(f"🔑 Config: {CONFIG_FILE}")
     print(f"🔐 API key: {ENV_FILE}")
     print(f"🔑 Portal passkey: {passkey}")
+    print(f"🔑 Initial admin token: {initial_token}")
     print("   Use this key when logging in to the dashboard for the first time.")
     print("🧠 Server URL:", server_url)
     print("🟢 Service: hashmancer-server (enabled & running)")

@@ -7,3 +7,4 @@ cryptography
 python-multipart
 psutil
 filelock
+argon2-cffi

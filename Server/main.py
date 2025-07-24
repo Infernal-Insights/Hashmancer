@@ -38,6 +38,7 @@ from filelock import FileLock
 from waifus import assign_waifu
 from auth_utils import verify_signature, verify_signature_with_key
 from pydantic import BaseModel
+from argon2 import PasswordHasher
 from ascii_logo import print_logo
 from pattern_to_mask import get_top_masks
 import psutil
@@ -48,6 +49,7 @@ from collections.abc import Coroutine
 app = FastAPI()
 
 r = get_redis()
+password_hasher = PasswordHasher()
 
 # store references to background tasks so they can be cancelled
 BACKGROUND_TASKS: list[asyncio.Task] = []
@@ -282,11 +284,23 @@ app.add_middleware(PortalAuthMiddleware, key=PORTAL_KEY)
 
 class LoginRequest(BaseModel):
     passkey: str
+    username: str | None = None
+    password: str | None = None
 
 
 @app.post("/login")
 async def login(req: LoginRequest):
-    if not PORTAL_PASSKEY or req.passkey != PORTAL_PASSKEY:
+    initial_token = CONFIG.get("initial_admin_token")
+    if initial_token and req.passkey == initial_token:
+        username = getattr(req, "username", None)
+        password = getattr(req, "password", None)
+        if not username or not password:
+            raise HTTPException("setup required")
+        CONFIG["admin_username"] = username
+        CONFIG["admin_password_hash"] = password_hasher.hash(password)
+        CONFIG.pop("initial_admin_token", None)
+        save_config()
+    elif not PORTAL_PASSKEY or req.passkey != PORTAL_PASSKEY:
         raise HTTPException(status_code=401, detail="unauthorized")
     session_id = uuid.uuid4().hex
     expiry = int(time.time()) + SESSION_TTL

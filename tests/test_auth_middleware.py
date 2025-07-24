@@ -3,6 +3,7 @@ import json
 import sys
 import os
 import types
+import pytest
 
 # Stub FastAPI and related pieces similar to other tests
 fastapi_stub = types.ModuleType("fastapi")
@@ -285,6 +286,38 @@ def test_login_creates_session(monkeypatch):
     cookie = resp["cookie"]
     sid = cookie.split("|")[0]
     assert f"session:{sid}" in fake_r.store
+
+
+def test_initial_login_requires_credentials(monkeypatch):
+    fake_r = FakeRedis()
+    monkeypatch.setattr(main, "r", fake_r)
+    monkeypatch.setitem(main.CONFIG, "initial_admin_token", "token")
+    monkeypatch.setattr(main, "PORTAL_PASSKEY", "pass")
+
+    class Req:
+        passkey = "token"
+
+    with pytest.raises(main.HTTPException):
+        asyncio.run(main.login(Req()))
+
+
+def test_initial_login_sets_credentials(monkeypatch):
+    fake_r = FakeRedis()
+    monkeypatch.setattr(main, "r", fake_r)
+    monkeypatch.setitem(main.CONFIG, "initial_admin_token", "token")
+    monkeypatch.setattr(main, "PORTAL_PASSKEY", "pass")
+
+    class Req:
+        passkey = "token"
+        username = "admin"
+        password = "secret"
+
+    resp = asyncio.run(main.login(Req()))
+    assert resp["status"] == "ok"
+    assert main.CONFIG.get("admin_username") == "admin"
+    assert "initial_admin_token" not in main.CONFIG
+    hashval = main.CONFIG.get("admin_password_hash")
+    assert hashval and main.password_hasher.verify(hashval, "secret")
 
 
 def test_portal_auth_allows_cookie(monkeypatch):
