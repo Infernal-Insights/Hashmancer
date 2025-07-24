@@ -12,13 +12,26 @@ Both NVIDIA, AMD, and Intel GPUs are supported.
 - `hashmancer_worker/gpu_sidecar.py` – fetches batches via `/get_batch` and submits results
 
 The worker expects a local Redis instance for caching. Configure `REDIS_HOST` and
-`REDIS_PORT`. Point to the server with `SERVER_URL` and provide signing keys via
-`PRIVATE_KEY_PATH` and `PUBLIC_KEY_PATH`. The status heartbeat interval can be
-customized with `STATUS_INTERVAL` (seconds).
+`REDIS_PORT`. Provide a password with `REDIS_PASSWORD` and set `REDIS_SSL=1` to
+enable TLS. Certificate paths can be specified with `REDIS_SSL_CA_CERT`,
+`REDIS_SSL_CERT`, and `REDIS_SSL_KEY`. Point to the server with `SERVER_URL` and
+provide signing keys via `PRIVATE_KEY_PATH` and `PUBLIC_KEY_PATH`. The status
+heartbeat interval can be customized with `STATUS_INTERVAL` (seconds).
 
 Run `python3 ../setup.py --worker` from the repository root to install
 dependencies and configure the worker.  Passing `--server-ip` skips broadcast
 discovery.
+
+Minimal `redis.conf` for a password-protected TLS instance:
+
+```conf
+port 0
+tls-port 6379
+requirepass s3cret
+tls-cert-file /etc/redis/server.pem
+tls-key-file /etc/redis/server.key
+tls-ca-cert-file /etc/redis/ca.pem
+```
 
 Start a worker with:
 

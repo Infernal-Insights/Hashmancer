@@ -260,6 +260,32 @@ environment variables or `~/.hashmancer/server_config.json`:
 If not provided, the defaults are `./` for `RESTORE_DIR` and
 `./restore_backups` for `BACKUP_DIR`.
 
+### Redis credentials
+
+If your Redis instance requires authentication or TLS, set these environment
+variables (or add the fields to `~/.hashmancer/server_config.json`):
+
+```json
+{
+  "redis_password": "s3cret",
+  "redis_ssl": true,
+  "redis_ssl_ca_cert": "/etc/redis/ca.pem",
+  "redis_ssl_cert": "/etc/redis/client.pem",
+  "redis_ssl_key": "/etc/redis/client.key"
+}
+```
+
+Minimal `redis.conf` snippet for TLS/ACLs:
+
+```conf
+port 0
+tls-port 6379
+requirepass s3cret
+tls-cert-file /etc/redis/server.pem
+tls-key-file /etc/redis/server.key
+tls-ca-cert-file /etc/redis/ca.pem
+```
+
 ### Portal API key
 
 To restrict access to the web dashboard set `"portal_key"` in

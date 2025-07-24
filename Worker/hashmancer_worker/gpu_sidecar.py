@@ -19,8 +19,29 @@ from darkling import statistics
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+REDIS_SSL = os.getenv("REDIS_SSL", "0")
+REDIS_SSL_CERT = os.getenv("REDIS_SSL_CERT")
+REDIS_SSL_KEY = os.getenv("REDIS_SSL_KEY")
+REDIS_SSL_CA_CERT = os.getenv("REDIS_SSL_CA_CERT")
 
-r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+redis_opts: dict[str, str | int | bool] = {
+    "host": REDIS_HOST,
+    "port": REDIS_PORT,
+    "decode_responses": True,
+}
+if REDIS_PASSWORD:
+    redis_opts["password"] = REDIS_PASSWORD
+if str(REDIS_SSL).lower() in {"1", "true", "yes"}:
+    redis_opts["ssl"] = True
+    if REDIS_SSL_CA_CERT:
+        redis_opts["ssl_ca_certs"] = REDIS_SSL_CA_CERT
+    if REDIS_SSL_CERT:
+        redis_opts["ssl_certfile"] = REDIS_SSL_CERT
+    if REDIS_SSL_KEY:
+        redis_opts["ssl_keyfile"] = REDIS_SSL_KEY
+
+r = redis.Redis(**redis_opts)
 
 
 def _safe_redis_call(func, *args, default=None, **kwargs):
