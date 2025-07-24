@@ -67,17 +67,6 @@ class DummyHTMLResponse:
 resp_stub.HTMLResponse = DummyHTMLResponse
 resp_stub.FileResponse = object
 
-crypto_stub = types.ModuleType("cryptography")
-exc_stub = types.ModuleType("cryptography.exceptions")
-class InvalidSignature(Exception):
-    pass
-exc_stub.InvalidSignature = InvalidSignature
-prim_stub = types.ModuleType("cryptography.hazmat.primitives")
-prim_stub.asymmetric = types.SimpleNamespace(padding=object())
-prim_stub.hashes = types.SimpleNamespace(SHA256=lambda: None)
-prim_stub.serialization = types.SimpleNamespace(load_pem_public_key=lambda x: None)
-crypto_stub.hazmat = types.SimpleNamespace(primitives=prim_stub)
-crypto_stub.exceptions = exc_stub
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Server'))
@@ -88,10 +77,6 @@ def test_allowed_origins_applied(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, 'fastapi.middleware.cors', cors_stub)
     monkeypatch.setitem(sys.modules, 'fastapi.responses', resp_stub)
     monkeypatch.setitem(sys.modules, 'pydantic', pydantic_stub)
-    monkeypatch.setitem(sys.modules, 'cryptography', crypto_stub)
-    monkeypatch.setitem(sys.modules, 'cryptography.exceptions', exc_stub)
-    monkeypatch.setitem(sys.modules, 'cryptography.hazmat.primitives', prim_stub)
-    monkeypatch.setitem(sys.modules, 'cryptography.hazmat.primitives.asymmetric', prim_stub.asymmetric)
 
     cfg_dir = tmp_path / '.hashmancer'
     cfg_dir.mkdir()
