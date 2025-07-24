@@ -45,21 +45,6 @@ class BaseModel:
 pydantic_stub.BaseModel = BaseModel
 sys.modules.setdefault('pydantic', pydantic_stub)
 
-crypto_stub = types.ModuleType('cryptography')
-exc_stub = types.ModuleType('cryptography.exceptions')
-class InvalidSignature(Exception):
-    pass
-exc_stub.InvalidSignature = InvalidSignature
-prim_stub = types.ModuleType('cryptography.hazmat.primitives')
-prim_stub.asymmetric = types.SimpleNamespace(padding=object())
-prim_stub.hashes = types.SimpleNamespace(SHA256=lambda: None)
-prim_stub.serialization = types.SimpleNamespace(load_pem_public_key=lambda x: None)
-crypto_stub.hazmat = types.SimpleNamespace(primitives=prim_stub)
-crypto_stub.exceptions = exc_stub
-sys.modules.setdefault('cryptography', crypto_stub)
-sys.modules.setdefault('cryptography.exceptions', exc_stub)
-sys.modules.setdefault('cryptography.hazmat.primitives', prim_stub)
-sys.modules.setdefault('cryptography.hazmat.primitives.asymmetric', prim_stub.asymmetric)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Server'))
