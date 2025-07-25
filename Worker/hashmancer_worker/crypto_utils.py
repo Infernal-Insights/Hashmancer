@@ -41,9 +41,10 @@ def load_public_key_pem() -> str:
 
 def sign_message(message: str) -> str:
     """Return a base64 signature for the provided message."""
+    global _PRIVATE_KEY
     key = _PRIVATE_KEY
     if key is None:
-        key = load_private_key()
+        _PRIVATE_KEY = key = load_private_key()
     signature = key.sign(
         message.encode(), padding.PKCS1v15(), hashes.SHA256()
     )
