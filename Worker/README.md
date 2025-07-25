@@ -11,12 +11,14 @@ Both NVIDIA, AMD, and Intel GPUs are supported.
 - `hashmancer_worker/worker_agent.py` – registers with `/register_worker` and spawns GPU sidecars
 - `hashmancer_worker/gpu_sidecar.py` – fetches batches via `/get_batch` and submits results
 
-The worker expects a local Redis instance for caching. Configure `REDIS_HOST` and
-`REDIS_PORT`. Provide a password with `REDIS_PASSWORD` and set `REDIS_SSL=1` to
-enable TLS. Certificate paths can be specified with `REDIS_SSL_CA_CERT`,
-`REDIS_SSL_CERT`, and `REDIS_SSL_KEY`. Point to the server with `SERVER_URL` and
-provide signing keys via `PRIVATE_KEY_PATH` and `PUBLIC_KEY_PATH`. The status
-heartbeat interval can be customized with `STATUS_INTERVAL` (seconds).
+The worker expects a Redis instance for caching. Configure `REDIS_HOST` and
+`REDIS_PORT`. When batches reference `wordlist_key`, `REDIS_HOST` must point to
+the server's Redis host so the worker can retrieve the cached wordlist.
+Provide a password with `REDIS_PASSWORD` and set `REDIS_SSL=1` to enable TLS.
+Certificate paths can be specified with `REDIS_SSL_CA_CERT`, `REDIS_SSL_CERT`,
+and `REDIS_SSL_KEY`. Point to the server with `SERVER_URL` and provide signing
+keys via `PRIVATE_KEY_PATH` and `PUBLIC_KEY_PATH`. The status heartbeat
+interval can be customized with `STATUS_INTERVAL` (seconds).
 
 Run `python3 ../setup.py --worker` from the repository root to install
 dependencies and configure the worker.  Passing `--server-ip` skips broadcast
@@ -43,7 +45,14 @@ Each sidecar launches `hashcat` for incoming batches and streams per-GPU
 hashrate statistics back to the server.  Restore files are uploaded if a job is
 interrupted so the server can requeue work.  Wordlists are cached in VRAM on
 low-bandwidth GPUs and can also be pulled from the server's Redis cache so
-workers start faster.
+workers start faster. When batches include a `wordlist_key` instead of a local
+wordlist path, make sure the worker connects to the server's Redis instance by
+setting `REDIS_HOST` to the server's host:
+
+```bash
+REDIS_HOST=redis.example.com REDIS_PORT=6379 \
+    python -m hashmancer_worker.worker_agent
+```
 
 On startup the worker benchmarks each GPU and submits the results to the
 server's `/submit_benchmark` endpoint. The orchestrator aggregates these
