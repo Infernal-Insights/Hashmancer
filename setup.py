@@ -32,6 +32,24 @@ def run_server_setup():
     srv_setup.configure()
 
 
+def upgrade_repo() -> None:
+    """Pull the latest code from the git repository."""
+    print("\n🔄 Pulling latest updates from GitHub...")
+    subprocess.run(["git", "pull"], cwd=os.path.dirname(__file__), check=False)
+
+
+def run_server_upgrade():
+    upgrade_repo()
+    import Server.setup as srv_setup
+
+    srv_setup.install_dependencies()
+
+
+def run_worker_upgrade():
+    upgrade_repo()
+    worker_install_deps()
+
+
 def worker_install_deps():
     print("📦 Installing worker dependencies...")
     subprocess.run(["pip3", "install", "-r", "Worker/requirements.txt"], check=False)
@@ -69,7 +87,30 @@ def main():
     parser.add_argument("--server", action="store_true", help="setup a server")
     parser.add_argument("--worker", action="store_true", help="setup a worker")
     parser.add_argument("--server-ip", help="server IP or URL for worker setup")
+    parser.add_argument(
+        "--upgrade",
+        action="store_true",
+        help="pull the latest code and update dependencies",
+    )
     args = parser.parse_args()
+
+    if args.upgrade:
+        target = None
+        if args.server:
+            target = "server"
+        elif args.worker:
+            target = "worker"
+        else:
+            if (CONFIG_DIR / "server_config.json").exists():
+                target = "server"
+            else:
+                target = "worker"
+
+        if target == "server":
+            run_server_upgrade()
+        else:
+            run_worker_upgrade()
+        return
 
     if not args.server and not args.worker:
         choice = input("Configure this machine as [server/worker]?: ").strip().lower()

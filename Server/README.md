@@ -65,6 +65,9 @@ cd hashmancer-server
 python3 ../setup.py --server
 ```
 
+Run `python3 ../setup.py --upgrade` later to pull updates and refresh
+dependencies.
+
 This will:
 - Prompt for base directories for wordlists, masks, and rules. A Hashes.com API key is required for registration
 - Configure Redis and logging
