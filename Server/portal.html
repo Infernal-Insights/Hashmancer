@@ -141,6 +141,7 @@ body::before {
 <h2>Hashes.com Settings</h2>
 <div>API Key: <input type="password" id="hashes-key"><button onclick="saveHashesKey()">Save</button></div>
 <div>Algorithms: <input type="text" id="hashes-algos"><button onclick="saveHashesAlgos()">Save</button></div>
+<div>Masks: <input type="text" id="predef-masks"><button onclick="savePredefMasks()">Save</button></div>
 </section>
 
 <section id="hashes-jobs">
@@ -380,6 +381,18 @@ async function saveHashesAlgos(){
   await fetch('/hashes_algorithms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({algorithms:algos})});
 }
 
+async function savePredefMasks(){
+  const txt=document.getElementById('predef-masks').value.trim();
+  const masks=txt?txt.split(',').map(m=>m.trim()).filter(m=>m):[];
+  await fetch('/predefined_masks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({masks})});
+}
+
+async function loadPredefMasks(){
+  const res=await fetch('/predefined_masks');
+  const data=await res.json();
+  document.getElementById('predef-masks').value=data.join(', ');
+}
+
 async function loadHashesJobs(){
   const res=await fetch('/hashes_jobs');
   const jobs=await res.json();
@@ -425,6 +438,7 @@ function tick(){
   loadJobs();
   loadLogs();
   loadHashesJobs();
+  loadPredefMasks();
 }
 
 function startWS(){

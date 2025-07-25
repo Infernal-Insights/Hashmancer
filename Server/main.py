@@ -123,6 +123,7 @@ BROADCAST_INTERVAL = int(CONFIG.get("broadcast_interval", 30))
 HASHES_POLL_INTERVAL = int(CONFIG.get("hashes_poll_interval", 1800))
 HASHES_ALGORITHMS = [a.lower() for a in CONFIG.get("hashes_algorithms", [])]
 HASHES_DEFAULT_PRIORITY = int(CONFIG.get("hashes_default_priority", 0))
+PREDEFINED_MASKS = list(CONFIG.get("predefined_masks", []))
 
 # Markov and candidate ordering settings
 PROBABILISTIC_ORDER = bool(CONFIG.get("probabilistic_order", False))
@@ -473,6 +474,13 @@ async def process_hashes_jobs():
                         wordlist=wordlist,
                         priority=priority,
                     )
+                    for pm in PREDEFINED_MASKS:
+                        redis_manager.store_batch(
+                            remaining,
+                            mask=pm,
+                            wordlist=wordlist,
+                            priority=priority + 1,
+                        )
                 r.hset(key, mapping={"status": "processed", "batch_id": batch_id or ""})
         except redis.exceptions.RedisError as e:
             log_error("server", "system", "SRED", "Redis unavailable", e)
@@ -1481,6 +1489,36 @@ async def set_hashes_job_priority(req: JobPriorityRequest):
     except redis.exceptions.RedisError as e:
         log_error("server", "system", "SRED", "Redis unavailable", e)
         return {"status": "error", "message": "redis unavailable"}
+
+
+class MaskListRequest(BaseModel):
+    masks: list[str]
+
+
+@app.get("/predefined_masks")
+async def get_predefined_masks():
+    """Return the list of predefined masks."""
+    return list(PREDEFINED_MASKS)
+
+
+@app.post("/predefined_masks")
+async def set_predefined_masks(req: MaskListRequest):
+    """Replace the predefined mask list."""
+    CONFIG["predefined_masks"] = req.masks
+    global PREDEFINED_MASKS
+    PREDEFINED_MASKS = list(req.masks)
+    save_config()
+    return {"status": "ok"}
+
+
+@app.delete("/predefined_masks")
+async def clear_predefined_masks():
+    """Remove all predefined masks."""
+    CONFIG["predefined_masks"] = []
+    global PREDEFINED_MASKS
+    PREDEFINED_MASKS = []
+    save_config()
+    return {"status": "ok"}
 
 
 class ProbOrderRequest(BaseModel):
