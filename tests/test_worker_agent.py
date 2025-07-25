@@ -38,7 +38,7 @@ def test_register_worker_success(monkeypatch):
 
     monkeypatch.setattr(worker_agent.requests, "post", mock_post)
     monkeypatch.setattr(worker_agent, "load_public_key_pem", lambda: "PUB")
-    monkeypatch.setattr(worker_agent, "sign_message", lambda x: "sig")
+    monkeypatch.setattr(worker_agent, "sign_message", lambda *a: "sig")
 
     gpus = [
         {
@@ -87,7 +87,7 @@ def test_register_worker_retry(monkeypatch):
         lambda url, json=None, timeout=None: DummyResp({"status": "ok", "waifu": "W"}),
     )
     monkeypatch.setattr(worker_agent, "load_public_key_pem", lambda: "PUB")
-    monkeypatch.setattr(worker_agent, "sign_message", lambda x: "sig")
+    monkeypatch.setattr(worker_agent, "sign_message", lambda *a: "sig")
 
     sleeps = []
     monkeypatch.setattr(worker_agent.time, "sleep", lambda s: sleeps.append(s))
@@ -145,7 +145,7 @@ def test_benchmark_low_bw_gpu(monkeypatch):
         worker_agent, "run_hashcat_benchmark", lambda g, engine="hashcat": {}
     )
     monkeypatch.setattr(worker_agent.requests, "post", fake_post)
-    monkeypatch.setattr(worker_agent, "sign_message", lambda x: "sig")
+    monkeypatch.setattr(worker_agent, "sign_message", lambda *a: "sig")
 
     class DummySidecar:
         def __init__(
@@ -221,7 +221,7 @@ def test_prob_order_from_server(monkeypatch):
         worker_agent, "run_hashcat_benchmark", lambda g, engine="hashcat": {}
     )
     monkeypatch.setattr(worker_agent.requests, "post", fake_post)
-    monkeypatch.setattr(worker_agent, "sign_message", lambda x: "sig")
+    monkeypatch.setattr(worker_agent, "sign_message", lambda *a: "sig")
 
     class DummySidecar:
         def __init__(

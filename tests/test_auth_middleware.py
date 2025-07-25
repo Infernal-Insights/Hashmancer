@@ -244,11 +244,12 @@ def test_root_auth_allows_with_key(monkeypatch):
 def test_portal_ws_reports_status(monkeypatch):
     fake_r = FakeRedis()
     monkeypatch.setattr(main, "r", fake_r)
-    monkeypatch.setattr(main, "verify_signature", lambda a, b, c: True)
+    monkeypatch.setattr(main, "verify_signature", lambda *a: True)
 
     class Req:
         name = "alpha"
         status = "busy"
+        timestamp = 0
         signature = "s"
 
     asyncio.run(main.set_worker_status(Req()))

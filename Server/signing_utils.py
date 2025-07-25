@@ -6,6 +6,7 @@ operations.
 """
 
 import base64
+import time
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
@@ -27,13 +28,16 @@ except FileNotFoundError:
     _PRIVATE_KEY = None
 
 
-def sign_message(message: str) -> str:
-    """Return a base64 signature for ``message`` using the cached key."""
+def sign_message(message: str, timestamp: int | None = None) -> str:
+    """Return a base64 signature for ``message`` at ``timestamp`` using the cached key."""
     global _PRIVATE_KEY
+    if timestamp is None:
+        timestamp = int(time.time())
     key = _PRIVATE_KEY
     if key is None:
         _PRIVATE_KEY = key = load_private_key()
+    payload = f"{message}|{timestamp}"
     signature = key.sign(
-        message.encode(), padding.PKCS1v15(), hashes.SHA256()
+        payload.encode(), padding.PKCS1v15(), hashes.SHA256()
     )
     return base64.b64encode(signature).decode()

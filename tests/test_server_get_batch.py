@@ -117,9 +117,9 @@ def test_get_batch_returns_batch_id(monkeypatch):
     fake.store["worker:worker"] = {"low_bw_engine": "hashcat"}
     monkeypatch.setattr(main, "r", fake)
     monkeypatch.setattr(redis_manager, "r", fake)
-    monkeypatch.setattr(main, "verify_signature", lambda a, b, c: True)
+    monkeypatch.setattr(main, "verify_signature", lambda *a: True)
 
-    resp = asyncio.run(main.get_batch("worker", "sig"))
+    resp = asyncio.run(main.get_batch("worker", 0, "sig"))
 
     assert resp["batch_id"] == "batch1"
     assert fake.store["worker:worker"]["last_batch"] == "batch1"
@@ -134,8 +134,9 @@ def test_get_batch_returns_batch_id(monkeypatch):
         "batch_id": resp["batch_id"],
         "job_id": resp["job_id"],
         "msg_id": resp["msg_id"],
+        "timestamp": 0,
         "signature": "sig",
     }
-    monkeypatch.setattr(main, "verify_signature", lambda a, b, c: True)
+    monkeypatch.setattr(main, "verify_signature", lambda *a: True)
     asyncio.run(main.submit_no_founds(payload))
     assert fake.ack_args == (main.JOB_STREAM, main.HTTP_GROUP, "1-0")

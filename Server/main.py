@@ -326,6 +326,7 @@ async def logout(req: LogoutRequest):
 
 class RegisterWorkerRequest(BaseModel):
     worker_id: str
+    timestamp: int
     signature: str
     pubkey: str
     mode: str = "eco"
@@ -336,6 +337,7 @@ class RegisterWorkerRequest(BaseModel):
 class WorkerStatusRequest(BaseModel):
     name: str
     status: str
+    timestamp: int
     signature: str
     temps: list[int] | None = None
     progress: dict | None = None
@@ -345,6 +347,7 @@ class SubmitHashrateRequest(BaseModel):
     worker_id: str
     gpu_uuid: str | None = None
     hashrate: float
+    timestamp: int
     signature: str
 
 
@@ -353,6 +356,7 @@ class SubmitBenchmarkRequest(BaseModel):
     gpu_uuid: str
     engine: str
     hashrates: dict[str, float]
+    timestamp: int
     signature: str
 
 
@@ -492,7 +496,7 @@ async def shutdown_event():
 async def register_worker(info: RegisterWorkerRequest):
     try:
         worker_id = info.worker_id
-        if not verify_signature_with_key(info.pubkey, worker_id, info.signature):
+        if not verify_signature_with_key(info.pubkey, worker_id, info.timestamp, info.signature):
             raise HTTPException(status_code=401, detail="unauthorized")
 
         specs = {
@@ -539,9 +543,9 @@ async def register_worker(info: RegisterWorkerRequest):
 
 
 @app.get("/get_batch")
-async def get_batch(worker_id: str, signature: str):
+async def get_batch(worker_id: str, timestamp: int, signature: str):
     try:
-        if not verify_signature(worker_id, worker_id, signature):
+        if not verify_signature(worker_id, worker_id, timestamp, signature):
             return {"status": "unauthorized"}
 
         info = r.hgetall(f"worker:{worker_id}")
@@ -602,7 +606,10 @@ async def get_batch(worker_id: str, signature: str):
 async def submit_founds(payload: dict):
     try:
         if not verify_signature(
-            payload["worker_id"], json.dumps(payload["founds"]), payload["signature"]
+            payload["worker_id"],
+            json.dumps(payload["founds"]),
+            int(payload.get("timestamp", 0)),
+            payload["signature"],
         ):
             return {"status": "unauthorized"}
 
@@ -654,7 +661,10 @@ async def submit_founds(payload: dict):
 async def submit_no_founds(payload: dict):
     try:
         if not verify_signature(
-            payload["worker_id"], payload["batch_id"], payload["signature"]
+            payload["worker_id"],
+            payload["batch_id"],
+            int(payload.get("timestamp", 0)),
+            payload["signature"],
         ):
             return {"status": "unauthorized"}
 
@@ -856,9 +866,10 @@ async def set_worker_status(data: WorkerStatusRequest):
     name = data.name
     status = data.status
     signature = data.signature
+    timestamp = data.timestamp
     if not name or status is None:
         raise HTTPException(status_code=400, detail="name and status required")
-    if not verify_signature(name, name, signature):
+    if not verify_signature(name, name, timestamp, signature):
         raise HTTPException(status_code=401, detail="unauthorized")
     try:
         r.hset(f"worker:{name}", "status", status)
@@ -877,7 +888,7 @@ async def submit_hashrate(payload: SubmitHashrateRequest):
     worker = payload.worker_id
     gpu = payload.gpu_uuid
     rate = payload.hashrate
-    if not verify_signature(worker, worker, payload.signature):
+    if not verify_signature(worker, worker, payload.timestamp, payload.signature):
         raise HTTPException(status_code=401, detail="unauthorized")
     if rate is None:
         raise HTTPException(status_code=400, detail="worker_id and hashrate required")
@@ -918,7 +929,7 @@ async def submit_benchmark(data: SubmitBenchmarkRequest):
     """Record benchmark results for a GPU and aggregate per-worker speed."""
     worker = data.worker_id
     gpu = data.gpu_uuid
-    if not verify_signature(worker, worker, data.signature):
+    if not verify_signature(worker, worker, data.timestamp, data.signature):
         raise HTTPException(status_code=401, detail="unauthorized")
     try:
         rates = {alg: float(val) for alg, val in data.hashrates.items()}
@@ -979,9 +990,9 @@ async def get_hashrate(worker: str | None = None):
 
 
 @app.get("/get_flash_task")
-async def get_flash_task(worker_id: str, signature: str):
+async def get_flash_task(worker_id: str, timestamp: int, signature: str):
     """Pop the next flash task for a worker."""
-    if not verify_signature(worker_id, worker_id, signature):
+    if not verify_signature(worker_id, worker_id, timestamp, signature):
         return {"status": "unauthorized"}
     try:
         data = r.lpop(f"flash:{worker_id}")
@@ -1005,13 +1016,14 @@ class FlashResult(BaseModel):
     worker_id: str
     gpu_uuid: str
     success: bool
+    timestamp: int
     signature: str
 
 
 @app.post("/flash_result")
 async def flash_result(res: FlashResult):
     """Record result of a flash attempt."""
-    if not verify_signature(res.worker_id, res.worker_id, res.signature):
+    if not verify_signature(res.worker_id, res.worker_id, res.timestamp, res.signature):
         raise HTTPException(status_code=401, detail="unauthorized")
     try:
         if not res.success:

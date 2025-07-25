@@ -8,6 +8,7 @@ threads is safe as long as the key is not modified.
 
 import os
 import base64
+import time
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
@@ -39,13 +40,20 @@ def load_public_key_pem() -> str:
         return f.read()
 
 
-def sign_message(message: str) -> str:
-    """Return a base64 signature for the provided message."""
+def sign_message(message: str, timestamp: int | None = None) -> str:
+    """Return a base64 signature for ``message`` and ``timestamp``.
+
+    If ``timestamp`` is ``None`` the current UNIX time is used.  The payload
+    signed is ``"{message}|{timestamp}"``.
+    """
     global _PRIVATE_KEY
+    if timestamp is None:
+        timestamp = int(time.time())
     key = _PRIVATE_KEY
     if key is None:
         _PRIVATE_KEY = key = load_private_key()
+    payload = f"{message}|{timestamp}"
     signature = key.sign(
-        message.encode(), padding.PKCS1v15(), hashes.SHA256()
+        payload.encode(), padding.PKCS1v15(), hashes.SHA256()
     )
     return base64.b64encode(signature).decode()
