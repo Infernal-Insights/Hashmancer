@@ -57,3 +57,11 @@ add these fields along with default training parameters:
   "llm_train_learning_rate": 0.0001
 }
 ```
+
+### Redis security
+
+Redis should only listen on the loopback interface. Add `bind 127.0.0.1` to
+`redis.conf` so the service is not exposed to the LAN. When remote workers need
+access, restrict the port to their IPs with firewall rules (`iptables` or
+`ufw`). It's best to place Redis behind a VPN or require TLS with client
+certificates when exposing it over the internet.

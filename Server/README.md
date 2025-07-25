@@ -286,6 +286,29 @@ tls-key-file /etc/redis/server.key
 tls-ca-cert-file /etc/redis/ca.pem
 ```
 
+### Binding and Firewall Rules
+
+By default Redis should only listen on localhost. Add `bind 127.0.0.1` to
+`redis.conf` (and optionally `protected-mode yes`) so the service is not
+reachable from other hosts. When you need to allow remote workers, open the
+port only for their IP addresses.
+
+Example `iptables` commands:
+
+```bash
+sudo iptables -A INPUT -p tcp --dport 6379 -s <worker-ip> -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 6379 -j DROP
+```
+
+Using `ufw` instead:
+
+```bash
+sudo ufw allow from <worker-ip> to any port 6379 proto tcp
+```
+
+For remote deployments it's strongly recommended to run Redis behind a VPN or
+enable TLS with client certificates so each worker authenticates securely.
+
 ### Portal API key
 
 To restrict access to the web dashboard set `"portal_key"` in
