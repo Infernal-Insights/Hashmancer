@@ -17,8 +17,9 @@ the server's Redis host so the worker can retrieve the cached wordlist.
 Provide a password with `REDIS_PASSWORD` and set `REDIS_SSL=1` to enable TLS.
 Certificate paths can be specified with `REDIS_SSL_CA_CERT`, `REDIS_SSL_CERT`,
 and `REDIS_SSL_KEY`. Point to the server with `SERVER_URL` and provide signing
-keys via `PRIVATE_KEY_PATH` and `PUBLIC_KEY_PATH`. The status heartbeat
-interval can be customized with `STATUS_INTERVAL` (seconds).
+keys via `PRIVATE_KEY_PATH` and `PUBLIC_KEY_PATH`. If these files do not exist
+the worker will create a new 4096-bit RSA pair on first use. The status
+heartbeat interval can be customized with `STATUS_INTERVAL` (seconds).
 
 Run `python3 ../setup.py --worker` from the repository root to install
 dependencies and configure the worker.  Passing `--server-ip` skips broadcast
@@ -87,8 +88,10 @@ HASHCAT_WORKLOAD=4 HASHCAT_OPTIMIZED=1 python -m hashmancer_worker.worker_agent
 
 ## Generating signing keys
 
-To sign requests sent to the server you need an RSA key pair.  Create the keys
-and store them under `~/.hashmancer` so the worker can load them automatically.
+The worker automatically generates a 4096-bit RSA key pair on first run if
+`PRIVATE_KEY_PATH` and `PUBLIC_KEY_PATH` do not exist.  You can also create the
+keys manually and store them under `~/.hashmancer` so the worker loads them
+at startup.
 
 Using `ssh-keygen`:
 

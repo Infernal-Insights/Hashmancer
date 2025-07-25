@@ -74,6 +74,7 @@ This will:
 - Install a systemd service
 - Optionally enable a UDP broadcast so workers can auto-discover the server
 - Generate a random portal passkey and an initial admin token
+- Create a 4096-bit server signing key if one doesn't exist
 
 3. Start the server (if not done via systemd):
 

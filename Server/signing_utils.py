@@ -7,15 +7,33 @@ operations.
 
 import base64
 import time
+from pathlib import Path
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 KEY_PATH = "./keys/private_key.pem"
 
 
+def generate_private_key() -> rsa.RSAPrivateKey:
+    """Generate a 4096-bit RSA private key and save it to ``KEY_PATH``."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+    priv_bytes = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    )
+    path = Path(KEY_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(priv_bytes)
+    return key
+
+
 def load_private_key():
-    with open(KEY_PATH, "rb") as f:
-        key_data = f.read()
+    try:
+        with open(KEY_PATH, "rb") as f:
+            key_data = f.read()
+    except FileNotFoundError:
+        return generate_private_key()
     return serialization.load_pem_private_key(key_data, password=None)
 
 
