@@ -37,6 +37,8 @@ Run `python3 setup.py` from the repository root to configure either a server or
 worker.  Use `--server` or `--worker` flags to skip the prompt.  A worker can
 also supply `--server-ip` to skip auto-discovery. After setup, run
 `python3 setup.py --upgrade` to pull the latest version and update dependencies.
+Both components generate their RSA signing keys automatically the first time
+they run if no key files are present.
 
 ## Thread Safety
 

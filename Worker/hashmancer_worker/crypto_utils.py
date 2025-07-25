@@ -9,8 +9,9 @@ threads is safe as long as the key is not modified.
 import os
 import base64
 import time
+from pathlib import Path
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 PRIVATE_KEY_PATH = os.getenv("PRIVATE_KEY_PATH", "./worker_private_key.pem")
 PUBLIC_KEY_PATH = os.getenv("PUBLIC_KEY_PATH", "./worker_public_key.pem")
@@ -20,9 +21,33 @@ PUBLIC_KEY_PATH = os.getenv("PUBLIC_KEY_PATH", "./worker_public_key.pem")
 # to use across threads for sign operations.
 
 
+def generate_keypair() -> rsa.RSAPrivateKey:
+    """Generate a 4096-bit RSA key pair and write it to disk."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+    priv_bytes = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    )
+    pub_bytes = key.public_key().public_bytes(
+        serialization.Encoding.PEM,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    priv_path = Path(PRIVATE_KEY_PATH)
+    pub_path = Path(PUBLIC_KEY_PATH)
+    priv_path.parent.mkdir(parents=True, exist_ok=True)
+    pub_path.parent.mkdir(parents=True, exist_ok=True)
+    priv_path.write_bytes(priv_bytes)
+    pub_path.write_bytes(pub_bytes)
+    return key
+
+
 def load_private_key():
-    with open(PRIVATE_KEY_PATH, "rb") as f:
-        key_data = f.read()
+    try:
+        with open(PRIVATE_KEY_PATH, "rb") as f:
+            key_data = f.read()
+    except FileNotFoundError:
+        return generate_keypair()
     return serialization.load_pem_private_key(key_data, password=None)
 
 
