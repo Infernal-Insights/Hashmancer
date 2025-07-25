@@ -16,6 +16,7 @@ from pathlib import Path
 
 from .crypto_utils import sign_message
 from darkling import statistics
+from hash_algos import HASHCAT_ALGOS
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
@@ -506,7 +507,11 @@ def run_hashcat_benchmark(gpu: dict, engine: str = "hashcat") -> dict[str, float
         Mapping of algorithm name (MD5, SHA1, NTLM) to hashrate in H/s.
     """
 
-    modes = [(0, "MD5"), (100, "SHA1"), (1000, "NTLM")]
+    modes = [
+        (HASHCAT_ALGOS.get("MD5", 0), "MD5"),
+        (HASHCAT_ALGOS.get("SHA1", 100), "SHA1"),
+        (HASHCAT_ALGOS.get("NTLM", 1000), "NTLM"),
+    ]
     index = str(gpu.get("index", 0))
     results: dict[str, float] = {}
 
@@ -548,7 +553,11 @@ def run_hashcat_benchmark(gpu: dict, engine: str = "hashcat") -> dict[str, float
 
 def run_darkling_benchmark(gpu: dict) -> dict[str, float]:
     """Run a short benchmark using the darkling engine."""
-    modes = [(0, "MD5"), (100, "SHA1"), (1000, "NTLM")]
+    modes = [
+        (HASHCAT_ALGOS.get("MD5", 0), "MD5"),
+        (HASHCAT_ALGOS.get("SHA1", 100), "SHA1"),
+        (HASHCAT_ALGOS.get("NTLM", 1000), "NTLM"),
+    ]
     index = str(gpu.get("index", 0))
     mask = "?a?a?a?a?a?a?a?a"
     results: dict[str, float] = {}
