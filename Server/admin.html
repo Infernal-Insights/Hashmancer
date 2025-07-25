@@ -53,6 +53,24 @@ pre { background:#111; color:#0f0; padding:5px; overflow:auto; max-height:200px;
 <tbody id="job-body"></tbody></table>
 </section>
 
+<section id="hashes-jobs">
+<h2>Hashes.com Jobs</h2>
+<button onclick="loadHashesJobs()">Refresh</button>
+<table><thead><tr><th>ID</th><th>Algorithm</th><th>Priority</th><th>Save</th></tr></thead>
+<tbody id="hashes-job-body"></tbody></table>
+</section>
+
+<section id="algo-params">
+<h2>Algorithm Parameters</h2>
+<div>
+  <input type="text" id="algo-name" placeholder="algorithm">
+  <input type="number" id="algo-masklen" placeholder="mask length">
+  <input type="text" id="algo-rule" placeholder="rule file">
+  <button onclick="saveAlgoParams()">Save</button>
+</div>
+<pre id="algo-params-output"></pre>
+</section>
+
 <script>
 async function loadDicts() {
   const res = await fetch('/wordlists');
@@ -170,6 +188,52 @@ async function loadJobs() {
   }
 }
 
+async function loadHashesJobs(){
+  const res=await fetch('/hashes_jobs');
+  const jobs=await res.json();
+  const tbody=document.getElementById('hashes-job-body');
+  tbody.innerHTML='';
+  for(const j of jobs){
+    const tr=document.createElement('tr');
+    const idTd=document.createElement('td');
+    idTd.textContent=j.id;
+    const algoTd=document.createElement('td');
+    algoTd.textContent=j.algorithmName||'';
+    const prioTd=document.createElement('td');
+    const inp=document.createElement('input');
+    inp.type='number';
+    inp.value=j.priority||0;
+    prioTd.appendChild(inp);
+    const actionTd=document.createElement('td');
+    const btn=document.createElement('button');
+    btn.textContent='Set';
+    btn.onclick=async()=>{
+      await fetch('/hashes_job_config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job_id:j.id,priority:parseInt(inp.value,10)||0})});
+    };
+    actionTd.appendChild(btn);
+    tr.appendChild(idTd);tr.appendChild(algoTd);tr.appendChild(prioTd);tr.appendChild(actionTd);
+    tbody.appendChild(tr);
+  }
+}
+
+async function loadAlgoParams(){
+  const res=await fetch('/hashes_algo_params');
+  const data=await res.json();
+  document.getElementById('algo-params-output').textContent=JSON.stringify(data,null,2);
+}
+
+async function saveAlgoParams(){
+  const algo=document.getElementById('algo-name').value.trim();
+  if(!algo) return;
+  const mask_length=parseInt(document.getElementById('algo-masklen').value,10);
+  const rule=document.getElementById('algo-rule').value.trim();
+  const params={};
+  if(mask_length) params.mask_length=mask_length;
+  if(rule) params.rule=rule;
+  await fetch('/hashes_algo_params',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({algo,params})});
+  loadAlgoParams();
+}
+
 function logout(){
   const m=document.cookie.match(/(?:^|; )session=([^;]+)/);
   if(m){
@@ -185,6 +249,8 @@ function tick(){
   loadWorkers();
   loadJobs();
   loadLogs();
+  loadHashesJobs();
+  loadAlgoParams();
 }
 
 setInterval(tick,5000);
