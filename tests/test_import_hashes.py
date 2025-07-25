@@ -68,13 +68,15 @@ class FakeUploadFile:
 
 def test_import_hashes(monkeypatch):
     calls = []
-    def fake_store_batch(hashes, mask="", wordlist="", ttl=1800, target="any", hash_mode="0"):
+    def fake_store_batch(hashes, mask="", wordlist="", rule="", ttl=1800, target="any", hash_mode="0", priority=0):
         calls.append({
             "hashes": hashes,
             "mask": mask,
             "wordlist": wordlist,
             "target": target,
             "hash_mode": hash_mode,
+            "rule": rule,
+            "priority": priority,
         })
         return f"id{len(calls)}"
     monkeypatch.setattr(redis_manager, 'store_batch', fake_store_batch)
@@ -90,6 +92,8 @@ def test_import_hashes(monkeypatch):
             "wordlist": "wl.txt",
             "target": "t1",
             "hash_mode": "1000",
+            "rule": "",
+            "priority": 0,
         },
         {
             "hashes": ["h2"],
@@ -97,5 +101,7 @@ def test_import_hashes(monkeypatch):
             "wordlist": "",
             "target": "any",
             "hash_mode": "1000",
+            "rule": "",
+            "priority": 0,
         },
     ]

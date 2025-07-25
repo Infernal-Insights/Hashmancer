@@ -124,6 +124,7 @@ HASHES_POLL_INTERVAL = int(CONFIG.get("hashes_poll_interval", 1800))
 HASHES_ALGORITHMS = [a.lower() for a in CONFIG.get("hashes_algorithms", [])]
 HASHES_DEFAULT_PRIORITY = int(CONFIG.get("hashes_default_priority", 0))
 PREDEFINED_MASKS = list(CONFIG.get("predefined_masks", []))
+HASHES_ALGO_PARAMS: dict[str, dict[str, Any]] = dict(CONFIG.get("hashes_algo_params", {}))
 
 # Markov and candidate ordering settings
 PROBABILISTIC_ORDER = bool(CONFIG.get("probabilistic_order", False))
@@ -452,6 +453,15 @@ async def process_hashes_jobs():
 
                 mask = job.get("mask", "")
                 wordlist = job.get("wordlist", "")
+                params = HASHES_ALGO_PARAMS.get(algorithm.lower(), {})
+                mask_len = params.get("mask_length")
+                if mask_len:
+                    mask_len = int(mask_len)
+                    if mask:
+                        mask = mask[:mask_len]
+                    else:
+                        mask = "?a" * mask_len
+                rule = params.get("rule", "")
                 if known:
                     try:
                         import tempfile
@@ -472,6 +482,7 @@ async def process_hashes_jobs():
                         remaining,
                         mask=mask,
                         wordlist=wordlist,
+                        rule=rule,
                         priority=priority,
                     )
                     for pm in PREDEFINED_MASKS:
@@ -479,6 +490,7 @@ async def process_hashes_jobs():
                             remaining,
                             mask=pm,
                             wordlist=wordlist,
+                            rule=rule,
                             priority=priority + 1,
                         )
                 r.hset(key, mapping={"status": "processed", "batch_id": batch_id or ""})
@@ -1188,7 +1200,7 @@ async def import_hashes(file: UploadFile = File(...), hash_mode: str = "0"):
             wordlist = (row.get("wordlist") or "").strip()
             target = row.get("target") or "any"
             batch_id = redis_manager.store_batch(
-                [h], mask=mask, wordlist=wordlist, target=target, hash_mode=hash_mode
+                [h], mask=mask, wordlist=wordlist, rule="", target=target, hash_mode=hash_mode
             )
             if batch_id:
                 queued.append(batch_id)
@@ -1475,9 +1487,53 @@ async def set_hashes_algorithms(req: AlgoRequest):
     return {"status": "ok"}
 
 
+class AlgoParamsRequest(BaseModel):
+    algo: str
+    params: dict[str, Any]
+
+
+@app.get("/hashes_algo_params")
+async def get_hashes_algo_params():
+    return HASHES_ALGO_PARAMS
+
+
+@app.post("/hashes_algo_params")
+async def set_hashes_algo_params(req: AlgoParamsRequest):
+    algo = req.algo.lower()
+    CONFIG.setdefault("hashes_algo_params", {})[algo] = req.params
+    global HASHES_ALGO_PARAMS
+    HASHES_ALGO_PARAMS[algo] = req.params
+    save_config()
+    return {"status": "ok"}
+
+
 class JobPriorityRequest(BaseModel):
     job_id: str
     priority: int
+
+
+class JobConfigRequest(BaseModel):
+    job_id: str
+    priority: int
+
+
+@app.get("/hashes_job_config")
+async def get_hashes_job_config():
+    cfg: dict[str, int] = {}
+    try:
+        for key in r.scan_iter("hashes_job:*"):
+            prio = r.hget(key, "priority")
+            if prio is not None:
+                cfg[key.split(":", 1)[1]] = int(prio)
+        return cfg
+    except redis.exceptions.RedisError as e:
+        log_error("server", "system", "SRED", "Redis unavailable", e)
+        return {}
+
+
+@app.post("/hashes_job_config")
+async def set_hashes_job_config(req: JobConfigRequest):
+    return await set_hashes_job_priority(req)
 
 
 @app.post("/hashes_job_priority")
