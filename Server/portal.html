@@ -141,6 +141,7 @@ body::before {
 <h2>Hashes.com Settings</h2>
 <div>API Key: <input type="password" id="hashes-key"><button onclick="saveHashesKey()">Save</button></div>
 <div>Algorithms: <input type="text" id="hashes-algos"><button onclick="saveHashesAlgos()">Save</button></div>
+<div>Poll Interval: <input type="number" id="hashes-poll" value="0"><button onclick="saveHashesPoll()">Save</button></div>
 <div>Masks: <input type="text" id="predef-masks"><button onclick="savePredefMasks()">Save</button></div>
 </section>
 
@@ -393,6 +394,11 @@ async function saveHashesAlgos(){
   await fetch('/hashes_algorithms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({algorithms:algos})});
 }
 
+async function saveHashesPoll(){
+  const interval=parseInt(document.getElementById('hashes-poll').value,10)||0;
+  await fetch('/hashes_settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hashes_poll_interval:interval})});
+}
+
 async function savePredefMasks(){
   const txt=document.getElementById('predef-masks').value.trim();
   const masks=txt?txt.split(',').map(m=>m.trim()).filter(m=>m):[];
@@ -434,9 +440,12 @@ async function loadHashesJobs(){
 }
 
 async function loadAlgoParams(){
-  const res=await fetch('/hashes_algo_params');
+  const res=await fetch('/hashes_settings');
   const data=await res.json();
-  document.getElementById('algo-params-output').textContent=JSON.stringify(data,null,2);
+  if(data.hashes_poll_interval!==undefined){
+    document.getElementById('hashes-poll').value=data.hashes_poll_interval;
+  }
+  document.getElementById('algo-params-output').textContent=JSON.stringify(data.algo_params||{},null,2);
 }
 
 async function saveAlgoParams(){
@@ -447,7 +456,9 @@ async function saveAlgoParams(){
   const params={};
   if(mask_length) params.mask_length=mask_length;
   if(rule) params.rule=rule;
-  await fetch('/hashes_algo_params',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({algo,params})});
+  const body={algo_params:{}};
+  body.algo_params[algo.toLowerCase()]=params;
+  await fetch('/hashes_settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   loadAlgoParams();
 }
 

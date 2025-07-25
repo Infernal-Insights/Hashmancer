@@ -120,11 +120,22 @@ BROADCAST_PORT = int(CONFIG.get("broadcast_port", 50000))
 BROADCAST_INTERVAL = int(CONFIG.get("broadcast_interval", 30))
 
 # hashes.com integration settings
-HASHES_POLL_INTERVAL = int(CONFIG.get("hashes_poll_interval", 1800))
+# consolidate hashes.com specific options under a single dictionary so updates
+# can be applied without restarting the server.
+HASHES_SETTINGS: dict[str, Any] = dict(CONFIG.get("hashes_settings", {}))
+HASHES_SETTINGS.setdefault(
+    "hashes_poll_interval", int(CONFIG.get("hashes_poll_interval", 1800))
+)
+HASHES_SETTINGS.setdefault(
+    "algo_params", dict(CONFIG.get("hashes_algo_params", {}))
+)
+HASHES_POLL_INTERVAL = int(HASHES_SETTINGS.get("hashes_poll_interval", 1800))
 HASHES_ALGORITHMS = [a.lower() for a in CONFIG.get("hashes_algorithms", [])]
 HASHES_DEFAULT_PRIORITY = int(CONFIG.get("hashes_default_priority", 0))
 PREDEFINED_MASKS = list(CONFIG.get("predefined_masks", []))
-HASHES_ALGO_PARAMS: dict[str, dict[str, Any]] = dict(CONFIG.get("hashes_algo_params", {}))
+HASHES_ALGO_PARAMS: dict[str, dict[str, Any]] = dict(
+    HASHES_SETTINGS.get("algo_params", {})
+)
 
 # Markov and candidate ordering settings
 PROBABILISTIC_ORDER = bool(CONFIG.get("probabilistic_order", False))
@@ -422,7 +433,8 @@ async def poll_hashes_jobs():
     """Background loop to periodically poll hashes.com for jobs."""
     while True:
         await fetch_and_store_jobs()
-        await asyncio.sleep(HASHES_POLL_INTERVAL)
+        interval = int(HASHES_SETTINGS.get("hashes_poll_interval", HASHES_POLL_INTERVAL))
+        await asyncio.sleep(interval)
 
 
 async def process_hashes_jobs():
@@ -1503,6 +1515,30 @@ async def set_hashes_algo_params(req: AlgoParamsRequest):
     CONFIG.setdefault("hashes_algo_params", {})[algo] = req.params
     global HASHES_ALGO_PARAMS
     HASHES_ALGO_PARAMS[algo] = req.params
+    save_config()
+    return {"status": "ok"}
+
+
+class HashesSettingsRequest(BaseModel):
+    hashes_poll_interval: int | None = None
+    algo_params: dict[str, dict[str, Any]] | None = None
+
+
+@app.get("/hashes_settings")
+async def get_hashes_settings():
+    return HASHES_SETTINGS
+
+
+@app.post("/hashes_settings")
+async def set_hashes_settings(req: HashesSettingsRequest):
+    if req.hashes_poll_interval is not None:
+        HASHES_SETTINGS["hashes_poll_interval"] = int(req.hashes_poll_interval)
+    if req.algo_params is not None:
+        HASHES_SETTINGS.setdefault("algo_params", {}).update(req.algo_params)
+    CONFIG["hashes_settings"] = HASHES_SETTINGS
+    global HASHES_POLL_INTERVAL, HASHES_ALGO_PARAMS
+    HASHES_POLL_INTERVAL = int(HASHES_SETTINGS.get("hashes_poll_interval", HASHES_POLL_INTERVAL))
+    HASHES_ALGO_PARAMS = dict(HASHES_SETTINGS.get("algo_params", {}))
     save_config()
     return {"status": "ok"}
 
