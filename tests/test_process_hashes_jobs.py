@@ -176,3 +176,30 @@ def test_process_hashes_known(monkeypatch, tmp_path):
     assert 'batch:22222222-2222-2222-2222-222222222222' in fake.store
     batch = fake.store['batch:22222222-2222-2222-2222-222222222222']
     assert json.loads(batch['hashes']) == ['deadbeef']
+
+
+def test_predefined_mask_batches(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(main, 'r', fake)
+    monkeypatch.setattr(redis_manager, 'r', fake)
+    ids = [UUID('33333333-3333-3333-3333-333333333333'), UUID('44444444-4444-4444-4444-444444444444')]
+    monkeypatch.setattr(redis_manager.uuid, 'uuid4', lambda: ids.pop(0))
+    monkeypatch.setattr(redis_manager.orchestrator_agent, 'build_mask_charsets', lambda: {})
+    monkeypatch.setattr(redis_manager.orchestrator_agent, 'estimate_keyspace', lambda m, c: 10)
+    monkeypatch.setattr(main, 'PREDEFINED_MASKS', ['?l?d'])
+
+    fake.store['hashes_job:3'] = {
+        'hashes': json.dumps(['dead']),
+        'mask': '?d?d',
+        'wordlist': '',
+        'algorithmName': 'MD5',
+        'algorithmId': '0',
+        'priority': '2'
+    }
+
+    asyncio.run(run_once())
+
+    assert 'batch:33333333-3333-3333-3333-333333333333' in fake.store
+    assert 'batch:44444444-4444-4444-4444-444444444444' in fake.store
+    assert fake.prio['33333333-3333-3333-3333-333333333333'] == 2
+    assert fake.prio['44444444-4444-4444-4444-444444444444'] == 3
