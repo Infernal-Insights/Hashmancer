@@ -178,8 +178,12 @@ body::before {
 <div>
   <label><input type="checkbox" id="prob-order" onchange="updateProbOrder()"> Probabilistic Ordering</label>
 </div>
+<div>
+  <label><input type="checkbox" id="inverse-order" onchange="updateInverseOrder()"> Inverse Order</label>
+</div>
 <div>Current Language: <span id="current-markov-lang"></span></div>
   <div>Probabilistic Order: <span id="current-prob-order"></span></div>
+  <div>Inverse Order: <span id="current-inverse-order"></span></div>
 </section>
 
 <section id="llm-training">
@@ -202,8 +206,10 @@ function applyMetrics(data){
   document.getElementById('gpu').textContent = (data.gpu_temps || []).join(',');
   document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
   document.getElementById('current-prob-order').textContent = data.probabilistic_order ? 'on' : 'off';
+  document.getElementById('current-inverse-order').textContent = data.inverse_prob_order ? 'on' : 'off';
   document.getElementById('current-markov-lang').textContent = data.markov_lang || '';
   document.getElementById('prob-order').checked = !!data.probabilistic_order;
+  document.getElementById('inverse-order').checked = !!data.inverse_prob_order;
   document.getElementById('markov-language').value = data.markov_lang || 'english';
   if(data.llm_train_epochs!==undefined){
     document.getElementById('llm-epochs').value = data.llm_train_epochs;
@@ -470,6 +476,12 @@ async function trainMarkov(){
 async function updateProbOrder(){
   const enabled=document.getElementById('prob-order').checked;
   await fetch('/probabilistic_order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});
+  updateMetrics();
+}
+
+async function updateInverseOrder(){
+  const enabled=document.getElementById('inverse-order').checked;
+  await fetch('/inverse_prob_order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});
   updateMetrics();
 }
 

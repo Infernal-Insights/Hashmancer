@@ -40,6 +40,10 @@ also supply `--server-ip` to skip auto-discovery. After setup, run
 Both components generate their RSA signing keys automatically the first time
 they run if no key files are present.
 
+Workers can enable probabilistic candidate ordering using `--probabilistic-order`.
+Use `--inverse-prob-order` to iterate from least likely candidates first. The
+server portal exposes matching checkboxes under the Markov Training section.
+
 ## Thread Safety
 
 Both the server and worker load their private signing keys once at module import
