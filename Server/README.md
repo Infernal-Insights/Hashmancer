@@ -367,6 +367,25 @@ Specify a list of origins permitted for CORS requests by adding
 
 If omitted, all origins are accepted.
 
+### Trusted worker keys
+
+Restrict worker registration to known public keys by listing SHA-256 fingerprints
+in a file and referencing it with `"trusted_keys_file"`:
+
+```json
+{
+  "trusted_keys_file": "/opt/hashmancer/trusted_keys.txt"
+}
+```
+
+Generate a fingerprint from a PEM key with:
+
+```bash
+openssl rsa -pubin -in worker_public_key.pem -outform der | sha256sum | cut -d' ' -f1 >> /opt/hashmancer/trusted_keys.txt
+```
+
+Only keys matching a fingerprint in this file are allowed to register.
+
 ## 🌐 Reverse Proxy Setup
 
 When exposing Hashmancer to the internet it's best to place a TLS-enabled

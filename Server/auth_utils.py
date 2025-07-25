@@ -3,6 +3,7 @@ import redis
 from redis_utils import get_redis
 import logging
 import time
+import hashlib
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.exceptions import InvalidSignature
@@ -74,3 +75,13 @@ def verify_signature_with_key(pubkey_pem: str, payload: str, timestamp: int, sig
     except Exception as e:
         logging.error(f"Verification error: {e}")
         return False
+
+
+def fingerprint_public_key(pubkey_pem: str) -> str:
+    """Return a SHA-256 fingerprint for the given public key."""
+    key = serialization.load_pem_public_key(pubkey_pem.encode())
+    der = key.public_bytes(
+        serialization.Encoding.DER,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    return hashlib.sha256(der).hexdigest()

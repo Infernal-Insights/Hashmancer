@@ -2,6 +2,7 @@ import asyncio
 import sys
 import os
 import types
+import pytest
 
 # Stub out FastAPI and Pydantic to avoid heavy dependencies during testing
 fastapi_stub = types.ModuleType("fastapi")
@@ -34,6 +35,7 @@ sys.modules.setdefault("fastapi.middleware.cors", cors_stub)
 
 resp_stub = types.ModuleType("fastapi.responses")
 resp_stub.HTMLResponse = object
+resp_stub.FileResponse = object
 sys.modules.setdefault("fastapi.responses", resp_stub)
 
 pydantic_stub = types.ModuleType("pydantic")
@@ -94,3 +96,40 @@ def test_register_worker_policy(monkeypatch):
 
     assert resp['status'] == 'ok'
     assert fake.store['worker:Agent']['low_bw_engine'] == 'darkling'
+
+
+def _build_req():
+    return type('Req', (), {
+        'worker_id': 'id',
+        'signature': 's',
+        'pubkey': 'p',
+        'timestamp': 0,
+        'mode': 'eco',
+        'provider': 'on-prem',
+        'hardware': {}
+    })()
+
+
+def test_trusted_key_allows_registration(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(main, 'r', fake)
+    monkeypatch.setattr(main, 'verify_signature_with_key', lambda *a: True)
+    monkeypatch.setattr(main, 'assign_waifu', lambda s: 'Ok')
+    monkeypatch.setattr(main, 'TRUSTED_KEY_FINGERPRINTS', {'abc'})
+    monkeypatch.setattr(main, 'fingerprint_public_key', lambda k: 'abc')
+
+    resp = asyncio.run(main.register_worker(_build_req()))
+    assert resp['status'] == 'ok'
+
+
+def test_untrusted_key_rejected(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(main, 'r', fake)
+    monkeypatch.setattr(main, 'verify_signature_with_key', lambda *a: True)
+    monkeypatch.setattr(main, 'assign_waifu', lambda s: 'Nope')
+    monkeypatch.setattr(main, 'log_error', lambda *a, **k: None)
+    monkeypatch.setattr(main, 'TRUSTED_KEY_FINGERPRINTS', {'abc'})
+    monkeypatch.setattr(main, 'fingerprint_public_key', lambda k: 'xyz')
+
+    with pytest.raises(main.HTTPException):
+        asyncio.run(main.register_worker(_build_req()))
