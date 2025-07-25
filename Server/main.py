@@ -49,6 +49,7 @@ import psutil
 import wordlist_db
 from typing import Any
 from collections.abc import Coroutine
+from hash_algos import HASHCAT_ALGOS
 
 app = FastAPI()
 
@@ -1611,6 +1612,12 @@ async def clear_predefined_masks():
     PREDEFINED_MASKS = []
     save_config()
     return {"status": "ok"}
+
+
+@app.get("/hash_algos")
+async def get_hash_algos():
+    """Return mapping of hash algorithm names to hashcat mode IDs."""
+    return HASHCAT_ALGOS
 
 
 class ProbOrderRequest(BaseModel):
