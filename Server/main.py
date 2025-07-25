@@ -36,7 +36,11 @@ import tempfile
 from filelock import FileLock
 
 from waifus import assign_waifu
-from auth_utils import verify_signature, verify_signature_with_key
+from auth_utils import (
+    verify_signature,
+    verify_signature_with_key,
+    fingerprint_public_key,
+)
 from pydantic import BaseModel
 from argon2 import PasswordHasher
 from ascii_logo import print_logo
@@ -84,6 +88,16 @@ WORDLIST_DB_PATH = Path(
         str(Path.home() / ".hashmancer" / "wordlists.db"),
     )
 )
+TRUSTED_KEYS_FILE = CONFIG.get("trusted_keys_file")
+TRUSTED_KEY_FINGERPRINTS: set[str] = set()
+if TRUSTED_KEYS_FILE:
+    try:
+        with open(TRUSTED_KEYS_FILE) as f:
+            TRUSTED_KEY_FINGERPRINTS = {
+                line.strip() for line in f if line.strip()
+            }
+    except Exception:
+        TRUSTED_KEY_FINGERPRINTS = set()
 FOUNDS_FILE = STORAGE_DIR / "founds.txt"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -499,6 +513,11 @@ async def register_worker(info: RegisterWorkerRequest):
         if not verify_signature_with_key(info.pubkey, worker_id, info.timestamp, info.signature):
             raise HTTPException(status_code=401, detail="unauthorized")
 
+        if TRUSTED_KEY_FINGERPRINTS:
+            fp = fingerprint_public_key(info.pubkey)
+            if fp not in TRUSTED_KEY_FINGERPRINTS:
+                raise HTTPException("untrusted key")
+
         specs = {
             "mode": info.mode,
             "provider": info.provider,
@@ -537,6 +556,8 @@ async def register_worker(info: RegisterWorkerRequest):
     except redis.exceptions.RedisError as e:
         log_error("server", "unassigned", "SRED", "Redis unavailable", e)
         raise HTTPException(status_code=500, detail="redis unavailable")
+    except HTTPException:
+        raise
     except Exception as e:
         log_error("server", "unassigned", "S700", "Worker registration failed", e)
         raise HTTPException(status_code=500, detail=str(e))
