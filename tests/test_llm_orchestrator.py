@@ -32,6 +32,7 @@ class FakeRedis:
         self.jobs = {}
         self.streams = []
         self.lists = {}
+        self.prio = {}
 
     def rpop(self, name):
         return self.queue.pop(0) if self.queue else None
@@ -55,6 +56,16 @@ class FakeRedis:
         lst = self.lists.get(name, [])
         while value in lst:
             lst.remove(value)
+
+    def zadd(self, name, mapping):
+        self.prio.update(mapping)
+
+    def zrevrange(self, name, start, end):
+        ordered = sorted(self.prio.items(), key=lambda x: -x[1])
+        return [k for k, _ in ordered[start:end+1]]
+
+    def zrem(self, name, member):
+        self.prio.pop(member, None)
 
     def scan_iter(self, pattern):
         return []

@@ -60,6 +60,7 @@ class FakeRedis:
         self.queue = []
         self.lists = []
         self.sets = {}
+        self.prio = {}
 
     def hset(self, key, mapping=None, **kwargs):
         self.store.setdefault(key, {}).update(mapping or {})
@@ -81,6 +82,16 @@ class FakeRedis:
 
     def lrem(self, name, count, value):
         pass
+
+    def zadd(self, name, mapping):
+        self.prio.update(mapping)
+
+    def zrevrange(self, name, start, end):
+        ordered = sorted(self.prio.items(), key=lambda x: -x[1])
+        return [k for k, _ in ordered[start:end+1]]
+
+    def zrem(self, name, member):
+        self.prio.pop(member, None)
 
     def hget(self, key, field):
         return self.store.get(key, {}).get(field)

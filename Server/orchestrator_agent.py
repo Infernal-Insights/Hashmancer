@@ -259,7 +259,14 @@ def dispatch_batches(lang: str = "English"):
         darkling = any_darkling_workers()
 
         while (pending_high < backlog_target) or (darkling and pending_low < backlog_target):
-            batch_id = r.rpop("batch:queue")
+            batch_id = None
+            prio = r.zrevrange("batch:prio", 0, 0)
+            if prio:
+                batch_id = prio[0]
+                r.zrem("batch:prio", batch_id)
+                r.lrem("batch:queue", 0, batch_id)
+            else:
+                batch_id = r.rpop("batch:queue")
             if not batch_id:
                 break
             batch = r.hgetall(f"batch:{batch_id}")

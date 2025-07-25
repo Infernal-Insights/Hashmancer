@@ -122,6 +122,7 @@ BROADCAST_INTERVAL = int(CONFIG.get("broadcast_interval", 30))
 # hashes.com integration settings
 HASHES_POLL_INTERVAL = int(CONFIG.get("hashes_poll_interval", 1800))
 HASHES_ALGORITHMS = [a.lower() for a in CONFIG.get("hashes_algorithms", [])]
+HASHES_DEFAULT_PRIORITY = int(CONFIG.get("hashes_default_priority", 0))
 
 # Markov and candidate ordering settings
 PROBABILISTIC_ORDER = bool(CONFIG.get("probabilistic_order", False))
@@ -465,7 +466,13 @@ async def process_hashes_jobs():
 
                 batch_id = None
                 if remaining:
-                    batch_id = redis_manager.store_batch(remaining, mask=mask, wordlist=wordlist)
+                    priority = int(job.get("priority", HASHES_DEFAULT_PRIORITY))
+                    batch_id = redis_manager.store_batch(
+                        remaining,
+                        mask=mask,
+                        wordlist=wordlist,
+                        priority=priority,
+                    )
                 r.hset(key, mapping={"status": "processed", "batch_id": batch_id or ""})
         except redis.exceptions.RedisError as e:
             log_error("server", "system", "SRED", "Redis unavailable", e)
@@ -1458,6 +1465,22 @@ async def set_hashes_algorithms(req: AlgoRequest):
     HASHES_ALGORITHMS = [a.lower() for a in req.algorithms]
     save_config()
     return {"status": "ok"}
+
+
+class JobPriorityRequest(BaseModel):
+    job_id: str
+    priority: int
+
+
+@app.post("/hashes_job_priority")
+async def set_hashes_job_priority(req: JobPriorityRequest):
+    """Set the priority for a Hashes.com job."""
+    try:
+        r.hset(f"hashes_job:{req.job_id}", "priority", int(req.priority))
+        return {"status": "ok"}
+    except redis.exceptions.RedisError as e:
+        log_error("server", "system", "SRED", "Redis unavailable", e)
+        return {"status": "error", "message": "redis unavailable"}
 
 
 class ProbOrderRequest(BaseModel):

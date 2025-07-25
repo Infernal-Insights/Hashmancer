@@ -14,6 +14,7 @@ class FakeRedis:
     def __init__(self):
         self.store = {}
         self.queue = []
+        self.prio = {}
 
     def sadd(self, key, value):
         self.store.setdefault(key, set()).add(value)
@@ -40,6 +41,16 @@ class FakeRedis:
 
     def rpop(self, name):
         return self.queue.pop() if self.queue else None
+
+    def zadd(self, name, mapping):
+        self.prio.update(mapping)
+
+    def zrevrange(self, name, start, end):
+        ordered = sorted(self.prio.items(), key=lambda x: -x[1])
+        return [k for k, _ in ordered[start:end+1]]
+
+    def zrem(self, name, member):
+        self.prio.pop(member, None)
 
     def hgetall(self, key):
         return dict(self.store.get(key, {}))
