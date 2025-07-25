@@ -15,6 +15,7 @@ def store_batch(
     ttl=1800,
     target="any",
     hash_mode="0",
+    priority: int = 0,
 ):
     batch_id = str(uuid.uuid4())
     try:
@@ -36,10 +37,13 @@ def store_batch(
                 "status": "queued",
                 "hash_mode": str(hash_mode),
                 "keyspace": keyspace,
+                "priority": int(priority),
             },
         )
         r.expire(f"batch:{batch_id}", ttl)
         r.lpush("batch:queue", batch_id)
+        if int(priority) > 0:
+            r.zadd("batch:prio", {batch_id: int(priority)})
         for h in hashes:
             r.sadd(f"hash_batches:{h}", batch_id)
             r.expire(f"hash_batches:{h}", ttl)
@@ -65,6 +69,9 @@ def get_next_batch():
 def requeue_batch(batch_id):
     try:
         r.lpush("batch:queue", batch_id)
+        prio = r.hget(f"batch:{batch_id}", "priority")
+        if prio and int(prio) > 0:
+            r.zadd("batch:prio", {batch_id: int(prio)})
     except redis.exceptions.RedisError as e:
         print(f"Redis unavailable: {e}")
 

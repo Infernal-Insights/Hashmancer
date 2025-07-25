@@ -18,6 +18,7 @@ class FakeRedis:
         self.raise_err = raise_err
         self.group_created = False
         self.lists = {}
+        self.prio = {}
 
     def xpending(self, stream, group):
         if self.raise_err:
@@ -34,6 +35,16 @@ class FakeRedis:
         lst = self.lists.get(name, [])
         while value in lst:
             lst.remove(value)
+
+    def zadd(self, name, mapping):
+        self.prio.update(mapping)
+
+    def zrevrange(self, name, start, end):
+        ordered = sorted(self.prio.items(), key=lambda x: -x[1])
+        return [k for k, _ in ordered[start:end+1]]
+
+    def zrem(self, name, member):
+        self.prio.pop(member, None)
 
 
 def test_compute_backlog_target(monkeypatch):
