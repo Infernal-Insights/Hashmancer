@@ -257,137 +257,140 @@ class GPUSidecar(threading.Thread):
         outfile = Path(f"/tmp/{batch_id}.out")
         restore = Path(f"/tmp/{batch_id}.restore")
 
-        attack = batch.get("attack_mode", "mask")
-        cmd = [engine, "-m", batch.get("hash_mode", "0"), str(hash_file)]
-
-        workload = os.getenv("HASHCAT_WORKLOAD")
-        if workload:
-            cmd += ["-w", workload]
-        if os.getenv("HASHCAT_OPTIMIZED", "0") == "1":
-            cmd.append("-O")
-
         wordlist_path = batch.get("wordlist")
-        if not wordlist_path and batch.get("wordlist_key"):
-            data_b64 = _safe_redis_call(r.get, f"wlcache:{batch['wordlist_key']}")
-            if data_b64:
-                tmp = Path(f"/tmp/{batch_id}.wl")
-                tmp.write_bytes(gzip.decompress(base64.b64decode(data_b64.encode())))
-                wordlist_path = str(tmp)
 
-        mask_charsets = batch.get("mask_charsets")
-        if mask_charsets and not skip_charsets:
-            try:
-                cs_map = json.loads(mask_charsets)
-            except Exception:
-                cs_map = {}
-            for key, charset in sorted(cs_map.items()):
-                if key.startswith("?") and len(key) == 2 and key[1].isdigit():
-                    cmd += [f"-{key[1]}", charset]
+        founds: list[str] = []
+        try:
+            attack = batch.get("attack_mode", "mask")
+            cmd = [engine, "-m", batch.get("hash_mode", "0"), str(hash_file)]
 
-        if attack == "mask" and batch.get("mask"):
-            cmd += ["-a", "3", batch["mask"]]
-        elif attack == "dict" and wordlist_path:
-            cmd += ["-a", "0", wordlist_path]
-        elif attack == "hybrid" and wordlist_path and batch.get("mask"):
-            cmd += ["-a", "6", wordlist_path, batch["mask"]]
+            workload = os.getenv("HASHCAT_WORKLOAD")
+            if workload:
+                cmd += ["-w", workload]
+            if os.getenv("HASHCAT_OPTIMIZED", "0") == "1":
+                cmd.append("-O")
 
-        if engine == "darkling-engine":
-            if range_start is not None:
-                cmd += ["--start", str(range_start)]
-            if range_end is not None:
-                cmd += ["--end", str(range_end)]
+            if not wordlist_path and batch.get("wordlist_key"):
+                data_b64 = _safe_redis_call(r.get, f"wlcache:{batch['wordlist_key']}")
+                if data_b64:
+                    tmp = Path(f"/tmp/{batch_id}.wl")
+                    tmp.write_bytes(gzip.decompress(base64.b64decode(data_b64.encode())))
+                    wordlist_path = str(tmp)
 
-        cmd += [
-            "--quiet",
-            "--status",
-            "--status-json",
-            "--status-timer",
-            "10",
-            "--outfile",
-            str(outfile),
-            "--outfile-format",
-            "2",
-            "--restore-file",
-            str(restore),
-            "-d",
-            str(self.gpu.get("index", 0)),
-        ]
-
-        env = os.environ.copy()
-        self._apply_power_limit(engine)
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            env=env,
-        )
-
-        def monitor():
-            while proc.poll() is None:
-                line = proc.stdout.readline()
-                if not line:
-                    time.sleep(1)
-                    continue
+            mask_charsets = batch.get("mask_charsets")
+            if mask_charsets and not skip_charsets:
                 try:
-                    status = json.loads(line.strip())
-                    if isinstance(status, dict):
-                        speeds = status.get("speed", [0])
-                        self.hashrate = float(speeds[0]) if speeds else 0.0
-                        self.progress = status.get("progress", 0.0)
-                        try:
-                            requests.post(
-                                f"{self.server_url}/submit_hashrate",
-                                json={
-                                    "worker_id": self.worker_id,
-                                    "gpu_uuid": self.gpu.get("uuid"),
-                                    "hashrate": self.hashrate,
-                                    "signature": sign_message(self.worker_id),
-                                },
-                                timeout=5,
-                            )
-                        except Exception:
-                            pass
-                except json.JSONDecodeError:
-                    continue
+                    cs_map = json.loads(mask_charsets)
+                except Exception:
+                    cs_map = {}
+                for key, charset in sorted(cs_map.items()):
+                    if key.startswith("?") and len(key) == 2 and key[1].isdigit():
+                        cmd += [f"-{key[1]}", charset]
 
-        t = threading.Thread(target=monitor, daemon=True)
-        t.start()
-        while proc.poll() is None:
-            time.sleep(0.1)
-        t.join()
+            if attack == "mask" and batch.get("mask"):
+                cmd += ["-a", "3", batch["mask"]]
+            elif attack == "dict" and wordlist_path:
+                cmd += ["-a", "0", wordlist_path]
+            elif attack == "hybrid" and wordlist_path and batch.get("mask"):
+                cmd += ["-a", "6", wordlist_path, batch["mask"]]
 
-        founds = []
-        if outfile.is_file():
-            founds = [
-                line.strip()
-                for line in outfile.read_text().splitlines()
-                if line.strip()
+            if engine == "darkling-engine":
+                if range_start is not None:
+                    cmd += ["--start", str(range_start)]
+                if range_end is not None:
+                    cmd += ["--end", str(range_end)]
+
+            cmd += [
+                "--quiet",
+                "--status",
+                "--status-json",
+                "--status-timer",
+                "10",
+                "--outfile",
+                str(outfile),
+                "--outfile-format",
+                "2",
+                "--restore-file",
+                str(restore),
+                "-d",
+                str(self.gpu.get("index", 0)),
             ]
 
-        if proc.returncode != 0 and restore.is_file():
+            env = os.environ.copy()
+            self._apply_power_limit(engine)
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env=env,
+            )
+
+            def monitor():
+                while proc.poll() is None:
+                    line = proc.stdout.readline()
+                    if not line:
+                        time.sleep(1)
+                        continue
+                    try:
+                        status = json.loads(line.strip())
+                        if isinstance(status, dict):
+                            speeds = status.get("speed", [0])
+                            self.hashrate = float(speeds[0]) if speeds else 0.0
+                            self.progress = status.get("progress", 0.0)
+                            try:
+                                requests.post(
+                                    f"{self.server_url}/submit_hashrate",
+                                    json={
+                                        "worker_id": self.worker_id,
+                                        "gpu_uuid": self.gpu.get("uuid"),
+                                        "hashrate": self.hashrate,
+                                        "signature": sign_message(self.worker_id),
+                                    },
+                                    timeout=5,
+                                )
+                            except Exception:
+                                pass
+                    except json.JSONDecodeError:
+                        continue
+
+            t = threading.Thread(target=monitor, daemon=True)
+            t.start()
+            while proc.poll() is None:
+                time.sleep(0.1)
+            t.join()
+
+            founds = []
+            if outfile.is_file():
+                founds = [
+                    line.strip()
+                    for line in outfile.read_text().splitlines()
+                    if line.strip()
+                ]
+
+            if proc.returncode != 0 and restore.is_file():
+                try:
+                    with open(restore, "rb") as f:
+                        requests.post(
+                            f"{self.server_url}/upload_restore",
+                            files={"file": (restore.name, f)},
+                            timeout=5,
+                        )
+                except Exception:
+                    pass
+        finally:
             try:
-                with open(restore, "rb") as f:
-                    requests.post(
-                        f"{self.server_url}/upload_restore",
-                        files={"file": (restore.name, f)},
-                        timeout=5,
-                    )
+                hash_file.unlink(missing_ok=True)
+                outfile.unlink(missing_ok=True)
+                restore.unlink(missing_ok=True)
+                if (
+                    wordlist_path
+                    and wordlist_path.startswith("/tmp/")
+                    and wordlist_path.endswith(".wl")
+                ):
+                    Path(wordlist_path).unlink(missing_ok=True)
             except Exception:
                 pass
-
-        try:
-            hash_file.unlink(missing_ok=True)
-            outfile.unlink(missing_ok=True)
-            restore.unlink(missing_ok=True)
-            if (
-                wordlist_path
-                and wordlist_path.startswith("/tmp/")
-                and wordlist_path.endswith(".wl")
-            ):
-                Path(wordlist_path).unlink(missing_ok=True)
-        except Exception:
-            pass
 
         return founds
 

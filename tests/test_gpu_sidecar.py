@@ -471,3 +471,27 @@ def test_darkling_hash_batching(monkeypatch):
     assert calls[0][2] is False
     assert calls[1][2] is True
 
+
+def test_temp_files_cleanup_on_exception(monkeypatch):
+    sidecar = gpu_sidecar.GPUSidecar("w", {"uuid": "gpu", "index": 0}, "http://sv")
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    def fake_popen(*args, **kwargs):
+        raise RuntimeError("fail")
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
+
+    batch = {
+        "batch_id": "jobexc",
+        "hashes": json.dumps(["h"]),
+        "mask": "?a",
+        "attack_mode": "mask",
+        "hash_mode": "0",
+    }
+
+    with pytest.raises(RuntimeError):
+        sidecar.run_hashcat(batch)
+
+    assert not Path("/tmp/jobexc.hashes").exists()
+    assert not Path("/tmp/jobexc.out").exists()
+    assert not Path("/tmp/jobexc.restore").exists()
