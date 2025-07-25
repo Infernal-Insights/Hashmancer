@@ -244,8 +244,10 @@ def register_worker(worker_id: str, gpus: list[dict]):
         "worker_id": worker_id,
         "hardware": {"gpus": gpus},
         "pubkey": load_public_key_pem(),
-        "signature": sign_message(worker_id),
+        "timestamp": int(time.time()),
+        "signature": None,
     }
+    payload["signature"] = sign_message(worker_id, payload["timestamp"])
 
     name = None
     try:
@@ -312,8 +314,10 @@ def main(argv: list[str] | None = None):
             "gpu_uuid": gpu.get("uuid"),
             "engine": engine,
             "hashrates": rates,
-            "signature": sign_message(name),
+            "timestamp": int(time.time()),
+            "signature": None,
         }
+        payload["signature"] = sign_message(name, payload["timestamp"])
         try:
             requests.post(f"{SERVER_URL}/submit_benchmark", json=payload, timeout=10)
         except Exception as e:
@@ -351,6 +355,7 @@ def main(argv: list[str] | None = None):
             temps = get_gpu_temps()
             progress = {t.gpu.get("uuid"): t.progress for t in threads if t.current_job}
             try:
+                ts = int(time.time())
                 requests.post(
                     f"{SERVER_URL}/worker_status",
                     json={
@@ -358,7 +363,8 @@ def main(argv: list[str] | None = None):
                         "status": "online",
                         "temps": temps,
                         "progress": progress,
-                        "signature": sign_message(name),
+                        "timestamp": ts,
+                        "signature": sign_message(name, ts),
                     },
                     timeout=5,
                 )

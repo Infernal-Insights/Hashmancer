@@ -76,6 +76,7 @@ def test_register_worker_policy(monkeypatch):
     monkeypatch.setattr(padding, 'PKCS1v15', lambda: None)
     monkeypatch.setattr(hashes, 'SHA256', lambda: None)
     monkeypatch.setattr(base64, 'b64decode', lambda s: b'')
+    monkeypatch.setattr(main, 'verify_signature_with_key', lambda *a: True)
     monkeypatch.setattr(main, 'assign_waifu', lambda s: 'Agent')
     monkeypatch.setattr(main, 'LOW_BW_ENGINE', 'darkling')
 
@@ -83,6 +84,7 @@ def test_register_worker_policy(monkeypatch):
         worker_id = 'id'
         signature = 's'
         pubkey = 'p'
+        timestamp = 0
         mode = 'eco'
         provider = 'on-prem'
         hardware = {}

@@ -159,9 +159,11 @@ class GPUSidecar(threading.Thread):
         try:
             while self.running:
                 try:
+                    ts = int(time.time())
                     params = {
                         "worker_id": self.worker_id,
-                        "signature": sign_message(self.worker_id),
+                        "timestamp": ts,
+                        "signature": sign_message(self.worker_id, ts),
                     }
                     resp = requests.get(
                         f"{self.server_url}/get_batch", params=params, timeout=10
@@ -220,8 +222,10 @@ class GPUSidecar(threading.Thread):
                 "job_id": job_id,
                 "msg_id": batch.get("msg_id"),
                 "founds": founds,
-                "signature": sign_message(json.dumps(founds)),
+                "timestamp": int(time.time()),
+                "signature": None,
             }
+            payload["signature"] = sign_message(json.dumps(founds), payload["timestamp"])
             endpoint = "submit_founds"
         else:
             payload = {
@@ -229,8 +233,10 @@ class GPUSidecar(threading.Thread):
                 "batch_id": batch_id,
                 "job_id": job_id,
                 "msg_id": batch.get("msg_id"),
-                "signature": sign_message(batch_id),
+                "timestamp": int(time.time()),
+                "signature": None,
             }
+            payload["signature"] = sign_message(batch_id, payload["timestamp"])
             endpoint = "submit_no_founds"
 
         try:
@@ -339,13 +345,15 @@ class GPUSidecar(threading.Thread):
                             self.hashrate = float(speeds[0]) if speeds else 0.0
                             self.progress = status.get("progress", 0.0)
                             try:
+                                ts = int(time.time())
                                 requests.post(
                                     f"{self.server_url}/submit_hashrate",
                                     json={
                                         "worker_id": self.worker_id,
                                         "gpu_uuid": self.gpu.get("uuid"),
                                         "hashrate": self.hashrate,
-                                        "signature": sign_message(self.worker_id),
+                                        "timestamp": ts,
+                                        "signature": sign_message(self.worker_id, ts),
                                     },
                                     timeout=5,
                                 )

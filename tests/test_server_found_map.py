@@ -75,6 +75,7 @@ async def call():
         "worker_id": "w",
         "batch_id": "b",
         "founds": ["h1:p1", "h2:p2"],
+        "timestamp": 0,
         "signature": "s",
     }
     return await main.submit_founds(payload)
@@ -84,7 +85,7 @@ def test_submit_founds_maps(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(main, "r", fake)
     monkeypatch.setattr(redis_manager, "r", fake)
-    monkeypatch.setattr(main, "verify_signature", lambda a, b, c: True)
+    monkeypatch.setattr(main, "verify_signature", lambda *a: True)
     tmp = Path("/tmp/founds.txt")
     if tmp.exists():
         tmp.unlink()
@@ -104,7 +105,7 @@ def test_submit_founds_thread_safe(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(main, "r", fake)
     monkeypatch.setattr(redis_manager, "r", fake)
-    monkeypatch.setattr(main, "verify_signature", lambda a, b, c: True)
+    monkeypatch.setattr(main, "verify_signature", lambda *a: True)
     tmp = Path("/tmp/founds_thread.txt")
     if tmp.exists():
         tmp.unlink()
@@ -119,6 +120,7 @@ def test_submit_founds_thread_safe(monkeypatch):
             "worker_id": f"w{i}",
             "batch_id": f"b{i}",
             "founds": [line],
+            "timestamp": 0,
             "signature": "s",
         }
         t = threading.Thread(target=_thread_call, args=(payload,))

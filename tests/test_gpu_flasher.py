@@ -24,7 +24,7 @@ def test_process_task(monkeypatch):
     monkeypatch.setattr(bios_flasher.requests, "post", fake_post)
     monkeypatch.setattr(bios_flasher, "md5_speed", lambda: 1.0)
     monkeypatch.setattr(bios_flasher, "apply_flash_settings", lambda g, s: True)
-    monkeypatch.setattr(bios_flasher, "sign_message", lambda x: "sig")
+    monkeypatch.setattr(bios_flasher, "sign_message", lambda *a: "sig")
 
     mgr = bios_flasher.GPUFlashManager("w", "http://sv", [{"uuid": "u1", "index": 0}])
     mgr.process_task("u1", {"vendor": "nvidia"})

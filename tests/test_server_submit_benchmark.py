@@ -62,13 +62,14 @@ class FakeRedis:
 def test_submit_benchmark(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(main, 'r', fake)
-    monkeypatch.setattr(main, 'verify_signature', lambda a, b, c: True)
+    monkeypatch.setattr(main, 'verify_signature', lambda *a: True)
 
     class Req:
         worker_id = 'w1'
         gpu_uuid = 'g1'
         engine = 'hashcat'
         hashrates = {'MD5': 1.0, 'SHA1': 2.0, 'NTLM': 3.0}
+        timestamp = 0
         signature = 's'
 
     resp = asyncio.run(main.submit_benchmark(Req()))

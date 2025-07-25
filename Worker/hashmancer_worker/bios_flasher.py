@@ -239,8 +239,10 @@ class GPUFlashManager(threading.Thread):
             "worker_id": self.worker_id,
             "gpu_uuid": gpu_uuid,
             "success": success,
-            "signature": sign_message(self.worker_id),
+            "timestamp": int(time.time()),
+            "signature": None,
         }
+        payload["signature"] = sign_message(self.worker_id, payload["timestamp"])
         try:
             requests.post(f"{self.server_url}/flash_result", json=payload, timeout=5)
         except Exception:
@@ -249,9 +251,11 @@ class GPUFlashManager(threading.Thread):
     def run(self):
         while self.running:
             try:
+                ts = int(time.time())
                 params = {
                     "worker_id": self.worker_id,
-                    "signature": sign_message(self.worker_id),
+                    "timestamp": ts,
+                    "signature": sign_message(self.worker_id, ts),
                 }
                 resp = requests.get(
                     f"{self.server_url}/get_flash_task", params=params, timeout=5

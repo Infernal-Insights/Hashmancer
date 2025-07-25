@@ -98,7 +98,7 @@ class FakeRedis:
 def test_flash_queue_on_register(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(main, "r", fake)
-    monkeypatch.setattr(main, "verify_signature_with_key", lambda a, b, c: True)
+    monkeypatch.setattr(main, "verify_signature_with_key", lambda *a: True)
     monkeypatch.setattr(main, "assign_waifu", lambda s: "Agent")
     monkeypatch.setattr(main, "LOW_BW_ENGINE", "hashcat")
 
@@ -106,6 +106,7 @@ def test_flash_queue_on_register(monkeypatch):
         worker_id = "id"
         signature = "s"
         pubkey = "p"
+        timestamp = 0
         mode = "eco"
         provider = "on-prem"
         hardware = {"gpus": [{"uuid": "u1", "model": "RTX 3080", "index": 0}]}
