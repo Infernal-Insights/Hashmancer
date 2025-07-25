@@ -62,18 +62,25 @@ def _digits_to_index(digits: List[int], bases: List[int]) -> int:
     return idx
 
 
-def _sorted_indices(charset: str, probs: Dict[str, int]) -> List[int]:
+def _sorted_indices(charset: str, probs: Dict[str, int], *, reverse: bool = True) -> List[int]:
     groups: Dict[str, List[int]] = defaultdict(list)
     for i, ch in enumerate(charset):
         groups[_char_token(ch)].append(i)
-    tokens = sorted(groups, key=lambda t: probs.get(t, 0), reverse=True)
+    tokens = sorted(groups, key=lambda t: probs.get(t, 0), reverse=reverse)
     order: List[int] = []
     for t in tokens:
         order.extend(groups[t])
     return order
 
 
-def probability_index_order(mask: str, charset_map: Dict[str, str], markov: dict, limit: int | None = None) -> List[int]:
+def probability_index_order(
+    mask: str,
+    charset_map: Dict[str, str],
+    markov: dict,
+    limit: int | None = None,
+    *,
+    inverse: bool = False,
+) -> List[int]:
     """Return candidate indices for *mask* sorted by Markov probability."""
     charsets_list: List[str] = []
     i = 0
@@ -101,7 +108,7 @@ def probability_index_order(mask: str, charset_map: Dict[str, str], markov: dict
             return
         charset = charsets_list[pos]
         probs = start_probs if pos == 0 else trans[pos - 1].get(prev, start_probs)
-        for idx in _sorted_indices(charset, probs):
+        for idx in _sorted_indices(charset, probs, reverse=not inverse):
             digits[pos] = idx
             token = _char_token(charset[idx]) if charset else prev
             recurse(pos + 1, token)

@@ -85,6 +85,7 @@ class GPUSidecar(threading.Thread):
         server_url: str,
         probabilistic_order: bool = False,
         markov_lang: str = "english",
+        inverse_order: bool = False,
     ):
         super().__init__(daemon=True)
         self.worker_id = worker_id
@@ -92,6 +93,7 @@ class GPUSidecar(threading.Thread):
         self.server_url = server_url
         self.probabilistic_order = probabilistic_order
         self.markov_lang = markov_lang
+        self.inverse_order = inverse_order
         self.running = True
         self.current_job = None
         self.hashrate = 0.0
@@ -454,7 +456,7 @@ class GPUSidecar(threading.Thread):
         if self.probabilistic_order:
             markov = statistics.load_markov(lang=self.markov_lang)
             indices = statistics.probability_index_order(
-                batch.get("mask", ""), cs_map, markov
+                batch.get("mask", ""), cs_map, markov, inverse=self.inverse_order
             )
 
         for chunk in hash_chunks:

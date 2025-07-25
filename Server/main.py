@@ -140,6 +140,7 @@ HASHES_ALGO_PARAMS: dict[str, dict[str, Any]] = dict(
 
 # Markov and candidate ordering settings
 PROBABILISTIC_ORDER = bool(CONFIG.get("probabilistic_order", False))
+INVERSE_PROB_ORDER = bool(CONFIG.get("inverse_prob_order", False))
 MARKOV_LANG = CONFIG.get("markov_lang", "english")
 
 # local language model settings
@@ -165,6 +166,7 @@ def save_config():
         CONFIG["llm_model_path"] = LLM_MODEL_PATH
         CONFIG["llm_train_epochs"] = int(LLM_TRAIN_EPOCHS)
         CONFIG["llm_train_learning_rate"] = float(LLM_TRAIN_LEARNING_RATE)
+        CONFIG["inverse_prob_order"] = bool(INVERSE_PROB_ORDER)
 
         with open(CONFIG_FILE, "w") as f:
             json.dump(CONFIG, f, indent=2)
@@ -835,6 +837,7 @@ async def server_status():
             "gpu_temps": get_gpu_temps(),
             "low_bw_engine": LOW_BW_ENGINE,
             "probabilistic_order": PROBABILISTIC_ORDER,
+            "inverse_prob_order": INVERSE_PROB_ORDER,
             "markov_lang": MARKOV_LANG,
             "llm_train_epochs": LLM_TRAIN_EPOCHS,
             "llm_train_learning_rate": LLM_TRAIN_LEARNING_RATE,
@@ -1630,6 +1633,20 @@ async def set_probabilistic_order(req: ProbOrderRequest):
     CONFIG["probabilistic_order"] = bool(req.enabled)
     global PROBABILISTIC_ORDER
     PROBABILISTIC_ORDER = bool(req.enabled)
+    save_config()
+    return {"status": "ok"}
+
+
+class InverseOrderRequest(BaseModel):
+    enabled: bool
+
+
+@app.post("/inverse_prob_order")
+async def set_inverse_prob_order(req: InverseOrderRequest):
+    """Enable or disable inverse probabilistic ordering."""
+    CONFIG["inverse_prob_order"] = bool(req.enabled)
+    global INVERSE_PROB_ORDER
+    INVERSE_PROB_ORDER = bool(req.enabled)
     save_config()
     return {"status": "ok"}
 

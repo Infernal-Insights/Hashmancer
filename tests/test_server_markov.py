@@ -105,6 +105,18 @@ def test_update_probabilistic_order(monkeypatch):
     assert saved.get('done')
 
 
+def test_update_inverse_prob_order(monkeypatch):
+    monkeypatch.setattr(main, 'CONFIG', {})
+    saved = {}
+    monkeypatch.setattr(main, 'save_config', lambda: saved.setdefault('done', True))
+    req = type('Req', (), {'enabled': True})
+    resp = asyncio.run(main.set_inverse_prob_order(req()))
+    assert resp['status'] == 'ok'
+    assert main.CONFIG['inverse_prob_order'] is True
+    assert main.INVERSE_PROB_ORDER is True
+    assert saved.get('done')
+
+
 def test_update_markov_lang(monkeypatch):
     monkeypatch.setattr(main, 'CONFIG', {})
     saved = {}
@@ -121,6 +133,7 @@ def test_server_status_includes_settings(monkeypatch):
     fake = DummyRedis()
     monkeypatch.setattr(main, 'r', fake)
     monkeypatch.setattr(main, 'PROBABILISTIC_ORDER', True)
+    monkeypatch.setattr(main, 'INVERSE_PROB_ORDER', True)
     monkeypatch.setattr(main, 'MARKOV_LANG', 'spanish')
     monkeypatch.setattr(main, 'LLM_TRAIN_EPOCHS', 2)
     monkeypatch.setattr(main, 'LLM_TRAIN_LEARNING_RATE', 0.002)
@@ -128,6 +141,7 @@ def test_server_status_includes_settings(monkeypatch):
     monkeypatch.setattr(main.orchestrator_agent, 'pending_count', lambda: 2)
     status = asyncio.run(main.server_status())
     assert status['probabilistic_order'] is True
+    assert status['inverse_prob_order'] is True
     assert status['markov_lang'] == 'spanish'
     assert status['llm_train_epochs'] == 2
     assert status['llm_train_learning_rate'] == 0.002

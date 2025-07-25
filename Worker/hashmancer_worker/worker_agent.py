@@ -275,10 +275,16 @@ def main(argv: list[str] | None = None):
         action="store_true",
         help="use Markov tables for probabilistic candidate ordering",
     )
+    parser.add_argument(
+        "--inverse-prob-order",
+        action="store_true",
+        help="iterate candidates from least likely first",
+    )
     args = parser.parse_args(argv)
 
     probabilistic_order = False
     markov_lang = "english"
+    inverse_prob_order = False
 
     print_logo()
     worker_id = os.getenv("WORKER_ID", str(uuid.uuid4()))
@@ -294,9 +300,14 @@ def main(argv: list[str] | None = None):
             probabilistic_order = data.get("probabilistic_order", False)
         else:
             probabilistic_order = True
+        if not args.inverse_prob_order:
+            inverse_prob_order = data.get("inverse_prob_order", False)
+        else:
+            inverse_prob_order = True
         markov_lang = data.get("markov_lang", "english")
     except Exception:
         probabilistic_order = args.probabilistic_order
+        inverse_prob_order = args.inverse_prob_order
         pass
 
     for gpu in gpus:
@@ -333,6 +344,7 @@ def main(argv: list[str] | None = None):
                     SERVER_URL,
                     probabilistic_order=probabilistic_order,
                     markov_lang=markov_lang,
+                    inverse_order=inverse_prob_order,
                 )
             )
         except TypeError:
@@ -343,6 +355,7 @@ def main(argv: list[str] | None = None):
                     SERVER_URL,
                     probabilistic_order=probabilistic_order,
                     markov_lang=markov_lang,
+                    inverse_order=inverse_prob_order,
                 )
             )
     for t in threads:

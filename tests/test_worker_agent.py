@@ -149,7 +149,13 @@ def test_benchmark_low_bw_gpu(monkeypatch):
 
     class DummySidecar:
         def __init__(
-            self, name, gpu, url, probabilistic_order=False, markov_lang="english"
+            self,
+            name,
+            gpu,
+            url,
+            probabilistic_order=False,
+            markov_lang="english",
+            inverse_order=False,
         ):
             self.gpu = gpu
             self.progress = 0.0
@@ -208,6 +214,7 @@ def test_prob_order_from_server(monkeypatch):
                 "low_bw_engine": "hashcat",
                 "probabilistic_order": True,
                 "markov_lang": "spanish",
+                "inverse_prob_order": True,
             }
         ),
     )
@@ -225,10 +232,17 @@ def test_prob_order_from_server(monkeypatch):
 
     class DummySidecar:
         def __init__(
-            self, name, gpu, url, probabilistic_order=False, markov_lang="english"
+            self,
+            name,
+            gpu,
+            url,
+            probabilistic_order=False,
+            markov_lang="english",
+            inverse_order=False,
         ):
             captured["prob"] = probabilistic_order
             captured["lang"] = markov_lang
+            captured["inv"] = inverse_order
             self.gpu = gpu
             self.progress = 0.0
             self.current_job = None
@@ -268,3 +282,4 @@ def test_prob_order_from_server(monkeypatch):
 
     assert captured["prob"] is True
     assert captured["lang"] == "spanish"
+    assert captured["inv"] is True
