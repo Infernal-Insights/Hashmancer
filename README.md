@@ -35,7 +35,8 @@ under the batch ID and only uses the job ID to acknowledge the stream entry.
 
 Run `python3 setup.py` from the repository root to configure either a server or
 worker.  Use `--server` or `--worker` flags to skip the prompt.  A worker can
-also supply `--server-ip` to skip auto-discovery.
+also supply `--server-ip` to skip auto-discovery. After setup, run
+`python3 setup.py --upgrade` to pull the latest version and update dependencies.
 
 ## Thread Safety
 

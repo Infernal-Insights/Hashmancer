@@ -23,6 +23,8 @@ interval can be customized with `STATUS_INTERVAL` (seconds).
 Run `python3 ../setup.py --worker` from the repository root to install
 dependencies and configure the worker.  Passing `--server-ip` skips broadcast
 discovery.
+Use `python3 ../setup.py --upgrade` anytime to pull the latest code and
+update dependencies.
 
 Minimal `redis.conf` for a password-protected TLS instance:
 
