@@ -1,5 +1,4 @@
 import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import asyncio
 import sys
 import os
@@ -17,8 +16,6 @@ install_stubs()
 
 
 # Add repo paths
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Server'))
 
 import main
 import orchestrator_agent

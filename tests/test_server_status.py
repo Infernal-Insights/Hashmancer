@@ -1,5 +1,4 @@
 import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import asyncio
 import sys
 import os
@@ -26,8 +25,6 @@ psutil_stub.disk_usage = lambda path: types.SimpleNamespace(percent=30.0)
 psutil_stub.getloadavg = lambda: (1.0, 0.5, 0.25)
 sys.modules.setdefault("psutil", psutil_stub)
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Server'))
 
 import main
 

@@ -4,7 +4,6 @@ import json
 import pytest
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from Worker.hashmancer_worker import gpu_sidecar
 

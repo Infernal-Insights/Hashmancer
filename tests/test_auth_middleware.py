@@ -1,5 +1,4 @@
 import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import asyncio
 import json
 import sys
@@ -19,8 +18,6 @@ install_stubs()
 
 
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "Server"))
 
 import main
 

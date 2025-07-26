@@ -7,8 +7,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
-sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "Server"))
 
 
 def _make_key(path: Path) -> Path:

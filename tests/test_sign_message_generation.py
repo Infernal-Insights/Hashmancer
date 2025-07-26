@@ -4,8 +4,6 @@ import importlib
 from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
-sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "Server"))
 
 
 def _run_worker(tmp_path: Path):

@@ -3,8 +3,6 @@ import sys
 import json
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
-sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "Server"))
 
 import orchestrator_agent
 import redis_manager
