@@ -495,3 +495,45 @@ def test_temp_files_cleanup_on_exception(monkeypatch):
     assert not Path("/tmp/jobexc.hashes").exists()
     assert not Path("/tmp/jobexc.out").exists()
     assert not Path("/tmp/jobexc.restore").exists()
+
+
+def test_probability_index_order_inverse(monkeypatch):
+    sidecar = gpu_sidecar.GPUSidecar(
+        "w",
+        {"uuid": "gpu", "index": 0},
+        "http://sv",
+        probabilistic_order=True,
+        inverse_order=True,
+    )
+
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    captured = {}
+
+    def fake_prob_order(mask, cs_map, markov, limit=None, *, inverse=False):
+        captured["inverse"] = inverse
+        return [0]
+
+    monkeypatch.setattr(
+        gpu_sidecar.statistics,
+        "probability_index_order",
+        fake_prob_order,
+    )
+    monkeypatch.setattr(
+        gpu_sidecar.statistics,
+        "load_markov",
+        lambda lang="english": {},
+    )
+    monkeypatch.setattr(gpu_sidecar.GPUSidecar, "_run_engine", lambda *a, **k: [])
+
+    batch = {
+        "batch_id": "jobprob",
+        "hashes": json.dumps(["h"]),
+        "mask": "?a",
+        "attack_mode": "mask",
+        "hash_mode": "0",
+    }
+
+    sidecar.run_darkling_engine(batch)
+
+    assert captured.get("inverse") is True
