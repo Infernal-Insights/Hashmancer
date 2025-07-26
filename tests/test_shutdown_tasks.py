@@ -33,10 +33,15 @@ async def test_tasks_cancelled_on_shutdown(monkeypatch):
                 raise
         return stub
 
-    monkeypatch.setattr(main, 'broadcast_presence', make_stub('bcast'))
-    monkeypatch.setattr(main, 'poll_hashes_jobs', make_stub('poll'))
-    monkeypatch.setattr(main, 'process_hashes_jobs', make_stub('process'))
-    monkeypatch.setattr(main, 'dispatch_loop', make_stub('dispatch'))
+    def fake_start_loops():
+        return [
+            asyncio.create_task(make_stub("bcast")()),
+            asyncio.create_task(make_stub("poll")()),
+            asyncio.create_task(make_stub("process")()),
+            asyncio.create_task(make_stub("dispatch")()),
+        ]
+
+    monkeypatch.setattr(main, 'start_loops', fake_start_loops)
     monkeypatch.setattr(main, 'print_logo', lambda: None)
     monkeypatch.setattr(main, 'BROADCAST_ENABLED', True)
 
