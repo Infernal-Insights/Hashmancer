@@ -18,12 +18,20 @@ import redis
 from redis_utils import get_redis
 import json
 import uuid
-import socket
 import asyncio
 import glob
 import sys
 from utils import redis_manager
 from utils.event_logger import log_error, log_info
+from app.background import (
+    broadcast_presence,
+    fetch_and_store_jobs,
+    poll_hashes_jobs,
+    process_hashes_jobs,
+    dispatch_loop,
+    start_loops,
+    stop_loops,
+)
 try:  # optional transformers dependency
     import train_llm as _train_llm  # type: ignore
 except Exception:  # pragma: no cover - optional component
@@ -72,8 +80,6 @@ from app.config import (
     MAX_IMPORT_SIZE,
     LOW_BW_ENGINE,
     BROADCAST_ENABLED,
-    BROADCAST_PORT,
-    BROADCAST_INTERVAL,
     WATCHDOG_TOKEN,
     HASHES_SETTINGS,
     HASHES_POLL_INTERVAL,
@@ -340,160 +346,19 @@ class SubmitBenchmarkRequest(BaseModel):
     signature: str
 
 
-async def broadcast_presence():
-    """Periodically broadcast the server URL over UDP."""
-    base = CONFIG.get("server_url", "http://localhost")
-    port = CONFIG.get("server_port", 8000)
-    url = f"{base}:{port}"
-    payload = json.dumps({"server_url": url}).encode()
-    while True:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-                s.sendto(payload, ("255.255.255.255", BROADCAST_PORT))
-        except Exception as e:
-            log_error("server", "system", "S716", "Broadcast failed", e)
-        await asyncio.sleep(BROADCAST_INTERVAL)
-
-
-async def fetch_and_store_jobs():
-    """Fetch jobs from hashes.com and store filtered results in Redis."""
-    try:
-        from hashescom_client import fetch_jobs
-
-        jobs = await fetch_jobs()
-        for job in jobs:
-            algo = str(job.get("algorithmName", "")).lower()
-            if HASHES_ALGORITHMS and algo not in HASHES_ALGORITHMS:
-                continue
-            if job.get("currency") != "BTC":
-                continue
-            try:
-                price = float(job.get("pricePerHash", 0))
-            except (TypeError, ValueError):
-                price = 0.0
-            if price <= 0:
-                continue
-            job_id = job.get("id")
-            if job_id is not None:
-                r.hset(f"hashes_job:{job_id}", mapping=job)
-    except Exception as e:
-        log_error("server", "system", "S741", "Hashes.com fetch failed", e)
-
-
-async def poll_hashes_jobs():
-    """Background loop to periodically poll hashes.com for jobs."""
-    while True:
-        await fetch_and_store_jobs()
-        interval = int(HASHES_SETTINGS.get("hashes_poll_interval", HASHES_POLL_INTERVAL))
-        await asyncio.sleep(interval)
-
-
-async def process_hashes_jobs():
-    """Queue batches for jobs fetched from hashes.com."""
-    while True:
-        try:
-            for key in r.scan_iter("hashes_job:*"):
-                job = r.hgetall(key)
-                if job.get("status") == "processed":
-                    continue
-
-                try:
-                    hashes = json.loads(job.get("hashes", "[]"))
-                except Exception:
-                    hashes = []
-
-                algorithm = job.get("algorithmName", "")
-                algo_id = job.get("algorithmId")
-
-                known: list[str] = []
-                remaining: list[str] = []
-                for h in hashes:
-                    pw = r.hget("found:map", h)
-                    if pw and verify_hash(pw, h, algorithm):
-                        known.append(f"{h}:{pw}")
-                    else:
-                        remaining.append(h)
-
-                mask = job.get("mask", "")
-                wordlist = job.get("wordlist", "")
-                params = HASHES_ALGO_PARAMS.get(algorithm.lower(), {})
-                mask_len = params.get("mask_length")
-                if mask_len:
-                    mask_len = int(mask_len)
-                    if mask:
-                        mask = mask[:mask_len]
-                    else:
-                        mask = "?a" * mask_len
-                rule = params.get("rule", "")
-                if known:
-                    try:
-                        import tempfile
-                        from hashescom_client import upload_founds
-
-                        with tempfile.NamedTemporaryFile("w", delete=False) as fh:
-                            fh.write("\n".join(known))
-                            temp_path = fh.name
-                        upload_founds(algo_id, temp_path)
-                        os.unlink(temp_path)
-                    except Exception:
-                        pass
-
-                batch_id = None
-                if remaining:
-                    priority = int(job.get("priority", HASHES_DEFAULT_PRIORITY))
-                    batch_id = redis_manager.store_batch(
-                        remaining,
-                        mask=mask,
-                        wordlist=wordlist,
-                        rule=rule,
-                        priority=priority,
-                    )
-                    for pm in PREDEFINED_MASKS:
-                        redis_manager.store_batch(
-                            remaining,
-                            mask=pm,
-                            wordlist=wordlist,
-                            rule=rule,
-                            priority=priority + 1,
-                        )
-                r.hset(key, mapping={"status": "processed", "batch_id": batch_id or ""})
-        except redis.exceptions.RedisError as e:
-            log_error("server", "system", "SRED", "Redis unavailable", e)
-        except Exception as e:
-            log_error("server", "system", "S742", "Failed to process hashes jobs", e)
-
-        await asyncio.sleep(30)
-
-
-async def dispatch_loop():
-    """Periodically dispatch queued batches to workers."""
-    while True:
-        try:
-            orchestrator_agent.dispatch_batches()
-        except redis.exceptions.RedisError as e:
-            log_error("server", "system", "SRED", "Redis unavailable", e)
-        except Exception as e:
-            log_error("server", "system", "S743", "Dispatch loop failed", e)
-        await asyncio.sleep(5)
 
 
 @app.on_event("startup")
 async def start_broadcast():
     print_logo()
-    if BROADCAST_ENABLED:
-        create_background_task(broadcast_presence())
-    create_background_task(poll_hashes_jobs())
-    create_background_task(process_hashes_jobs())
-    create_background_task(dispatch_loop())
+    tasks = start_loops()
+    BACKGROUND_TASKS.extend(tasks)
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cancel all background tasks and wait for them to finish."""
-    for task in BACKGROUND_TASKS:
-        task.cancel()
-    await asyncio.gather(*BACKGROUND_TASKS, return_exceptions=True)
+    await stop_loops(BACKGROUND_TASKS)
     BACKGROUND_TASKS.clear()
 
 
