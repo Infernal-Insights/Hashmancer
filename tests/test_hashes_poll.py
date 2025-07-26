@@ -14,7 +14,9 @@ from tests.test_helpers import (
 install_stubs()
 
 
-import main
+from Server.app.background.hashes_jobs import fetch_and_store_jobs
+import Server.main as main
+sys.modules['main'] = main
 import hashescom_client
 
 class FakeRedis:
@@ -26,7 +28,7 @@ class FakeRedis:
         return []
 
 async def run_once():
-    await main.fetch_and_store_jobs()
+    await fetch_and_store_jobs()
 
 def test_fetch_and_store_jobs(monkeypatch):
     fake = FakeRedis()

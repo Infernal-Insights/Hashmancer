@@ -19,7 +19,9 @@ install_stubs()
 
 
 
-import main
+from Server.app.background.hashes_jobs import process_hashes_jobs
+import Server.main as main
+sys.modules['main'] = main
 from utils import redis_manager
 from uuid import UUID
 
@@ -81,7 +83,7 @@ async def run_once():
     asyncio_sleep = asyncio.sleep
     try:
         asyncio.sleep = fake_sleep
-        await main.process_hashes_jobs()
+        await process_hashes_jobs()
     except StopAsyncIteration:
         pass
     finally:

@@ -19,7 +19,8 @@ install_stubs()
 
 
 
-import main
+from Server.app import app as app_mod
+import Server.main as main
 
 
 class FakeRedis:
@@ -86,7 +87,7 @@ def test_portal_auth_denies_without_key(monkeypatch):
         events.append(evt)
 
     app = FakeApp()
-    mw = main.PortalAuthMiddleware(app, key="secret")
+    mw = app_mod.PortalAuthMiddleware(app, key="secret")
     scope = {"type": "http", "path": "/portal", "headers": [(b"x-api-key", b"bad")]} 
 
     asyncio.run(mw(scope, lambda: None, send))
@@ -120,7 +121,7 @@ def test_logout_revokes_session(monkeypatch):
         events.append(evt)
 
     app = FakeApp()
-    mw = main.PortalAuthMiddleware(app, key="apikey")
+    mw = app_mod.PortalAuthMiddleware(app, key="apikey")
     scope = {
         "type": "http",
         "path": "/portal",
@@ -140,7 +141,7 @@ def test_root_auth_denies_without_key(monkeypatch):
         events.append(evt)
 
     app = FakeApp()
-    mw = main.PortalAuthMiddleware(app, key="secret")
+    mw = app_mod.PortalAuthMiddleware(app, key="secret")
     scope = {"type": "http", "path": "/", "headers": []}
 
     asyncio.run(mw(scope, lambda: None, send))
@@ -156,7 +157,7 @@ def test_portal_auth_allows_with_key(monkeypatch):
         events.append(evt)
 
     app = FakeApp()
-    mw = main.PortalAuthMiddleware(app, key="secret")
+    mw = app_mod.PortalAuthMiddleware(app, key="secret")
     scope = {"type": "http", "path": "/portal", "headers": [(b"x-api-key", b"secret")]} 
 
     asyncio.run(mw(scope, lambda: None, send))
@@ -172,7 +173,7 @@ def test_root_auth_allows_with_key(monkeypatch):
         events.append(evt)
 
     app = FakeApp()
-    mw = main.PortalAuthMiddleware(app, key="secret")
+    mw = app_mod.PortalAuthMiddleware(app, key="secret")
     scope = {"type": "http", "path": "/", "headers": [(b"x-api-key", b"secret")]}
 
     asyncio.run(mw(scope, lambda: None, send))
@@ -279,7 +280,7 @@ def test_portal_auth_allows_cookie(monkeypatch):
         events.append(evt)
 
     app = FakeApp()
-    mw = main.PortalAuthMiddleware(app, key="apikey")
+    mw = app_mod.PortalAuthMiddleware(app, key="apikey")
     scope = {
         "type": "http",
         "path": "/portal",
@@ -312,7 +313,7 @@ def test_session_expiry(monkeypatch):
         events.append(evt)
 
     app = FakeApp()
-    mw = main.PortalAuthMiddleware(app, key="apikey")
+    mw = app_mod.PortalAuthMiddleware(app, key="apikey")
     scope = {
         "type": "http",
         "path": "/portal",

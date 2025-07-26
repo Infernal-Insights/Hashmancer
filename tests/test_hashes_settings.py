@@ -16,7 +16,9 @@ from tests.test_helpers import (
 install_stubs()
 
 
-import main
+import Server.main as main
+sys.modules['main'] = main
+from Server.app.background import hashes_jobs
 
 
 @pytest.mark.asyncio
@@ -47,13 +49,13 @@ async def test_poll_hashes_jobs_uses_setting(monkeypatch):
     called = {}
     async def fake_fetch():
         called['fetch'] = True
-    monkeypatch.setattr(main, 'fetch_and_store_jobs', fake_fetch)
+    monkeypatch.setattr(hashes_jobs, 'fetch_and_store_jobs', fake_fetch)
 
     async def fake_sleep(t):
         called['sleep'] = t
         raise StopAsyncIteration
     monkeypatch.setattr(asyncio, 'sleep', fake_sleep)
     with pytest.raises(StopAsyncIteration):
-        await main.poll_hashes_jobs()
+        await hashes_jobs.poll_hashes_jobs()
     assert called.get('sleep') == 5
 

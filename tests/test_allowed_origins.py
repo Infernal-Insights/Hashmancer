@@ -38,12 +38,14 @@ def test_allowed_origins_applied(monkeypatch, tmp_path):
     cfg.write_text(json.dumps({"allowed_origins": ["https://foo"]}))
     monkeypatch.setenv('HOME', str(tmp_path))
 
-    import main
-    importlib.reload(main)
+    from Server.app import config, app
+    import importlib
+    importlib.reload(config)
+    importlib.reload(app)
 
-    app = main.app
+    app_instance = app.app
     found = False
-    for args, kw in app.added:
+    for args, kw in app_instance.added:
         if args and args[0] is cors_stub.CORSMiddleware:
             found = kw.get('allow_origins') == ["https://foo"]
     assert found

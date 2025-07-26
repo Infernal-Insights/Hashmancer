@@ -17,7 +17,7 @@ install_stubs()
 
 # Add repo paths
 
-import main
+from Server.app.background.dispatch import dispatch_loop
 import orchestrator_agent
 from utils import redis_manager
 
@@ -62,7 +62,7 @@ def run_once():
         orig = asyncio.sleep
         try:
             asyncio.sleep = fake_sleep
-            await main.dispatch_loop()
+            await dispatch_loop()
         except StopAsyncIteration:
             pass
         finally:

@@ -18,7 +18,7 @@ install_stubs()
 
 
 
-import main
+import Server.main as main
 from utils import redis_manager
 from uuid import UUID
 
