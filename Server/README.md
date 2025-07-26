@@ -97,6 +97,22 @@ sudo systemctl start hashmancer-server
 
 ---
 
+## 🐳 Docker
+
+Build the server image from the repository root:
+
+```bash
+docker build -t hashmancer .
+```
+
+Run the container and expose port 8000:
+
+```bash
+docker run -p 8000:8000 hashmancer
+```
+
+---
+
 ## 📊 Glyph Dashboard
 
 `main.py` now includes a tiny dashboard called **Glyph** that you can view from
