@@ -9,3 +9,6 @@ build/
 env/
 *.so
 *.o
+*.pem
+keys/
+worker_*key.pem
