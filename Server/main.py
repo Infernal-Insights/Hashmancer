@@ -8,6 +8,9 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
+import logging
+
+logging.basicConfig(level=logging.INFO)
 import subprocess
 from datetime import datetime
 import os

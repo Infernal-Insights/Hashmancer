@@ -3,6 +3,7 @@ from redis_utils import get_redis
 import json
 import traceback
 from datetime import datetime
+import logging
 
 r = get_redis()
 
@@ -25,7 +26,7 @@ def log_event(
         r.rpush(f"error_logs:{worker_id}", json.dumps(event))
         r.ltrim(f"error_logs:{worker_id}", -100, -1)  # Keep last 100 logs
     except redis.exceptions.RedisError:
-        print("Redis unavailable: log_event", event)
+        logging.warning("Redis unavailable: log_event %s", event)
 
 
 def log_error(component, worker_id, code, message, exception=None):
@@ -52,4 +53,4 @@ def log_watchdog_event(payload: dict):
         r.rpush(f"watchdog_events:{worker_id}", json.dumps(event))
         r.ltrim(f"watchdog_events:{worker_id}", -100, -1)
     except redis.exceptions.RedisError:
-        print("Redis unavailable: log_watchdog_event", event)
+        logging.warning("Redis unavailable: log_watchdog_event %s", event)

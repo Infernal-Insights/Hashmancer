@@ -3,6 +3,7 @@ from redis_utils import get_redis
 import json
 import uuid
 import time
+import logging
 import orchestrator_agent
 
 r = get_redis()
@@ -50,7 +51,7 @@ def store_batch(
             r.sadd(f"hash_batches:{h}", batch_id)
             r.expire(f"hash_batches:{h}", ttl)
     except redis.exceptions.RedisError as e:
-        print(f"Redis unavailable: {e}")
+        logging.warning("Redis unavailable: %s", e)
         return None
     return batch_id
 
@@ -64,7 +65,7 @@ def get_next_batch():
         data["batch_id"] = batch_id
         return data
     except redis.exceptions.RedisError as e:
-        print(f"Redis unavailable: {e}")
+        logging.warning("Redis unavailable: %s", e)
         return None
 
 
@@ -75,7 +76,7 @@ def requeue_batch(batch_id):
         if prio and int(prio) > 0:
             r.zadd("batch:prio", {batch_id: int(prio)})
     except redis.exceptions.RedisError as e:
-        print(f"Redis unavailable: {e}")
+        logging.warning("Redis unavailable: %s", e)
 
 
 def queue_range(batch_id: str, start: int, end: int) -> None:

@@ -4,6 +4,7 @@ import subprocess
 import time
 import uuid
 import redis
+import logging
 
 try:
     from redis.exceptions import RedisError
@@ -269,6 +270,7 @@ def register_worker(worker_id: str, gpus: list[dict]):
 def main(argv: list[str] | None = None):
     if argv is None:
         argv = []
+    logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser(description="Hashmancer worker agent")
     parser.add_argument(
         "--probabilistic-order",
@@ -332,7 +334,11 @@ def main(argv: list[str] | None = None):
         try:
             requests.post(f"{SERVER_URL}/submit_benchmark", json=payload, timeout=10)
         except Exception as e:
-            print(f"Failed to submit benchmark for {gpu.get('uuid')}: {e}")
+            logging.warning(
+                "Failed to submit benchmark for %s: %s",
+                gpu.get("uuid"),
+                e,
+            )
 
     threads = []
     for gpu in gpus:
@@ -362,7 +368,7 @@ def main(argv: list[str] | None = None):
         t.start()
     flash_mgr = GPUFlashManager(name, SERVER_URL, gpus)
     flash_mgr.start()
-    print(f"Worker {name} started with {len(gpus)} GPUs")
+    logging.info("Worker %s started with %d GPUs", name, len(gpus))
     try:
         while True:
             temps = get_gpu_temps()
@@ -385,7 +391,7 @@ def main(argv: list[str] | None = None):
                 pass
             time.sleep(STATUS_INTERVAL)
     except KeyboardInterrupt:
-        print("Stopping worker...")
+        logging.info("Stopping worker...")
         for t in threads:
             t.running = False
         flash_mgr.running = False
