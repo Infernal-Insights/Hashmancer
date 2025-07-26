@@ -81,14 +81,18 @@ def test_get_batch_returns_batch_id(monkeypatch):
     assert fake.read_args[0] == main.HTTP_GROUP
     assert list(fake.read_args[1].keys())[0] == main.JOB_STREAM
 
-    payload = {
-        "worker_id": "worker",
-        "batch_id": resp["batch_id"],
-        "job_id": resp["job_id"],
-        "msg_id": resp["msg_id"],
-        "timestamp": 0,
-        "signature": "sig",
-    }
+    payload = type(
+        "Req",
+        (),
+        {
+            "worker_id": "worker",
+            "batch_id": resp["batch_id"],
+            "job_id": resp["job_id"],
+            "msg_id": resp["msg_id"],
+            "timestamp": 0,
+            "signature": "sig",
+        },
+    )()
     monkeypatch.setattr(main, "verify_signature", lambda *a: True)
     asyncio.run(main.submit_no_founds(payload))
     assert fake.ack_args == (main.JOB_STREAM, main.HTTP_GROUP, "1-0")
