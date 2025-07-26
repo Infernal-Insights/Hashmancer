@@ -52,7 +52,29 @@ from auth_utils import (
     verify_signature_with_key,
     fingerprint_public_key,
 )
-from pydantic import BaseModel
+from app.api.models import (
+    LoginRequest,
+    LogoutRequest,
+    RegisterWorkerRequest,
+    WorkerStatusRequest,
+    SubmitHashrateRequest,
+    SubmitBenchmarkRequest,
+    FlashResult,
+    SubmitFoundsRequest,
+    SubmitNoFoundsRequest,
+    TrainMarkovRequest,
+    TrainLLMRequest,
+    ApiKeyRequest,
+    AlgoRequest,
+    AlgoParamsRequest,
+    HashesSettingsRequest,
+    JobPriorityRequest,
+    JobConfigRequest,
+    MaskListRequest,
+    ProbOrderRequest,
+    InverseOrderRequest,
+    MarkovLangRequest,
+)
 from argon2 import PasswordHasher
 from ascii_logo import print_logo
 from pattern_to_mask import get_top_masks
@@ -268,12 +290,6 @@ class PortalAuthMiddleware:
 app.add_middleware(PortalAuthMiddleware, key=PORTAL_KEY)
 
 
-class LoginRequest(BaseModel):
-    passkey: str
-    username: str | None = None
-    password: str | None = None
-
-
 @app.post("/login")
 async def login(req: LoginRequest):
     initial_token = CONFIG.get("initial_admin_token")
@@ -295,10 +311,6 @@ async def login(req: LoginRequest):
     return {"status": "ok", "cookie": token}
 
 
-class LogoutRequest(BaseModel):
-    token: str
-
-
 @app.post("/logout")
 async def logout(req: LogoutRequest):
     """Invalidate a session token."""
@@ -308,42 +320,6 @@ async def logout(req: LogoutRequest):
     except Exception:
         pass
     return {"status": "ok", "cookie": ""}
-
-
-class RegisterWorkerRequest(BaseModel):
-    worker_id: str
-    timestamp: int
-    signature: str
-    pubkey: str
-    mode: str = "eco"
-    provider: str = "on-prem"
-    hardware: dict = {}
-
-
-class WorkerStatusRequest(BaseModel):
-    name: str
-    status: str
-    timestamp: int
-    signature: str
-    temps: list[int] | None = None
-    progress: dict | None = None
-
-
-class SubmitHashrateRequest(BaseModel):
-    worker_id: str
-    gpu_uuid: str | None = None
-    hashrate: float
-    timestamp: int
-    signature: str
-
-
-class SubmitBenchmarkRequest(BaseModel):
-    worker_id: str
-    gpu_uuid: str
-    engine: str
-    hashrates: dict[str, float]
-    timestamp: int
-    signature: str
 
 
 
@@ -480,18 +456,18 @@ async def get_batch(worker_id: str, timestamp: int, signature: str):
 
 
 @app.post("/submit_founds")
-async def submit_founds(payload: dict):
+async def submit_founds(payload: SubmitFoundsRequest):
     try:
         if not verify_signature(
-            payload["worker_id"],
-            json.dumps(payload["founds"]),
-            int(payload.get("timestamp", 0)),
-            payload["signature"],
+            payload.worker_id,
+            json.dumps(payload.founds),
+            int(getattr(payload, "timestamp", 0)),
+            payload.signature,
         ):
             return {"status": "unauthorized"}
 
-        for line in payload["founds"]:
-            r.rpush("found:results", f"{payload['batch_id']}:{line}")
+        for line in payload.founds:
+            r.rpush("found:results", f"{payload.batch_id}:{line}")
             try:
                 hash_str, password = line.split(":", 1)
             except ValueError:
@@ -501,14 +477,14 @@ async def submit_founds(payload: dict):
             lock = FileLock(str(FOUNDS_FILE) + ".lock")
             with lock:
                 with FOUNDS_FILE.open("a", encoding="utf-8") as fh:
-                    for line in payload["founds"]:
+                    for line in payload.founds:
                         fh.write(line + "\n")
         except Exception:
             pass
 
-        job_id = payload.get("job_id", payload.get("batch_id"))
+        job_id = payload.job_id or payload.batch_id
         info = r.hgetall(f"job:{job_id}")
-        msg_id = payload.get("msg_id") or info.get("msg_id")
+        msg_id = payload.msg_id or info.get("msg_id")
         stream = info.get("stream", JOB_STREAM)
         group = HTTP_GROUP if stream == JOB_STREAM else LOW_BW_GROUP
         if msg_id:
@@ -518,38 +494,38 @@ async def submit_founds(payload: dict):
             start = int(info.get("start", 0))
             end = int(info.get("end", 0))
             if start or end:
-                redis_manager.complete_range(payload["batch_id"], start, end)
+                redis_manager.complete_range(payload.batch_id, start, end)
         except Exception:
             pass
 
-        r.hset(f"worker:{payload['worker_id']}", "status", "idle")
-        return {"status": "ok", "received": len(payload["founds"])}
+        r.hset(f"worker:{payload.worker_id}", "status", "idle")
+        return {"status": "ok", "received": len(payload.founds)}
     except redis.exceptions.RedisError as e:
         log_error(
-            "server", payload.get("worker_id", "system"), "SRED", "Redis unavailable", e
+            "server", payload.worker_id if hasattr(payload, "worker_id") else "system", "SRED", "Redis unavailable", e
         )
         return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
-        log_error("server", payload["worker_id"], "S003", "Failed to accept founds", e)
+        log_error("server", payload.worker_id, "S003", "Failed to accept founds", e)
         return {"status": "error"}
 
 
 @app.post("/submit_no_founds")
-async def submit_no_founds(payload: dict):
+async def submit_no_founds(payload: SubmitNoFoundsRequest):
     try:
         if not verify_signature(
-            payload["worker_id"],
-            payload["batch_id"],
-            int(payload.get("timestamp", 0)),
-            payload["signature"],
+            payload.worker_id,
+            payload.batch_id,
+            int(getattr(payload, "timestamp", 0)),
+            payload.signature,
         ):
             return {"status": "unauthorized"}
 
-        r.rpush("found:none", payload["batch_id"])
+        r.rpush("found:none", payload.batch_id)
 
-        job_id = payload.get("job_id", payload.get("batch_id"))
+        job_id = payload.job_id or payload.batch_id
         info = r.hgetall(f"job:{job_id}")
-        msg_id = payload.get("msg_id") or info.get("msg_id")
+        msg_id = payload.msg_id or info.get("msg_id")
         stream = info.get("stream", JOB_STREAM)
         group = HTTP_GROUP if stream == JOB_STREAM else LOW_BW_GROUP
         if msg_id:
@@ -559,20 +535,20 @@ async def submit_no_founds(payload: dict):
             start = int(info.get("start", 0))
             end = int(info.get("end", 0))
             if start or end:
-                redis_manager.complete_range(payload["batch_id"], start, end)
+                redis_manager.complete_range(payload.batch_id, start, end)
         except Exception:
             pass
 
-        r.hset(f"worker:{payload['worker_id']}", "status", "idle")
+        r.hset(f"worker:{payload.worker_id}", "status", "idle")
         return {"status": "ok"}
     except redis.exceptions.RedisError as e:
         log_error(
-            "server", payload.get("worker_id", "system"), "SRED", "Redis unavailable", e
+            "server", payload.worker_id if hasattr(payload, "worker_id") else "system", "SRED", "Redis unavailable", e
         )
         return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error(
-            "server", payload["worker_id"], "S004", "Failed to record empty result", e
+            "server", payload.worker_id, "S004", "Failed to record empty result", e
         )
         return {"status": "error"}
 
@@ -948,14 +924,6 @@ async def get_flash_task(worker_id: str, timestamp: int, signature: str):
         return {"status": "error"}
 
 
-class FlashResult(BaseModel):
-    worker_id: str
-    gpu_uuid: str
-    success: bool
-    timestamp: int
-    signature: str
-
-
 @app.post("/flash_result")
 async def flash_result(res: FlashResult):
     """Record result of a flash attempt."""
@@ -1102,17 +1070,6 @@ async def import_hashes(file: UploadFile = File(...), hash_mode: str = "0"):
         raise HTTPException(status_code=500, detail="import failed")
 
 
-class TrainMarkovRequest(BaseModel):
-    lang: str = "english"
-    directory: str | None = None
-
-
-class TrainLLMRequest(BaseModel):
-    dataset: str
-    base_model: str
-    epochs: int
-    learning_rate: float
-    output_dir: str
 
 
 async def train_llm(req: TrainLLMRequest):
@@ -1344,10 +1301,6 @@ async def list_hashes_jobs():
         return []
 
 
-class ApiKeyRequest(BaseModel):
-    api_key: str
-
-
 @app.post("/hashes_api_key")
 async def set_hashes_api_key(req: ApiKeyRequest):
     """Update the stored hashes.com API key."""
@@ -1361,10 +1314,6 @@ async def set_hashes_api_key(req: ApiKeyRequest):
     return {"status": "ok"}
 
 
-class AlgoRequest(BaseModel):
-    algorithms: list[str]
-
-
 @app.post("/hashes_algorithms")
 async def set_hashes_algorithms(req: AlgoRequest):
     """Set desired algorithm filters for hashes.com jobs."""
@@ -1373,11 +1322,6 @@ async def set_hashes_algorithms(req: AlgoRequest):
     HASHES_ALGORITHMS = [a.lower() for a in req.algorithms]
     save_config()
     return {"status": "ok"}
-
-
-class AlgoParamsRequest(BaseModel):
-    algo: str
-    params: dict[str, Any]
 
 
 @app.get("/hashes_algo_params")
@@ -1393,11 +1337,6 @@ async def set_hashes_algo_params(req: AlgoParamsRequest):
     HASHES_ALGO_PARAMS[algo] = req.params
     save_config()
     return {"status": "ok"}
-
-
-class HashesSettingsRequest(BaseModel):
-    hashes_poll_interval: int | None = None
-    algo_params: dict[str, dict[str, Any]] | None = None
 
 
 @app.get("/hashes_settings")
@@ -1417,16 +1356,6 @@ async def set_hashes_settings(req: HashesSettingsRequest):
     HASHES_ALGO_PARAMS = dict(HASHES_SETTINGS.get("algo_params", {}))
     save_config()
     return {"status": "ok"}
-
-
-class JobPriorityRequest(BaseModel):
-    job_id: str
-    priority: int
-
-
-class JobConfigRequest(BaseModel):
-    job_id: str
-    priority: int
 
 
 @app.get("/hashes_job_config")
@@ -1457,10 +1386,6 @@ async def set_hashes_job_priority(req: JobPriorityRequest):
     except redis.exceptions.RedisError as e:
         log_error("server", "system", "SRED", "Redis unavailable", e)
         return {"status": "error", "message": "redis unavailable"}
-
-
-class MaskListRequest(BaseModel):
-    masks: list[str]
 
 
 @app.get("/predefined_masks")
@@ -1495,10 +1420,6 @@ async def get_hash_algos():
     return HASHCAT_ALGOS
 
 
-class ProbOrderRequest(BaseModel):
-    enabled: bool
-
-
 @app.post("/probabilistic_order")
 async def set_probabilistic_order(req: ProbOrderRequest):
     """Enable or disable probabilistic candidate ordering."""
@@ -1509,10 +1430,6 @@ async def set_probabilistic_order(req: ProbOrderRequest):
     return {"status": "ok"}
 
 
-class InverseOrderRequest(BaseModel):
-    enabled: bool
-
-
 @app.post("/inverse_prob_order")
 async def set_inverse_prob_order(req: InverseOrderRequest):
     """Enable or disable inverse probabilistic ordering."""
@@ -1521,10 +1438,6 @@ async def set_inverse_prob_order(req: InverseOrderRequest):
     INVERSE_PROB_ORDER = bool(req.enabled)
     save_config()
     return {"status": "ok"}
-
-
-class MarkovLangRequest(BaseModel):
-    lang: str
 
 
 @app.post("/markov_lang")

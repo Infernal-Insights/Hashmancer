@@ -40,13 +40,19 @@ class FakeRedis:
 
 
 async def call():
-    payload = {
-        "worker_id": "w",
-        "batch_id": "b",
-        "founds": ["h1:p1", "h2:p2"],
-        "timestamp": 0,
-        "signature": "s",
-    }
+    payload = type(
+        "Req",
+        (),
+        {
+            "worker_id": "w",
+            "batch_id": "b",
+            "founds": ["h1:p1", "h2:p2"],
+            "timestamp": 0,
+            "signature": "s",
+            "job_id": None,
+            "msg_id": None,
+        },
+    )()
     return await main.submit_founds(payload)
 
 
@@ -85,13 +91,19 @@ def test_submit_founds_thread_safe(monkeypatch):
     for i in range(5):
         line = f"h{i}:p{i}"
         lines.append(line)
-        payload = {
-            "worker_id": f"w{i}",
-            "batch_id": f"b{i}",
-            "founds": [line],
-            "timestamp": 0,
-            "signature": "s",
-        }
+        payload = type(
+            "Req",
+            (),
+            {
+                "worker_id": f"w{i}",
+                "batch_id": f"b{i}",
+                "founds": [line],
+                "timestamp": 0,
+                "signature": "s",
+                "job_id": None,
+                "msg_id": None,
+            },
+        )()
         t = threading.Thread(target=_thread_call, args=(payload,))
         threads.append(t)
         t.start()
