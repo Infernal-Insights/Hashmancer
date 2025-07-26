@@ -10,12 +10,12 @@ import zlib
 import hashlib
 import re
 from redis_utils import get_redis
-from event_logger import log_error
+from utils.event_logger import log_error
 import wordlist_db
 from pattern_stats import generate_mask, TOKEN_RE
 from pattern_utils import is_valid_word
 from darkling import charsets
-import redis_manager
+from utils import redis_manager
 
 try:  # optional local LLM orchestrator
     from llm_orchestrator import LLMOrchestrator  # type: ignore

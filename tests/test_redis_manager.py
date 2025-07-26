@@ -5,7 +5,7 @@ from uuid import UUID
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 
-import redis_manager
+from utils import redis_manager
 
 
 class FakeRedis:

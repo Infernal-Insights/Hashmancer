@@ -18,7 +18,7 @@ install_stubs()
 
 
 import main
-import redis_manager
+from utils import redis_manager
 
 class FakeRedis:
     def __init__(self):

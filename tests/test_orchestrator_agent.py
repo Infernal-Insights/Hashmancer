@@ -3,7 +3,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 import json
-import redis_manager
+from utils import redis_manager
 
 import orchestrator_agent
 

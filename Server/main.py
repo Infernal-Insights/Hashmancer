@@ -22,8 +22,8 @@ import socket
 import asyncio
 import glob
 import sys
-import redis_manager
-from event_logger import log_error, log_info
+from utils import redis_manager
+from utils.event_logger import log_error, log_info
 try:  # optional transformers dependency
     import train_llm as _train_llm  # type: ignore
 except Exception:  # pragma: no cover - optional component
