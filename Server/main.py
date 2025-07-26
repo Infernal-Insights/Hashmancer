@@ -123,6 +123,9 @@ BROADCAST_ENABLED = bool(CONFIG.get("broadcast_enabled", True))
 BROADCAST_PORT = int(CONFIG.get("broadcast_port", 50000))
 BROADCAST_INTERVAL = int(CONFIG.get("broadcast_interval", 30))
 
+# optional token used by external watchdogs like Occulis
+WATCHDOG_TOKEN = CONFIG.get("watchdog_token")
+
 # hashes.com integration settings
 # consolidate hashes.com specific options under a single dictionary so updates
 # can be applied without restarting the server.
@@ -927,6 +930,57 @@ async def list_workers():
         return []
 
 
+@app.get("/workers/{worker_id}/stats")
+async def get_worker_stats(worker_id: str, token: str | None = None):
+    """Return temperature, hashrate and status for a worker."""
+    if WATCHDOG_TOKEN and token != WATCHDOG_TOKEN:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    try:
+        info = r.hgetall(f"worker:{worker_id}")
+        if not info:
+            raise HTTPException(status_code=404, detail="not found")
+        temps = []
+        if info.get("temps"):
+            try:
+                temps = json.loads(info["temps"])
+            except Exception:
+                temps = []
+        hashrate = 0.0
+        try:
+            hashrate = float(info.get("hashrate", 0))
+        except (TypeError, ValueError):
+            hashrate = 0.0
+        return {
+            "temps": temps,
+            "hashrate": hashrate,
+            "status": info.get("status", "unknown"),
+        }
+    except redis.exceptions.RedisError as e:
+        log_error("server", worker_id or "system", "SRED", "Redis unavailable", e)
+        raise HTTPException(status_code=500, detail="redis unavailable")
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("server", worker_id, "S750", "Failed to fetch stats", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/workers/{worker_id}/reboot")
+async def reboot_worker(worker_id: str, token: str | None = None):
+    """Queue a reboot command for the worker."""
+    if WATCHDOG_TOKEN and token != WATCHDOG_TOKEN:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    try:
+        r.rpush(f"reboot:{worker_id}", "reboot")
+        return {"status": "queued"}
+    except redis.exceptions.RedisError as e:
+        log_error("server", worker_id or "system", "SRED", "Redis unavailable", e)
+        raise HTTPException(status_code=500, detail="redis unavailable")
+    except Exception as e:
+        log_error("server", worker_id, "S751", "Failed to queue reboot", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/worker_status")
 async def set_worker_status(data: WorkerStatusRequest):
     """Update a worker's status string."""
@@ -939,7 +993,14 @@ async def set_worker_status(data: WorkerStatusRequest):
     if not verify_signature(name, name, timestamp, signature):
         raise HTTPException(status_code=401, detail="unauthorized")
     try:
-        r.hset(f"worker:{name}", "status", status)
+        mapping = {"status": status, "last_seen": int(time.time())}
+        temps = getattr(data, "temps", None)
+        progress = getattr(data, "progress", None)
+        if temps is not None:
+            mapping["temps"] = json.dumps(temps)
+        if progress is not None:
+            mapping["progress"] = json.dumps(progress)
+        r.hset(f"worker:{name}", mapping=mapping)
         return {"status": "ok"}
     except redis.exceptions.RedisError as e:
         log_error("server", name or "system", "SRED", "Redis unavailable", e)
