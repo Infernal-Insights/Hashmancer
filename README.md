@@ -72,3 +72,16 @@ Redis should only listen on the loopback interface. Add `bind 127.0.0.1` to
 access, restrict the port to their IPs with firewall rules (`iptables` or
 `ufw`). It's best to place Redis behind a VPN or require TLS with client
 certificates when exposing it over the internet.
+
+## Tests
+
+The unit tests cover both the server and worker components. Install their
+dependencies with:
+
+```bash
+pip install -r Server/requirements.txt -r Worker/requirements.txt -r Server/requirements-dev.txt
+```
+
+You can also use the provided `requirements-dev.txt` which includes the
+packages from all three files. Once installed, run `pytest` from the repository
+root.
