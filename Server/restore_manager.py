@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import redis
 from redis_utils import get_redis
-from event_logger import log_error
+from utils.event_logger import log_error
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s"

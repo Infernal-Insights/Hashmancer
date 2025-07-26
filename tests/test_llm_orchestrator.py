@@ -5,7 +5,7 @@ import json
 ROOT = os.path.dirname(os.path.dirname(__file__))
 
 import orchestrator_agent
-import redis_manager
+from utils import redis_manager
 
 # ensure redis exceptions are simple
 orchestrator_agent.redis.exceptions.ResponseError = Exception
