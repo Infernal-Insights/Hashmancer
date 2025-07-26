@@ -1,12 +1,10 @@
 from fastapi import (
-    FastAPI,
     UploadFile,
     File,
     HTTPException,
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
 import logging
 
@@ -124,7 +122,11 @@ from app.config import (
 load_config()
 CONFIG = _config.CONFIG  # refresh local reference after reload
 
-app = FastAPI()
+import importlib
+from app import app as _app_module
+importlib.reload(_app_module)
+app = _app_module.app
+PortalAuthMiddleware = _app_module.PortalAuthMiddleware
 
 r = get_redis()
 password_hasher = PasswordHasher()
@@ -244,52 +246,6 @@ def get_flash_settings(model: str) -> dict:
     return data
 
 
-origins = CONFIG.get("allowed_origins", ["*"])
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-class PortalAuthMiddleware:
-    """Simple ASGI middleware enforcing an API key for portal routes."""
-
-    def __init__(self, app, key: str | None):
-        self.app = app
-        self.key = key
-
-    async def __call__(self, scope, receive, send):
-        if scope.get("type") == "http" and self.key:
-            path = scope.get("path", "")
-            if (
-                path == "/"
-                or path.startswith("/portal")
-                or path.startswith("/glyph")
-                or path.startswith("/admin")
-            ):
-                headers = {
-                    k.decode().lower(): v.decode() for k, v in scope.get("headers", [])
-                }
-                if headers.get("x-api-key") != self.key:
-                    cookie_header = headers.get("cookie", "")
-                    token = None
-                    for part in cookie_header.split(";"):
-                        if part.strip().startswith("session="):
-                            token = part.strip().split("=", 1)[1]
-                            break
-                    if not token or not verify_session_token(token):
-                        response = HTMLResponse("Unauthorized", status_code=401)
-                        await response(scope, receive, send)
-                        return
-        await self.app(scope, receive, send)
-
-
-app.add_middleware(PortalAuthMiddleware, key=PORTAL_KEY)
-
-
 @app.post("/login")
 async def login(req: LoginRequest):
     initial_token = CONFIG.get("initial_admin_token")
@@ -326,7 +282,6 @@ async def logout(req: LogoutRequest):
 
 @app.on_event("startup")
 async def start_broadcast():
-    print_logo()
     tasks = start_loops()
     BACKGROUND_TASKS.extend(tasks)
 
