@@ -85,3 +85,9 @@ pip install -r Server/requirements.txt -r Worker/requirements.txt -r Server/requ
 You can also use the provided `requirements-dev.txt` which includes the
 packages from all three files. Once installed, run `pytest` from the repository
 root.
+
+The project uses [flake8](https://flake8.pycqa.org) for linting. Legacy files do not
+fully conform to the default style yet, so ``.flake8`` extends the ignore list
+(E203, E225, E301, E302, E303, E305, E306, E401, E402, E501, E741,
+F401, F541, F811, F824, W291, W292, W391). This allows the current codebase to
+pass the lint step while work continues on modernization.
