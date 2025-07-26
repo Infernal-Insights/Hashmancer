@@ -15,5 +15,7 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: pip install -r Server/requirements.txt -r Worker/requirements.txt -r Server/requirements-dev.txt
+      - name: Run flake8
+        run: flake8 .
       - name: Run tests
         run: pytest -q
