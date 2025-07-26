@@ -46,7 +46,7 @@ def is_already_cracked(hash_str: str) -> bool:
         return False
     except redis.exceptions.RedisError:
         return False
-    
+
 
 def get_cracked_password(hash_str: str) -> str | None:
     """Return the password for a previously cracked hash, if any."""
@@ -57,6 +57,7 @@ def get_cracked_password(hash_str: str) -> str | None:
         return None
     except redis.exceptions.RedisError:
         return None
+
 
 # Mapping between pattern tokens produced by pattern_stats and mask charset
 # identifiers used by the darkling engine.
@@ -82,6 +83,7 @@ ID_TO_CHARSET = {
 
 
 MASK_ID_RE = re.compile(r"\?[1-6]")
+
 
 def build_mask_charsets(lang: str | None = None) -> dict[str, str]:
     """Return a mask charset map for the given language."""
@@ -172,13 +174,37 @@ def cache_wordlist(path: str) -> str:
         if not r.exists(redis_key):
             name = os.path.basename(path)
             comp = zlib.compressobj(wbits=31)
-            buf = bytearray()
+            pipe = r.pipeline()
+            leftover = b""
+            first = True
+            queued = 0
             for chunk in wordlist_db.stream_wordlist(name):
                 if not chunk:
                     break
-                buf.extend(comp.compress(chunk))
-            buf.extend(comp.flush())
-            r.set(redis_key, base64.b64encode(bytes(buf)).decode())
+                data = comp.compress(chunk)
+                if not data:
+                    continue
+                leftover += data
+                encode_len = (len(leftover) // 3) * 3
+                if encode_len:
+                    encoded = base64.b64encode(leftover[:encode_len]).decode()
+                    if first:
+                        pipe.set(redis_key, encoded)
+                        first = False
+                    else:
+                        pipe.append(redis_key, encoded)
+                    queued += 1
+                    if queued % 100 == 0:
+                        pipe.execute()
+                    leftover = leftover[encode_len:]
+            leftover += comp.flush()
+            if leftover:
+                encoded = base64.b64encode(leftover).decode()
+                if first:
+                    pipe.set(redis_key, encoded)
+                else:
+                    pipe.append(redis_key, encoded)
+            pipe.execute()
     except Exception as e:
         log_error("orchestrator", "system", "SCACHE", "Failed to cache wordlist", e)
     return key
@@ -250,6 +276,7 @@ def compute_batch_range(gpu_rate: float, keyspace: int) -> tuple[int, int]:
         end = keyspace
     return 0, end
 
+
 def dispatch_batches(lang: str = "English"):
     """Prefetch batches from batch:queue into one of the job streams."""
     try:
@@ -258,7 +285,9 @@ def dispatch_batches(lang: str = "English"):
         pending_low = pending_count(LOW_BW_JOB_STREAM, LOW_BW_GROUP)
         darkling = any_darkling_workers()
 
-        while (pending_high < backlog_target) or (darkling and pending_low < backlog_target):
+        while (pending_high < backlog_target) or (
+            darkling and pending_low < backlog_target
+        ):
             batch_id = None
             prio = r.zrevrange("batch:prio", 0, 0)
             if prio:
@@ -307,7 +336,9 @@ def dispatch_batches(lang: str = "English"):
 
             if use_llm:
                 try:
-                    stream_choice = _LLM.choose_job_stream(job_data, pending_high, pending_low)
+                    stream_choice = _LLM.choose_job_stream(
+                        job_data, pending_high, pending_low
+                    )
                 except Exception:  # pragma: no cover - optional component
                     stream_choice = "high"
                 try:
@@ -328,7 +359,12 @@ def dispatch_batches(lang: str = "English"):
                     if batch.get("wordlist"):
                         try:
                             lengths = []
-                            with open(batch["wordlist"], "r", encoding="utf-8", errors="ignore") as f:
+                            with open(
+                                batch["wordlist"],
+                                "r",
+                                encoding="utf-8",
+                                errors="ignore",
+                            ) as f:
                                 for i, line in enumerate(f):
                                     if i >= 100:
                                         break
@@ -343,12 +379,14 @@ def dispatch_batches(lang: str = "English"):
                     pattern = generate_mask(mask_length)
                     tokens = TOKEN_RE.findall(pattern)
                     mask = "".join(TOKEN_TO_ID.get(t, "?1") for t in tokens)
-                    job_data.update({
-                        "mask": mask,
-                        "wordlist": "",
-                        "wordlist_key": "",
-                        "attack_mode": "mask",
-                    })
+                    job_data.update(
+                        {
+                            "mask": mask,
+                            "wordlist": "",
+                            "wordlist_key": "",
+                            "attack_mode": "mask",
+                        }
+                    )
 
                 cs_map = build_mask_charsets(lang)
                 job_data["mask_charsets"] = json.dumps(cs_map)
@@ -361,7 +399,9 @@ def dispatch_batches(lang: str = "English"):
                 r.hset(f"job:{task_id}", mapping=job_data)
                 r.expire(f"job:{task_id}", 3600)
                 if "start" in job_data and "end" in job_data:
-                    redis_manager.queue_range(batch_id, int(job_data["start"]), int(job_data["end"]))
+                    redis_manager.queue_range(
+                        batch_id, int(job_data["start"]), int(job_data["end"])
+                    )
                 r.xadd(LOW_BW_JOB_STREAM, {"job_id": task_id})
                 pending_low += 1
                 continue
@@ -370,11 +410,18 @@ def dispatch_batches(lang: str = "English"):
             r.hset(f"job:{task_id}", mapping=job_data)
             r.expire(f"job:{task_id}", 3600)
             if "start" in job_data and "end" in job_data:
-                redis_manager.queue_range(batch_id, int(job_data["start"]), int(job_data["end"]))
+                redis_manager.queue_range(
+                    batch_id, int(job_data["start"]), int(job_data["end"])
+                )
             r.xadd(JOB_STREAM, {"job_id": task_id})
             pending_high += 1
 
-            if not use_llm and darkling and attack != "mask" and pending_low < backlog_target:
+            if (
+                not use_llm
+                and darkling
+                and attack != "mask"
+                and pending_low < backlog_target
+            ):
                 # transform into a basic mask attack for darkling workers
                 d_id = str(uuid.uuid4())
                 transformed = job_data.copy()
@@ -383,7 +430,9 @@ def dispatch_batches(lang: str = "English"):
                 if batch.get("wordlist"):
                     try:
                         lengths = []
-                        with open(batch["wordlist"], "r", encoding="utf-8", errors="ignore") as f:
+                        with open(
+                            batch["wordlist"], "r", encoding="utf-8", errors="ignore"
+                        ) as f:
                             for i, line in enumerate(f):
                                 if i >= 100:
                                     break
@@ -400,13 +449,15 @@ def dispatch_batches(lang: str = "English"):
                 mask = "".join(TOKEN_TO_ID.get(t, "?1") for t in tokens)
 
                 cs_map = build_mask_charsets(lang)
-                transformed.update({
-                    "mask": mask,
-                    "wordlist": "",
-                    "wordlist_key": "",
-                    "attack_mode": "mask",
-                    "mask_charsets": json.dumps(cs_map),
-                })
+                transformed.update(
+                    {
+                        "mask": mask,
+                        "wordlist": "",
+                        "wordlist_key": "",
+                        "attack_mode": "mask",
+                        "mask_charsets": json.dumps(cs_map),
+                    }
+                )
                 keyspace = estimate_keyspace(mask, cs_map)
                 rate = average_benchmark_rate()
                 start, end = compute_batch_range(rate, keyspace)
@@ -424,7 +475,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Dispatch batches to workers")
-    parser.add_argument("--lang", default="English", help="language for alphabet charsets")
+    parser.add_argument(
+        "--lang", default="English", help="language for alphabet charsets"
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")

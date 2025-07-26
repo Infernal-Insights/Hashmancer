@@ -9,26 +9,39 @@ import gzip
 
 # Stub modules similar to other server tests
 fastapi_stub = types.ModuleType("fastapi")
+
+
 class FakeApp:
     def add_middleware(self, *a, **kw):
         pass
+
     def on_event(self, *a, **kw):
         return lambda f: f
+
     def post(self, *a, **kw):
         return lambda f: f
+
     def get(self, *a, **kw):
         return lambda f: f
+
     def delete(self, *a, **kw):
         return lambda f: f
+
     def websocket(self, *a, **kw):
         return lambda f: f
+
+
 fastapi_stub.FastAPI = lambda: FakeApp()
 fastapi_stub.UploadFile = object
 fastapi_stub.File = lambda *a, **kw: None
 fastapi_stub.WebSocket = object
 fastapi_stub.WebSocketDisconnect = type("WebSocketDisconnect", (), {})
+
+
 class HTTPException(Exception):
     pass
+
+
 fastapi_stub.HTTPException = HTTPException
 sys.modules.setdefault("fastapi", fastapi_stub)
 
@@ -42,61 +55,95 @@ resp_stub.FileResponse = object
 sys.modules.setdefault("fastapi.responses", resp_stub)
 
 pydantic_stub = types.ModuleType("pydantic")
+
+
 class BaseModel:
     pass
+
+
 pydantic_stub.BaseModel = BaseModel
 sys.modules.setdefault("pydantic", pydantic_stub)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Server'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "Server"))
 
 import main
 import orchestrator_agent
 import wordlist_db
+
 
 class FakeUploadFile:
     def __init__(self, name, data):
         self.filename = name
         self._data = data
         self._idx = 0
+
     async def read(self, n=-1):
         if self._idx >= len(self._data):
             return b""
         if n < 0:
             n = len(self._data) - self._idx
-        chunk = self._data[self._idx:self._idx+n]
+        chunk = self._data[self._idx : self._idx + n]
         self._idx += n
         return chunk
+
 
 class FakeRedis:
     def __init__(self):
         self.store = {}
+
     def exists(self, key):
         return key in self.store
+
     def set(self, key, value):
         self.store[key] = value
 
+    def append(self, key, value):
+        self.store[key] = self.store.get(key, "") + value
+
+    def pipeline(self):
+        parent = self
+
+        class Pipe:
+            def __init__(self):
+                self.cmds = []
+
+            def set(self, k, v):
+                self.cmds.append(("set", k, v))
+
+            def append(self, k, v):
+                self.cmds.append(("append", k, v))
+
+            def execute(self):
+                for cmd, k, v in self.cmds:
+                    if cmd == "set":
+                        parent.set(k, v)
+                    else:
+                        parent.append(k, v)
+                self.cmds = []
+
+        return Pipe()
+
 
 def test_wordlist_db_persist_and_cache(monkeypatch, tmp_path):
-    db_path = tmp_path / 'wl.db'
-    monkeypatch.setattr(wordlist_db, 'DB_PATH', db_path)
-    monkeypatch.setattr(main.wordlist_db, 'DB_PATH', db_path)
-    monkeypatch.setattr(orchestrator_agent.wordlist_db, 'DB_PATH', db_path)
-    monkeypatch.setattr(orchestrator_agent, 'log_error', lambda *a, **k: None)
-    monkeypatch.setattr(main, 'log_error', lambda *a, **k: None)
-    monkeypatch.setattr(main, 'log_info', lambda *a, **k: None)
+    db_path = tmp_path / "wl.db"
+    monkeypatch.setattr(wordlist_db, "DB_PATH", db_path)
+    monkeypatch.setattr(main.wordlist_db, "DB_PATH", db_path)
+    monkeypatch.setattr(orchestrator_agent.wordlist_db, "DB_PATH", db_path)
+    monkeypatch.setattr(orchestrator_agent, "log_error", lambda *a, **k: None)
+    monkeypatch.setattr(main, "log_error", lambda *a, **k: None)
+    monkeypatch.setattr(main, "log_info", lambda *a, **k: None)
 
-    file = FakeUploadFile('foo.txt', b'abc\n123')
+    file = FakeUploadFile("foo.txt", b"abc\n123")
     asyncio.run(main.upload_wordlist(file))
 
     conn = sqlite3.connect(db_path)
-    row = conn.execute('SELECT name, data FROM wordlists').fetchone()
+    row = conn.execute("SELECT name, data FROM wordlists").fetchone()
     conn.close()
-    assert row == ('foo.txt', b'abc\n123')
+    assert row == ("foo.txt", b"abc\n123")
 
     fake_r = FakeRedis()
-    monkeypatch.setattr(orchestrator_agent, 'r', fake_r)
-    key = orchestrator_agent.cache_wordlist('foo.txt')
-    stored = fake_r.store['wlcache:' + key]
-    assert gzip.decompress(base64.b64decode(stored)) == b'abc\n123'
-
+    monkeypatch.setattr(orchestrator_agent, "r", fake_r)
+    key = orchestrator_agent.cache_wordlist("foo.txt")
+    stored = fake_r.store["wlcache:" + key]
+    assert gzip.decompress(base64.b64decode(stored)) == b"abc\n123"
