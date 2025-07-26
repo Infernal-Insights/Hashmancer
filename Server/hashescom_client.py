@@ -12,7 +12,7 @@ except Exception:  # pragma: no cover - fallback when aiohttp unavailable
     aiohttp = None
 
 # Prefer an environment variable but fall back to the server config
-CONFIG_FILE = Path.home() / ".hashmancer" / "server_config.json"
+from app.config import CONFIG_FILE
 
 def _load_api_key() -> str | None:
     key = os.environ.get("HASHES_COM_API_KEY")

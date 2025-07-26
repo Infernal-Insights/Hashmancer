@@ -53,6 +53,48 @@ import wordlist_db
 from typing import Any
 from collections.abc import Coroutine
 from hash_algos import HASHCAT_ALGOS
+from app import config as _config
+from app.config import (
+    CONFIG,
+    CONFIG_FILE,
+    WORDLISTS_DIR,
+    MASKS_DIR,
+    RULES_DIR,
+    RESTORE_DIR,
+    STORAGE_DIR,
+    WORDLIST_DB_PATH,
+    TRUSTED_KEYS_FILE,
+    TRUSTED_KEY_FINGERPRINTS,
+    FOUNDS_FILE,
+    PORTAL_KEY,
+    PORTAL_PASSKEY,
+    SESSION_TTL,
+    MAX_IMPORT_SIZE,
+    LOW_BW_ENGINE,
+    BROADCAST_ENABLED,
+    BROADCAST_PORT,
+    BROADCAST_INTERVAL,
+    WATCHDOG_TOKEN,
+    HASHES_SETTINGS,
+    HASHES_POLL_INTERVAL,
+    HASHES_ALGORITHMS,
+    HASHES_DEFAULT_PRIORITY,
+    PREDEFINED_MASKS,
+    HASHES_ALGO_PARAMS,
+    PROBABILISTIC_ORDER,
+    INVERSE_PROB_ORDER,
+    MARKOV_LANG,
+    LLM_ENABLED,
+    LLM_MODEL_PATH,
+    LLM_TRAIN_EPOCHS,
+    LLM_TRAIN_LEARNING_RATE,
+    save_config,
+    load_config,
+)
+
+# reload configuration in case HOME changed before import
+load_config()
+CONFIG = _config.CONFIG  # refresh local reference after reload
 
 app = FastAPI()
 
@@ -74,86 +116,6 @@ HTTP_GROUP = os.getenv("HTTP_GROUP", "http-workers")
 LOW_BW_JOB_STREAM = os.getenv("LOW_BW_JOB_STREAM", "darkling-jobs")
 LOW_BW_GROUP = os.getenv("LOW_BW_GROUP", "darkling-workers")
 
-CONFIG_FILE = Path.home() / ".hashmancer" / "server_config.json"
-try:
-    with open(CONFIG_FILE) as cfg:
-        CONFIG = json.load(cfg)
-except Exception:
-    CONFIG = {}
-
-WORDLISTS_DIR = Path(CONFIG.get("wordlists_dir", "/opt/hashmancer/wordlists"))
-MASKS_DIR = Path(CONFIG.get("masks_dir", "/opt/hashmancer/masks"))
-RULES_DIR = Path(CONFIG.get("rules_dir", "/opt/hashmancer/rules"))
-RESTORE_DIR = Path(CONFIG.get("restore_dir", "/opt/hashmancer/restores"))
-STORAGE_DIR = Path(CONFIG.get("storage_path", "/opt/hashmancer"))
-WORDLIST_DB_PATH = Path(
-    CONFIG.get(
-        "wordlist_db_path",
-        str(Path.home() / ".hashmancer" / "wordlists.db"),
-    )
-)
-TRUSTED_KEYS_FILE = CONFIG.get("trusted_keys_file")
-TRUSTED_KEY_FINGERPRINTS: set[str] = set()
-if TRUSTED_KEYS_FILE:
-    try:
-        with open(TRUSTED_KEYS_FILE) as f:
-            TRUSTED_KEY_FINGERPRINTS = {
-                line.strip() for line in f if line.strip()
-            }
-    except Exception:
-        TRUSTED_KEY_FINGERPRINTS = set()
-FOUNDS_FILE = STORAGE_DIR / "founds.txt"
-STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-
-# API key used to protect the portal and legacy dashboard pages. When not set
-# these routes remain publicly accessible.
-PORTAL_KEY = CONFIG.get("portal_key")
-PORTAL_PASSKEY = CONFIG.get("portal_passkey")
-SESSION_TTL = 3600  # seconds
-
-# maximum allowed bytes for /import_hashes uploads
-MAX_IMPORT_SIZE = int(CONFIG.get("max_import_size", 1_048_576))  # 1 MB
-
-# select which cracking engine low bandwidth workers should use. The
-# specialized option is called "darkling".
-LOW_BW_ENGINE = CONFIG.get("low_bw_engine", "hashcat")
-
-# broadcast settings
-BROADCAST_ENABLED = bool(CONFIG.get("broadcast_enabled", True))
-BROADCAST_PORT = int(CONFIG.get("broadcast_port", 50000))
-BROADCAST_INTERVAL = int(CONFIG.get("broadcast_interval", 30))
-
-# optional token used by external watchdogs like Occulis
-WATCHDOG_TOKEN = CONFIG.get("watchdog_token")
-
-# hashes.com integration settings
-# consolidate hashes.com specific options under a single dictionary so updates
-# can be applied without restarting the server.
-HASHES_SETTINGS: dict[str, Any] = dict(CONFIG.get("hashes_settings", {}))
-HASHES_SETTINGS.setdefault(
-    "hashes_poll_interval", int(CONFIG.get("hashes_poll_interval", 1800))
-)
-HASHES_SETTINGS.setdefault(
-    "algo_params", dict(CONFIG.get("hashes_algo_params", {}))
-)
-HASHES_POLL_INTERVAL = int(HASHES_SETTINGS.get("hashes_poll_interval", 1800))
-HASHES_ALGORITHMS = [a.lower() for a in CONFIG.get("hashes_algorithms", [])]
-HASHES_DEFAULT_PRIORITY = int(CONFIG.get("hashes_default_priority", 0))
-PREDEFINED_MASKS = list(CONFIG.get("predefined_masks", []))
-HASHES_ALGO_PARAMS: dict[str, dict[str, Any]] = dict(
-    HASHES_SETTINGS.get("algo_params", {})
-)
-
-# Markov and candidate ordering settings
-PROBABILISTIC_ORDER = bool(CONFIG.get("probabilistic_order", False))
-INVERSE_PROB_ORDER = bool(CONFIG.get("inverse_prob_order", False))
-MARKOV_LANG = CONFIG.get("markov_lang", "english")
-
-# local language model settings
-LLM_ENABLED = bool(CONFIG.get("llm_enabled", False))
-LLM_MODEL_PATH = CONFIG.get("llm_model_path", "")
-LLM_TRAIN_EPOCHS = int(CONFIG.get("llm_train_epochs", 1))
-LLM_TRAIN_LEARNING_RATE = float(CONFIG.get("llm_train_learning_rate", 0.0001))
 
 # propagate the model path for orchestrator_agent if enabled
 if LLM_ENABLED and LLM_MODEL_PATH:
@@ -164,25 +126,6 @@ else:
 import orchestrator_agent
 
 
-def save_config():
-    """Persist the CONFIG dictionary to disk."""
-    try:
-        # ensure current LLM settings are written to disk
-        CONFIG["llm_enabled"] = bool(LLM_ENABLED)
-        CONFIG["llm_model_path"] = LLM_MODEL_PATH
-        CONFIG["llm_train_epochs"] = int(LLM_TRAIN_EPOCHS)
-        CONFIG["llm_train_learning_rate"] = float(LLM_TRAIN_LEARNING_RATE)
-        CONFIG["inverse_prob_order"] = bool(INVERSE_PROB_ORDER)
-
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(CONFIG, f, indent=2)
-
-        if LLM_ENABLED and LLM_MODEL_PATH:
-            os.environ["LLM_MODEL_PATH"] = LLM_MODEL_PATH
-        else:
-            os.environ.pop("LLM_MODEL_PATH", None)
-    except Exception as e:
-        log_error("server", "system", "S740", "Failed to save config", e)
 
 
 def sign_session(session_id: str, expiry: int) -> str:

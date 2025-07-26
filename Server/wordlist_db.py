@@ -1,22 +1,11 @@
 import os
-import json
 import sqlite3
 from pathlib import Path
 from typing import Iterable, Generator
 
-CONFIG_FILE = Path.home() / ".hashmancer" / "server_config.json"
-try:
-    with open(CONFIG_FILE) as f:
-        CONFIG = json.load(f)
-except Exception:
-    CONFIG = {}
+from app.config import WORDLIST_DB_PATH
 
-DB_PATH = Path(
-    CONFIG.get(
-        "wordlist_db_path",
-        str(Path.home() / ".hashmancer" / "wordlists.db"),
-    )
-)
+DB_PATH = WORDLIST_DB_PATH
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
