@@ -21,9 +21,12 @@ keys via `PRIVATE_KEY_PATH` and `PUBLIC_KEY_PATH`. If these files do not exist
 the worker will create a new 4096-bit RSA pair on first use. The status
 heartbeat interval can be customized with `STATUS_INTERVAL` (seconds).
 
+## Setup
+
 Run `python3 ../setup.py --worker` from the repository root to install
-dependencies and configure the worker.  Passing `--server-ip` skips broadcast
-discovery.
+dependencies and configure the worker. This command now also installs and
+starts a `hashmancer-worker` systemd service so the worker launches
+automatically on boot. Passing `--server-ip` skips broadcast discovery.
 Use `python3 ../setup.py --upgrade` anytime to pull the latest code and
 update dependencies.
 

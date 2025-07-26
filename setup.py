@@ -9,6 +9,7 @@ from ascii_logo import print_logo
 CONFIG_DIR = Path.home() / ".hashmancer"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 WORKER_CONFIG = CONFIG_DIR / "worker_config.json"
+WORKER_SERVICE_FILE = "/etc/systemd/system/hashmancer-worker.service"
 
 
 def discover_server(timeout: int = 5, port: int = 50000) -> str | None:
@@ -65,6 +66,35 @@ def worker_configure(server_url: str):
     print("Run 'python -m hashmancer_worker.worker_agent' to start the worker")
 
 
+def configure_worker_systemd() -> None:
+    python_path = subprocess.getoutput("which python3")
+    working_dir = os.path.abspath("Worker")
+    service = f"""[Unit]
+Description=Hashmancer Worker
+After=network.target
+
+[Service]
+ExecStart={python_path} -m hashmancer_worker.worker_agent
+WorkingDirectory={working_dir}
+Restart=always
+Environment=PYTHONUNBUFFERED=1
+User={os.getenv('USER')}
+Group={os.getenv('USER')}
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+    with open("/tmp/hashmancer-worker.service", "w") as f:
+        f.write(service)
+
+    subprocess.run(["sudo", "mv", "/tmp/hashmancer-worker.service", WORKER_SERVICE_FILE])
+    subprocess.run(["sudo", "systemctl", "daemon-reexec"])
+    subprocess.run(["sudo", "systemctl", "enable", "hashmancer-worker.service"])
+    subprocess.run(["sudo", "systemctl", "start", "hashmancer-worker.service"])
+    print("✅ Worker systemd service installed and started.")
+
+
 def run_worker_setup(server_ip: str | None):
     worker_install_deps()
     server_url = None
@@ -79,6 +109,7 @@ def run_worker_setup(server_ip: str | None):
         if not server_url:
             server_url = input("Server URL (e.g. http://1.2.3.4:8000): ").strip()
     worker_configure(server_url)
+    configure_worker_systemd()
 
 
 def main():
