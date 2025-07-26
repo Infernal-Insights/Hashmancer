@@ -1,5 +1,4 @@
 import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import os
 import sys
 import json
@@ -25,8 +24,6 @@ from tests.test_helpers import (
 install_stubs()
 
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Server'))
 
 
 def test_allowed_origins_applied(monkeypatch, tmp_path):

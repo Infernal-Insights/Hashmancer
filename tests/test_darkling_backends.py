@@ -4,7 +4,6 @@ import shutil
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
-sys.path.insert(0, ROOT)
 
 try:
     import pyopencl as cl

@@ -4,8 +4,6 @@ import json
 from uuid import UUID
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
-sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "Server"))
 
 import redis_manager
 

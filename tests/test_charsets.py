@@ -3,7 +3,6 @@ import sys
 import unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
-sys.path.insert(0, ROOT)
 
 from darkling import charsets
 

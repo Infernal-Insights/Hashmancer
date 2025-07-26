@@ -1,5 +1,4 @@
 import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import asyncio
 import sys
 
@@ -15,8 +14,6 @@ from tests.test_helpers import (
 install_stubs()
 
 
-sys.path.insert(0, '..')
-sys.path.insert(0, 'Server')
 import main
 import hashescom_client
 

@@ -2,7 +2,6 @@ import importlib
 import types
 import sys
 
-sys.path.insert(0, 'Server')
 
 import auth_utils
 
