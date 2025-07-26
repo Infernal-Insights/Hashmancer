@@ -1,0 +1,4 @@
+# Development and test requirements
+-r Server/requirements.txt
+-r Worker/requirements.txt
+-r Server/requirements-dev.txt
