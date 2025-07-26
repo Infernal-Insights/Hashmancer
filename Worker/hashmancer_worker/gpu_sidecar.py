@@ -2,6 +2,7 @@ import os
 import time
 import threading
 import redis
+import logging
 
 try:
     from redis.exceptions import RedisError
@@ -153,8 +154,11 @@ class GPUSidecar(threading.Thread):
             except FileNotFoundError:
                 continue
             except Exception as e:
-                print(
-                    f"Failed to set power limit using {' '.join(cmd)} on {self.gpu.get('uuid')}: {e}"
+                logging.warning(
+                    "Failed to set power limit using %s on %s: %s",
+                    " ".join(cmd),
+                    self.gpu.get("uuid"),
+                    e,
                 )
                 return
 
@@ -177,7 +181,7 @@ class GPUSidecar(threading.Thread):
                         continue
                     self.execute_job(data)
                 except Exception as e:
-                    print(f"Sidecar error on {self.gpu['uuid']}: {e}")
+                    logging.warning("Sidecar error on %s: %s", self.gpu['uuid'], e)
                     time.sleep(5)
         finally:
             self.darkling_ctx.cleanup()
@@ -209,7 +213,7 @@ class GPUSidecar(threading.Thread):
                 except Exception:
                     pass
 
-        print(f"GPU {self.gpu['uuid']} processing {batch_id}")
+        logging.info("GPU %s processing %s", self.gpu['uuid'], batch_id)
         if (
             self.gpu.get("pci_link_width", self.gpu.get("pci_width", 16)) <= 4
             and self.low_bw_engine == "darkling"
@@ -245,7 +249,7 @@ class GPUSidecar(threading.Thread):
         try:
             requests.post(f"{self.server_url}/{endpoint}", json=payload, timeout=10)
         except Exception as e:
-            print(f"Result submission failed: {e}")
+            logging.warning("Result submission failed: %s", e)
 
         self.current_job = None
 
@@ -532,7 +536,12 @@ def run_hashcat_benchmark(gpu: dict, engine: str = "hashcat") -> dict[str, float
         try:
             output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
         except Exception as e:
-            print(f"Benchmark failed for {gpu.get('uuid')} mode {mode}: {e}")
+            logging.warning(
+                "Benchmark failed for %s mode %s: %s",
+                gpu.get("uuid"),
+                mode,
+                e,
+            )
             results[name] = 0.0
             continue
 
@@ -604,7 +613,12 @@ def run_darkling_benchmark(gpu: dict) -> dict[str, float]:
                 except json.JSONDecodeError:
                     continue
         except Exception as e:
-            print(f"Benchmark failed for {gpu.get('uuid')} mode {mode}: {e}")
+            logging.warning(
+                "Benchmark failed for %s mode %s: %s",
+                gpu.get("uuid"),
+                mode,
+                e,
+            )
             rate = 0.0
         results[name] = rate
     return results

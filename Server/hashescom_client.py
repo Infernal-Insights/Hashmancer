@@ -2,6 +2,7 @@ import asyncio
 import os
 import json
 from pathlib import Path
+import logging
 
 import requests
 
@@ -56,7 +57,7 @@ async def fetch_jobs() -> list:
             return await _fetch_jobs_async(url, headers)
         return await asyncio.to_thread(_fetch_jobs_sync, url, headers)
     except Exception as e:
-        print(f"[❌] Hashes.com fetch error: {e}")
+        logging.warning("[❌] Hashes.com fetch error: %s", e)
         return []
 
 
@@ -71,12 +72,12 @@ def upload_founds(algo_id, found_file) -> bool:
         resp.raise_for_status()
         result = resp.json()
         if not result.get("success"):
-            print(f"[❌] Upload rejected: {result}")
+            logging.warning("[❌] Upload rejected: %s", result)
             return False
         return True
     except requests.HTTPError as e:
-        print(f"[❌] Upload error: {e}")
+        logging.warning("[❌] Upload error: %s", e)
         return False
     except Exception as e:
-        print(f"[❌] Upload error: {e}")
+        logging.warning("[❌] Upload error: %s", e)
         return False
