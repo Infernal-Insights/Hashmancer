@@ -8,7 +8,7 @@ from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".hashmancer"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-CONFIG_FILE = CONFIG_DIR / "server_config.json"
+from app.config import CONFIG_FILE
 ENV_FILE = CONFIG_DIR / ".env"
 SERVICE_FILE = "/etc/systemd/system/hashmancer-server.service"
 DEFAULT_BASE_DIR = "/opt/hashmancer"

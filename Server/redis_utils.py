@@ -1,9 +1,8 @@
 import os
 import json
-from pathlib import Path
 import redis
 
-CONFIG_FILE = Path.home() / ".hashmancer" / "server_config.json"
+from app.config import CONFIG_FILE
 
 
 def get_redis() -> redis.Redis:

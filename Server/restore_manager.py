@@ -2,28 +2,18 @@ import os
 import glob
 import shutil
 import logging
-import json
 from pathlib import Path
 import redis
 from redis_utils import get_redis
 from utils.event_logger import log_error
+from app.config import RESTORE_DIR
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s"
 )
 r = get_redis()
 
-CONFIG_FILE = Path.home() / ".hashmancer" / "server_config.json"
-try:
-    with CONFIG_FILE.open() as f:
-        CONFIG = json.load(f)
-except Exception:
-    CONFIG = {}
-
-RESTORE_DIR = Path(os.getenv("RESTORE_DIR", CONFIG.get("restore_dir", "./")))
-BACKUP_DIR = Path(
-    os.getenv("BACKUP_DIR", CONFIG.get("backup_dir", "./restore_backups"))
-)
+BACKUP_DIR = Path(os.getenv("BACKUP_DIR", "./restore_backups"))
 
 
 def scan_restore_files():
