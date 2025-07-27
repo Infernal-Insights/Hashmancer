@@ -734,6 +734,38 @@ async def reboot_worker(worker_id: str, token: str | None = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/workers/{worker_id}/upgrade")
+async def upgrade_worker(worker_id: str, token: str | None = None):
+    """Queue an upgrade command for the worker."""
+    if WATCHDOG_TOKEN and token != WATCHDOG_TOKEN:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    try:
+        r.rpush(f"command:{worker_id}", "upgrade")
+        return {"status": "queued"}
+    except redis.exceptions.RedisError as e:
+        log_error("server", worker_id or "system", "SRED", "Redis unavailable", e)
+        raise HTTPException(status_code=500, detail="redis unavailable")
+    except Exception as e:
+        log_error("server", worker_id, "S752", "Failed to queue upgrade", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/workers/{worker_id}/restart")
+async def restart_worker(worker_id: str, token: str | None = None):
+    """Queue a restart command for the worker."""
+    if WATCHDOG_TOKEN and token != WATCHDOG_TOKEN:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    try:
+        r.rpush(f"command:{worker_id}", "restart")
+        return {"status": "queued"}
+    except redis.exceptions.RedisError as e:
+        log_error("server", worker_id or "system", "SRED", "Redis unavailable", e)
+        raise HTTPException(status_code=500, detail="redis unavailable")
+    except Exception as e:
+        log_error("server", worker_id, "S753", "Failed to queue restart", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/worker_status")
 async def set_worker_status(data: WorkerStatusRequest):
     """Update a worker's status string."""
@@ -896,6 +928,24 @@ async def get_flash_task(worker_id: str, timestamp: int, signature: str):
         return {"status": "error", "message": "redis unavailable"}
     except Exception as e:
         log_error("server", worker_id, "S740", "Failed to get flash task", e)
+        return {"status": "error"}
+
+
+@app.get("/get_worker_command")
+async def get_worker_command(worker_id: str, timestamp: int, signature: str):
+    """Pop the next management command for a worker."""
+    if not verify_signature(worker_id, worker_id, timestamp, signature):
+        return {"status": "unauthorized"}
+    try:
+        cmd = r.lpop(f"command:{worker_id}")
+        if not cmd:
+            return {"status": "none"}
+        return {"status": "ok", "command": cmd}
+    except redis.exceptions.RedisError as e:
+        log_error("server", worker_id, "SRED", "Redis unavailable", e)
+        return {"status": "error", "message": "redis unavailable"}
+    except Exception as e:
+        log_error("server", worker_id, "S742", "Failed to get command", e)
         return {"status": "error"}
 
 

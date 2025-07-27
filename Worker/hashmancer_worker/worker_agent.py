@@ -25,6 +25,7 @@ from .bios_flasher import GPUFlashManager
 from .crypto_utils import load_public_key_pem, sign_message
 from ascii_logo import print_logo
 import argparse
+from pathlib import Path
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
@@ -386,6 +387,49 @@ def register_worker(worker_id: str, gpus: list[dict]):
     return name
 
 
+def perform_command(cmd: str) -> None:
+    """Execute a management command such as upgrade or restart."""
+    root_dir = Path(__file__).resolve().parents[2]
+    if cmd == "upgrade":
+        subprocess.run(
+            ["python3", "setup.py", "--upgrade", "--worker"],
+            cwd=root_dir,
+            check=False,
+        )
+        subprocess.run(
+            ["sudo", "systemctl", "restart", "hashmancer-worker.service"],
+            check=False,
+        )
+    elif cmd == "restart":
+        subprocess.run(
+            ["sudo", "systemctl", "restart", "hashmancer-worker.service"],
+            check=False,
+        )
+
+
+def check_worker_command(name: str) -> None:
+    """Poll the server for upgrade/restart commands."""
+    ts = int(time.time())
+    try:
+        resp = requests.get(
+            f"{SERVER_URL}/get_worker_command",
+            params={
+                "worker_id": name,
+                "timestamp": ts,
+                "signature": sign_message(name, ts),
+            },
+            timeout=5,
+        )
+        data = resp.json()
+    except Exception:
+        return
+    if data.get("status") != "ok":
+        return
+    cmd = data.get("command")
+    if cmd:
+        perform_command(cmd)
+
+
 def main(argv: list[str] | None = None):
     if argv is None:
         argv = []
@@ -512,6 +556,7 @@ def main(argv: list[str] | None = None):
                 )
             except Exception:
                 pass
+            check_worker_command(name)
             time.sleep(STATUS_INTERVAL)
     except KeyboardInterrupt:
         logging.info("Stopping worker...")
