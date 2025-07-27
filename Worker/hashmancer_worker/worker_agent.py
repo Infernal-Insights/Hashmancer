@@ -38,6 +38,7 @@ SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
 STATUS_INTERVAL = int(os.getenv("STATUS_INTERVAL", "30"))
 
 CONFIG_FILE = Path.home() / ".hashmancer" / "worker_config.json"
+GPU_TUNING: dict[str, dict] = {}
 if CONFIG_FILE.exists():
     try:
         with open(CONFIG_FILE) as f:
@@ -50,6 +51,7 @@ if CONFIG_FILE.exists():
         REDIS_SSL_CERT = os.getenv("REDIS_SSL_CERT", cfg.get("redis_ssl_cert", REDIS_SSL_CERT))
         REDIS_SSL_KEY = os.getenv("REDIS_SSL_KEY", cfg.get("redis_ssl_key", REDIS_SSL_KEY))
         REDIS_SSL_CA_CERT = os.getenv("REDIS_SSL_CA_CERT", cfg.get("redis_ssl_ca_cert", REDIS_SSL_CA_CERT))
+        GPU_TUNING = cfg.get("darkling_tuning", {})
     except Exception:
         pass
 
@@ -454,6 +456,13 @@ def main(argv: list[str] | None = None):
     print_logo()
     worker_id = os.getenv("WORKER_ID", str(uuid.uuid4()))
     gpus = detect_gpus()
+    for g in gpus:
+        params = GPU_TUNING.get(g.get("model"), {})
+        if params:
+            if "grid" in params:
+                g["darkling_grid"] = params["grid"]
+            if "block" in params:
+                g["darkling_block"] = params["block"]
     name = register_worker(worker_id, gpus)
     # benchmark GPUs once before starting normal job processing
     low_bw_engine = "hashcat"

@@ -330,6 +330,13 @@ class GPUSidecar(threading.Thread):
             ]
 
             env = os.environ.copy()
+            if engine == "darkling-engine":
+                grid = self.gpu.get("darkling_grid")
+                block = self.gpu.get("darkling_block")
+                if grid:
+                    env["DARKLING_GRID"] = str(grid)
+                if block:
+                    env["DARKLING_BLOCK"] = str(block)
             self._apply_power_limit(engine)
             proc = subprocess.Popen(
                 cmd,
