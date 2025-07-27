@@ -108,3 +108,7 @@ cmake --build build
 specific platform.  The resulting static libraries `cuda_backend`,
 `hip_backend`, and `opencl_backend` expose a `launch_darkling` entry point for
 each vendor.
+
+Precompiled binaries are published with each release. Set the environment
+variable `DARKLING_ENGINE_URL` before running `setup.py` on a worker to
+automatically download a ready-to-use `darkling-engine`.

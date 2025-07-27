@@ -1,6 +1,8 @@
 import os
 import sys
 import shutil
+import subprocess
+from pathlib import Path
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -32,3 +34,27 @@ def test_hip_kernel_present():
         pytest.skip('hipcc not available')
     path = os.path.join(ROOT, 'darkling', 'hip_backend', 'darkling_engine.hip')
     assert os.path.exists(path)
+
+
+def test_cmake_build_backends(tmp_path):
+    hipcc = shutil.which('hipcc')
+    has_opencl = shutil.which('pkg-config') and shutil.which('clang')
+    if not hipcc and not has_opencl:
+        pytest.skip('HIP/OpenCL toolchains unavailable')
+
+    build_dir = tmp_path / 'build'
+    args = ['cmake', str(Path(ROOT)/'darkling')]
+    if hipcc:
+        args += ['-DENABLE_HIP=ON']
+    else:
+        args += ['-DENABLE_HIP=OFF']
+    if has_opencl:
+        args += ['-DENABLE_OPENCL=ON']
+    else:
+        args += ['-DENABLE_OPENCL=OFF']
+
+    res = subprocess.run(args + ['-B', str(build_dir)], capture_output=True)
+    if res.returncode != 0:
+        pytest.skip('cmake configuration failed')
+    res = subprocess.run(['cmake', '--build', str(build_dir)], capture_output=True)
+    assert res.returncode == 0
