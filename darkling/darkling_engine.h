@@ -14,6 +14,11 @@
 extern "C" {
 #endif
 
+#ifdef __CUDACC__
+__global__ void crack_kernel(uint64_t start, uint64_t total, char *results,
+                             int max_results, int *found_count);
+#endif
+
 extern __constant__ uint8_t d_charset_bytes[MAX_CUSTOM_SETS][MAX_CHARSET_CHARS][MAX_UTF8_BYTES];
 extern __constant__ uint8_t d_charset_charlen[MAX_CUSTOM_SETS][MAX_CHARSET_CHARS];
 extern __constant__ int  d_charset_lens[MAX_CUSTOM_SETS];
