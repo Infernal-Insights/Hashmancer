@@ -285,3 +285,19 @@ def test_prob_order_from_server(monkeypatch):
     assert captured["prob"] is True
     assert captured["lang"] == "spanish"
     assert captured["inv"] is True
+
+
+def test_check_worker_command(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        worker_agent.requests,
+        "get",
+        lambda url, params=None, timeout=5: DummyResp({"status": "ok", "command": "upgrade"}),
+    )
+    monkeypatch.setattr(worker_agent, "sign_message", lambda *a: "sig")
+    monkeypatch.setattr(worker_agent.subprocess, "run", lambda cmd, **k: calls.append(cmd))
+
+    worker_agent.check_worker_command("alpha")
+
+    assert any("setup.py" in c for c in calls[0])
+    assert any("systemctl" in c for c in calls[1])

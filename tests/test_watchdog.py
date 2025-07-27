@@ -24,6 +24,9 @@ class FakeRedis:
         return dict(self.store.get(key, {}))
     def rpush(self, key, value):
         self.store.setdefault(key, []).append(value)
+    def lpop(self, key):
+        vals = self.store.get(key, [])
+        return vals.pop(0) if vals else None
 
 
 def test_get_worker_stats(monkeypatch):
@@ -66,3 +69,36 @@ def test_reboot_worker(monkeypatch):
 
     with pytest.raises(main.HTTPException):
         asyncio.run(main.reboot_worker("alpha", token="bad"))
+
+
+def test_upgrade_and_restart_queue(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(main, "r", fake)
+    monkeypatch.setitem(main.CONFIG, "watchdog_token", "tok")
+    monkeypatch.setattr(main, "WATCHDOG_TOKEN", "tok")
+
+    resp = asyncio.run(main.upgrade_worker("alpha", token="tok"))
+    assert resp["status"] == "queued"
+    assert fake.store["command:alpha"] == ["upgrade"]
+
+    resp = asyncio.run(main.restart_worker("alpha", token="tok"))
+    assert resp["status"] == "queued"
+    assert fake.store["command:alpha"] == ["upgrade", "restart"]
+
+    with pytest.raises(main.HTTPException):
+        asyncio.run(main.upgrade_worker("alpha", token="bad"))
+
+
+def test_get_worker_command(monkeypatch):
+    fake = FakeRedis()
+    fake.store["command:alpha"] = ["upgrade"]
+    monkeypatch.setattr(main, "r", fake)
+    monkeypatch.setattr(main, "verify_signature", lambda *a: True)
+
+    data = asyncio.run(main.get_worker_command("alpha", 0, "sig"))
+    assert data["command"] == "upgrade"
+    assert fake.store["command:alpha"] == []
+
+    monkeypatch.setattr(main, "verify_signature", lambda *a: False)
+    data = asyncio.run(main.get_worker_command("alpha", 0, "sig"))
+    assert data["status"] == "unauthorized"
