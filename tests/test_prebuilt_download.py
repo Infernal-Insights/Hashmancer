@@ -17,7 +17,15 @@ def test_download_prebuilt_engine(monkeypatch, tmp_path):
             pass
 
     monkeypatch.setenv('DARKLING_ENGINE_URL', 'http://example.com/engine')
-    monkeypatch.setattr(setup.requests, 'get', lambda *a, **k: Resp())
+    monkeypatch.setenv('DARKLING_GPU_BACKEND', 'cuda')
+
+    urls = []
+
+    def fake_get(url, *args, **kwargs):
+        urls.append(url)
+        return Resp()
+
+    monkeypatch.setattr(setup.requests, 'get', fake_get)
     monkeypatch.setattr(setup, 'CONFIG_DIR', tmp_path)
 
     dest = tmp_path / 'bin' / 'darkling-engine'
@@ -27,3 +35,4 @@ def test_download_prebuilt_engine(monkeypatch, tmp_path):
     setup.download_prebuilt_engine()
     assert dest.exists()
     assert dest.read_bytes() == data
+    assert urls == ['http://example.com/engine-cuda']
