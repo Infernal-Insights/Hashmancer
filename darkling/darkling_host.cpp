@@ -237,12 +237,15 @@ int main(int argc, char** argv) {
     uint64_t start = 0;
     uint64_t end = 1000;
     std::string cs_args[16];
+    std::vector<std::string> hash_hex;
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--start") == 0 && i + 1 < argc) {
             start = std::strtoull(argv[++i], nullptr, 10);
         } else if (std::strcmp(argv[i], "--end") == 0 && i + 1 < argc) {
             end = std::strtoull(argv[++i], nullptr, 10);
+        } else if (std::strcmp(argv[i], "--hash") == 0 && i + 1 < argc) {
+            hash_hex.push_back(argv[++i]);
         } else if (argv[i][0] == '-' && std::isdigit(argv[i][1]) &&
                    argv[i][2] == '\0' && i + 1 < argc) {
             int id = argv[i][1] - '1';
@@ -262,8 +265,32 @@ int main(int argc, char** argv) {
     else charsets.push_back("123");
 
     std::vector<uint8_t> pos_map = {0,1};
-    std::vector<uint8_t> hashes(16); // placeholder
-    ctx.preload(charsets, pos_map, hashes, 2, 16);
+
+    if (hash_hex.empty()) {
+        std::cerr << "No --hash arguments provided" << std::endl;
+        return 1;
+    }
+
+    size_t hlen = hash_hex[0].size();
+    if (hlen % 2 != 0) {
+        std::cerr << "Invalid hash length: " << hash_hex[0] << std::endl;
+        return 1;
+    }
+    hlen /= 2;
+
+    std::vector<uint8_t> hashes;
+    for (const auto &h : hash_hex) {
+        if (h.size() != hash_hex[0].size()) {
+            std::cerr << "Hash length mismatch: " << h << std::endl;
+            return 1;
+        }
+        for (size_t j = 0; j < h.size(); j += 2) {
+            unsigned int val = std::stoi(h.substr(j, 2), nullptr, 16);
+            hashes.push_back(static_cast<uint8_t>(val));
+        }
+    }
+
+    ctx.preload(charsets, pos_map, hashes, 2, static_cast<int>(hlen));
     auto res = ctx.run(start, end);
     for (auto& s : res) std::cout << s << "\n";
     return 0;
