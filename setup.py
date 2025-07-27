@@ -1,6 +1,7 @@
 import argparse
 import json
 import subprocess
+import shutil
 import socket
 import os
 from pathlib import Path
@@ -53,17 +54,28 @@ def run_worker_upgrade():
 
 
 def download_prebuilt_engine() -> None:
-    """Download a precompiled darkling-engine if DARKLING_ENGINE_URL is set."""
-    url = os.getenv("DARKLING_ENGINE_URL")
-    if not url:
+    """Download a vendor specific darkling-engine if DARKLING_ENGINE_URL is set."""
+    base = os.getenv("DARKLING_ENGINE_URL")
+    if not base:
         return
+
+    backend = os.getenv("DARKLING_GPU_BACKEND")
+    if not backend:
+        if shutil.which("nvidia-smi"):
+            backend = "cuda"
+        elif shutil.which("rocm-smi"):
+            backend = "hip"
+        else:
+            backend = "opencl"
+
+    url = f"{base}-{backend}"
 
     dest_dir = CONFIG_DIR / "bin"
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / "darkling-engine"
 
     try:
-        print("\U0001F53D Downloading prebuilt darkling-engine...")
+        print(f"\U0001F53D Downloading prebuilt darkling-engine ({backend})...")
         resp = requests.get(url, timeout=20)
         resp.raise_for_status()
         dest.write_bytes(resp.content)
