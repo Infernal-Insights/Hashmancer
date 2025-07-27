@@ -45,6 +45,84 @@ void md5(const __private char *msg, int len, __global uchar *out) {
     for(int i=0;i<4;i++){ out[i*4]=(out32[i])&0xff; out[i*4+1]=(out32[i]>>8)&0xff; out[i*4+2]=(out32[i]>>16)&0xff; out[i*4+3]=(out32[i]>>24)&0xff; }
 }
 
+void sha1(const __private char *msg, int len, __global uchar *out) {
+    uint h0=0x67452301, h1=0xefcdab89, h2=0x98badcfe, h3=0x10325476, h4=0xc3d2e1f0;
+    uchar buffer[64];
+    for(int i=0;i<64;i++) buffer[i]=0;
+    for(int i=0;i<len;i++) buffer[i]=(uchar)msg[i];
+    buffer[len]=0x80;
+    ulong bits=(ulong)len*8;
+    for(int i=0;i<8;i++) buffer[56+i]=(bits>>(56-8*i))&0xff;
+    uint w[80];
+    for(int i=0;i<16;i++)
+        w[i]=((uint)buffer[4*i]<<24)|((uint)buffer[4*i+1]<<16)|((uint)buffer[4*i+2]<<8)|buffer[4*i+3];
+    for(int i=16;i<80;i++) w[i]=rotl32(w[i-3]^w[i-8]^w[i-14]^w[i-16],1);
+    uint a=h0,b=h1,c=h2,d=h3,e=h4;
+    for(int i=0;i<80;i++) {
+        uint f,k;
+        if(i<20){f=(b&c)|((~b)&d);k=0x5a827999;}
+        else if(i<40){f=b^c^d;k=0x6ed9eba1;}
+        else if(i<60){f=(b&c)|(b&d)|(c&d);k=0x8f1bbcdc;}
+        else{f=b^c^d;k=0xca62c1d6;}
+        uint temp=rotl32(a,5)+f+e+k+w[i];
+        e=d; d=c; c=rotl32(b,30); b=a; a=temp;
+    }
+    h0+=a; h1+=b; h2+=c; h3+=d; h4+=e;
+    uint hv[5]={h0,h1,h2,h3,h4};
+    for(int i=0;i<5;i++){ out[i*4]=(hv[i]>>24)&0xff; out[i*4+1]=(hv[i]>>16)&0xff; out[i*4+2]=(hv[i]>>8)&0xff; out[i*4+3]=hv[i]&0xff; }
+}
+
+void md4(const __private uchar *msg, int len, __global uchar *out) {
+    uint a=0x67452301, b=0xefcdab89, c=0x98badcfe, d=0x10325476;
+    uchar buffer[64];
+    for(int i=0;i<64;i++) buffer[i]=0;
+    for(int i=0;i<len;i++) buffer[i]=msg[i];
+    buffer[len]=0x80;
+    ulong bits=(ulong)len*8;
+    for(int i=0;i<8;i++) buffer[56+i]=(bits>>(8*i))&0xff;
+    uint w[16];
+    for(int i=0;i<16;i++)
+        w[i]=((uint)buffer[i*4])|((uint)buffer[i*4+1]<<8)|((uint)buffer[i*4+2]<<16)|((uint)buffer[i*4+3]<<24);
+#define F(x,y,z) ((x & y) | (~x & z))
+#define G(x,y,z) ((x & y) | (x & z) | (y & z))
+#define H(x,y,z) (x ^ y ^ z)
+#define ROUND(a,b,c,d,k,s,func,add) a = rotl32(a + func(b,c,d) + w[k] + add, s)
+    ROUND(a,b,c,d,0,3,F,0);  ROUND(d,a,b,c,1,7,F,0);  ROUND(c,d,a,b,2,11,F,0); ROUND(b,c,d,a,3,19,F,0);
+    ROUND(a,b,c,d,4,3,F,0);  ROUND(d,a,b,c,5,7,F,0);  ROUND(c,d,a,b,6,11,F,0); ROUND(b,c,d,a,7,19,F,0);
+    ROUND(a,b,c,d,8,3,F,0);  ROUND(d,a,b,c,9,7,F,0);  ROUND(c,d,a,b,10,11,F,0); ROUND(b,c,d,a,11,19,F,0);
+    ROUND(a,b,c,d,12,3,F,0); ROUND(d,a,b,c,13,7,F,0); ROUND(c,d,a,b,14,11,F,0); ROUND(b,c,d,a,15,19,F,0);
+    ROUND(a,b,c,d,0,3,G,0x5a827999);  ROUND(d,a,b,c,4,5,G,0x5a827999);  ROUND(c,d,a,b,8,9,G,0x5a827999);  ROUND(b,c,d,a,12,13,G,0x5a827999);
+    ROUND(a,b,c,d,1,3,G,0x5a827999);  ROUND(d,a,b,c,5,5,G,0x5a827999);  ROUND(c,d,a,b,9,9,G,0x5a827999);  ROUND(b,c,d,a,13,13,G,0x5a827999);
+    ROUND(a,b,c,d,2,3,G,0x5a827999);  ROUND(d,a,b,c,6,5,G,0x5a827999);  ROUND(c,d,a,b,10,9,G,0x5a827999); ROUND(b,c,d,a,14,13,G,0x5a827999);
+    ROUND(a,b,c,d,3,3,G,0x5a827999);  ROUND(d,a,b,c,7,5,G,0x5a827999);  ROUND(c,d,a,b,11,9,G,0x5a827999); ROUND(b,c,d,a,15,13,G,0x5a827999);
+    ROUND(a,b,c,d,0,3,H,0x6ed9eba1); ROUND(d,a,b,c,8,9,H,0x6ed9eba1); ROUND(c,d,a,b,4,11,H,0x6ed9eba1); ROUND(b,c,d,a,12,15,H,0x6ed9eba1);
+    ROUND(a,b,c,d,2,3,H,0x6ed9eba1); ROUND(d,a,b,c,10,9,H,0x6ed9eba1); ROUND(c,d,a,b,6,11,H,0x6ed9eba1); ROUND(b,c,d,a,14,15,H,0x6ed9eba1);
+    ROUND(a,b,c,d,1,3,H,0x6ed9eba1); ROUND(d,a,b,c,9,9,H,0x6ed9eba1); ROUND(c,d,a,b,5,11,H,0x6ed9eba1); ROUND(b,c,d,a,13,15,H,0x6ed9eba1);
+    ROUND(a,b,c,d,3,3,H,0x6ed9eba1); ROUND(d,a,b,c,11,9,H,0x6ed9eba1); ROUND(c,d,a,b,7,11,H,0x6ed9eba1); ROUND(b,c,d,a,15,15,H,0x6ed9eba1);
+#undef ROUND
+#undef H
+#undef G
+#undef F
+    a+=0x67452301; b+=0xefcdab89; c+=0x98badcfe; d+=0x10325476;
+    uint hv[4]={a,b,c,d};
+    for(int i=0;i<4;i++){ out[i*4]=hv[i]&0xff; out[i*4+1]=(hv[i]>>8)&0xff; out[i*4+2]=(hv[i]>>16)&0xff; out[i*4+3]=(hv[i]>>24)&0xff; }
+}
+
+void compute_hash(const __private uchar *pwd, int len, __global uchar *out, int hash_len, uchar hash_type) {
+    uchar type = hash_type;
+    if(type==0) type = (hash_len==20)?2:1;
+    if(type==3){
+        uchar tmp[MAX_PWD_BYTES*2];
+        int t=0; for(int i=0;i<len;i++){ tmp[t++]=pwd[i]; tmp[t++]=0; }
+        md4(tmp,t,out);
+    } else if(type==2){
+        sha1((const char*)pwd,len,out);
+    } else {
+        md5((const char*)pwd,len,out);
+    }
+}
+
+
 __kernel void crack_kernel(
     ulong start,
     ulong total,
@@ -55,6 +133,7 @@ __kernel void crack_kernel(
     __global const uchar *hashes,
     int num_hashes,
     int hash_len,
+    uchar hash_type,
     int pwd_len,
     __global char *results,
     int max_results,
@@ -81,7 +160,7 @@ __kernel void crack_kernel(
             int clen=charset_len[set*MAX_CHARSET_CHARS+ci];
             for(int j=0;j<clen;j++) pwd[out_len++]=charset_bytes[(set*MAX_CHARSET_CHARS+ci)*MAX_UTF8_BYTES+j];
         }
-        md5((const char*)pwd,out_len,digest);
+        compute_hash(pwd,out_len,digest,hash_len,hash_type);
         for(int h=0;h<num_hashes;++h){
             int match=1;
             for(int i=0;i<hash_len;i++){ if(digest[i]!=hashes[h*hash_len+i]){match=0;break;} }

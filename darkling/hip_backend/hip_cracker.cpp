@@ -35,6 +35,7 @@ bool HipCracker::load_job(const MaskJob &job) {
 
     hipMemcpyToSymbol(HIP_SYMBOL(d_pwd_len), &job_.mask_length, sizeof(int));
     hipMemcpyToSymbol(HIP_SYMBOL(d_hash_len), &job_.hash_length, sizeof(int));
+    hipMemcpyToSymbol(HIP_SYMBOL(d_hash_type), &job_.hash_type, sizeof(uint8_t));
     hipMemcpyToSymbol(HIP_SYMBOL(d_num_hashes), &job_.num_hashes, sizeof(int));
     hipMemcpyToSymbol(HIP_SYMBOL(d_pos_charset), job_.mask_template, job_.mask_length);
 

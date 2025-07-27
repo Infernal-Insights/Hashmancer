@@ -27,12 +27,14 @@ extern __constant__ uint8_t d_hashes[MAX_HASHES][20];
 extern __constant__ int d_num_hashes;
 extern __constant__ int d_hash_len;
 extern __constant__ int d_pwd_len;
+extern __constant__ uint8_t d_hash_type;
 
 void launch_darkling(const uint8_t **charset_bytes,
                      const uint8_t **charset_lens,
                      const int *charset_sizes,
                      const uint8_t *pos_map, int pwd_len,
                      const uint8_t *hashes, int num_hashes, int hash_len,
+                     uint8_t hash_type,
                      uint64_t start, uint64_t end,
                      char *d_results, int max_results, int *d_count,
                      dim3 grid, dim3 block);
@@ -41,7 +43,8 @@ void load_darkling_data(const uint8_t **charset_bytes,
                         const uint8_t **charset_lens,
                         const int *charset_sizes,
                         const uint8_t *pos_map, int pwd_len,
-                        const uint8_t *hashes, int num_hashes, int hash_len);
+                        const uint8_t *hashes, int num_hashes, int hash_len,
+                        uint8_t hash_type);
 
 void launch_darkling_kernel(uint64_t start, uint64_t end,
                             char *d_results, int max_results, int *d_count,

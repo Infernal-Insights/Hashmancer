@@ -74,6 +74,7 @@ bool IntelCracker::run_batch() {
     clSetKernelArg(kr,idx++,sizeof(cl_mem),&hash_buf);
     clSetKernelArg(kr,idx++,sizeof(int),&job_.num_hashes);
     clSetKernelArg(kr,idx++,sizeof(int),&job_.hash_length);
+    clSetKernelArg(kr,idx++,sizeof(cl_uchar),&job_.hash_type);
     clSetKernelArg(kr,idx++,sizeof(int),&job_.mask_length);
     clSetKernelArg(kr,idx++,sizeof(cl_mem),&res_buf);
     int max_results_const = MAX_RESULT_BUFFER;
