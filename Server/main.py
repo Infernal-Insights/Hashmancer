@@ -679,11 +679,23 @@ async def get_worker_stats(worker_id: str, token: str | None = None):
         if not info:
             raise HTTPException(status_code=404, detail="not found")
         temps = []
+        power = []
+        util = []
         if info.get("temps"):
             try:
                 temps = json.loads(info["temps"])
             except Exception:
                 temps = []
+        if info.get("power"):
+            try:
+                power = json.loads(info["power"])
+            except Exception:
+                power = []
+        if info.get("utilization"):
+            try:
+                util = json.loads(info["utilization"])
+            except Exception:
+                util = []
         hashrate = 0.0
         try:
             hashrate = float(info.get("hashrate", 0))
@@ -691,6 +703,8 @@ async def get_worker_stats(worker_id: str, token: str | None = None):
             hashrate = 0.0
         return {
             "temps": temps,
+            "power": power,
+            "utilization": util,
             "hashrate": hashrate,
             "status": info.get("status", "unknown"),
         }
@@ -734,9 +748,15 @@ async def set_worker_status(data: WorkerStatusRequest):
     try:
         mapping = {"status": status, "last_seen": int(time.time())}
         temps = getattr(data, "temps", None)
+        power = getattr(data, "power", None)
+        util = getattr(data, "utilization", None)
         progress = getattr(data, "progress", None)
         if temps is not None:
             mapping["temps"] = json.dumps(temps)
+        if power is not None:
+            mapping["power"] = json.dumps(power)
+        if util is not None:
+            mapping["utilization"] = json.dumps(util)
         if progress is not None:
             mapping["progress"] = json.dumps(progress)
         r.hset(f"worker:{name}", mapping=mapping)
