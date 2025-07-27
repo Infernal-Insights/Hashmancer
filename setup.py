@@ -4,6 +4,7 @@ import subprocess
 import socket
 import os
 from pathlib import Path
+import requests
 from ascii_logo import print_logo
 
 CONFIG_DIR = Path.home() / ".hashmancer"
@@ -51,10 +52,32 @@ def run_worker_upgrade():
     worker_install_deps()
 
 
+def download_prebuilt_engine() -> None:
+    """Download a precompiled darkling-engine if DARKLING_ENGINE_URL is set."""
+    url = os.getenv("DARKLING_ENGINE_URL")
+    if not url:
+        return
+
+    dest_dir = CONFIG_DIR / "bin"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / "darkling-engine"
+
+    try:
+        print("\U0001F53D Downloading prebuilt darkling-engine...")
+        resp = requests.get(url, timeout=20)
+        resp.raise_for_status()
+        dest.write_bytes(resp.content)
+        dest.chmod(0o755)
+        print(f"Downloaded darkling-engine to {dest}")
+    except Exception as e:
+        print(f"⚠️  Failed to download prebuilt engine: {e}")
+
+
 def worker_install_deps():
     print("📦 Installing worker dependencies...")
     subprocess.run(["pip3", "install", "-r", "Worker/requirements.txt"], check=False)
     subprocess.run(["sudo", "apt", "install", "-y", "redis-server", "hashcat"], check=False)
+    download_prebuilt_engine()
 
 
 def worker_configure(server_url: str):
@@ -69,6 +92,7 @@ def worker_configure(server_url: str):
 def configure_worker_systemd() -> None:
     python_path = subprocess.getoutput("which python3")
     working_dir = os.path.abspath("Worker")
+    bin_path = CONFIG_DIR / "bin"
     service = f"""[Unit]
 Description=Hashmancer Worker
 After=network.target
@@ -78,6 +102,7 @@ ExecStart={python_path} -m hashmancer_worker.worker_agent
 WorkingDirectory={working_dir}
 Restart=always
 Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:{bin_path}
 User={os.getenv('USER')}
 Group={os.getenv('USER')}
 
