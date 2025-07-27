@@ -2,6 +2,8 @@
 #define INTEL_CRACKER_H
 
 #include "gpu_backend.h"
+#include <vector>
+#include <chrono>
 
 namespace darkling {
 
@@ -18,6 +20,9 @@ public:
 
 private:
     MaskJob job_{};
+    std::vector<CrackResult> results_{};
+    std::chrono::high_resolution_clock::time_point start_time_{};
+    std::chrono::high_resolution_clock::time_point end_time_{};
 };
 
 } // namespace darkling
