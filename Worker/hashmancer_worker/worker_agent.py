@@ -237,18 +237,8 @@ def detect_gpus() -> list[dict]:
     except Exception:
         pass
 
-    # fallback single fake gpu so worker still runs
-    return [
-        {
-            "index": 0,
-            "uuid": str(uuid.uuid4()),
-            "model": "CPU",  # placeholder
-            "pci_bus": "0000:00:00.0",
-            "pci_width": 16,
-            "memory_mb": 0,
-            "pci_link_width": 0,
-        }
-    ]
+    logging.error("No GPUs detected. Ensure drivers are installed and accessible")
+    return []
 
 
 def get_gpu_temps() -> list[int]:
