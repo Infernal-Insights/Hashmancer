@@ -25,6 +25,8 @@ class WorkerStatusRequest(BaseModel):
     timestamp: int
     signature: str
     temps: list[int] | None = None
+    power: list[float] | None = None
+    utilization: list[int] | None = None
     progress: dict | None = None
 
 class SubmitHashrateRequest(BaseModel):

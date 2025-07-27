@@ -181,6 +181,8 @@ def test_benchmark_low_bw_gpu(monkeypatch):
     monkeypatch.setattr(worker_agent, "GPUFlashManager", DummyFlash)
 
     monkeypatch.setattr(worker_agent, "get_gpu_temps", lambda: [])
+    monkeypatch.setattr(worker_agent, "get_gpu_power", lambda: [])
+    monkeypatch.setattr(worker_agent, "get_gpu_utilization", lambda: [])
 
     def stop(_):
         raise KeyboardInterrupt()
@@ -267,6 +269,8 @@ def test_prob_order_from_server(monkeypatch):
     monkeypatch.setattr(worker_agent, "GPUFlashManager", DummyFlash)
 
     monkeypatch.setattr(worker_agent, "get_gpu_temps", lambda: [])
+    monkeypatch.setattr(worker_agent, "get_gpu_power", lambda: [])
+    monkeypatch.setattr(worker_agent, "get_gpu_utilization", lambda: [])
 
     def stop(_):
         raise KeyboardInterrupt()

@@ -32,12 +32,23 @@ def test_get_worker_stats(monkeypatch):
     monkeypatch.setitem(main.CONFIG, "watchdog_token", "tok")
     monkeypatch.setattr(main, "WATCHDOG_TOKEN", "tok")
 
-    fake.hset("worker:alpha", mapping={"status": "idle", "hashrate": "5.0", "temps": "[70]"})
+    fake.hset(
+        "worker:alpha",
+        mapping={
+            "status": "idle",
+            "hashrate": "5.0",
+            "temps": "[70]",
+            "power": "[120.5]",
+            "utilization": "[80]",
+        },
+    )
 
     data = asyncio.run(main.get_worker_stats("alpha", token="tok"))
     assert data["status"] == "idle"
     assert data["hashrate"] == 5.0
     assert data["temps"] == [70]
+    assert data["power"] == [120.5]
+    assert data["utilization"] == [80]
 
     with pytest.raises(main.HTTPException):
         asyncio.run(main.get_worker_stats("alpha", token="bad"))

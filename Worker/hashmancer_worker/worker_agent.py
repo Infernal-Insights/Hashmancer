@@ -5,6 +5,7 @@ import time
 import uuid
 import redis
 import logging
+import shutil
 
 try:
     from redis.exceptions import RedisError
@@ -146,9 +147,64 @@ def detect_gpus() -> list[dict]:
             elif line.startswith("GPU") and "PCI Bus" in line:
                 current["pci_bus"] = line.split()[-1]
             elif line.startswith("GPU") and "VRAM Total" in line:
-                current["memory_mb"] = int(line.split()[-2])
+                try:
+                    current["memory_mb"] = int(line.split()[-2])
+                except Exception:
+                    pass
         if current:
             gpus.append(current)
+        if gpus:
+            return gpus
+    except Exception:
+        pass
+
+    # Generic detection via sysfs for AMD/Intel
+    try:
+        gpus = []
+        cards = sorted(glob.glob("/sys/class/drm/card[0-9]*"))
+        for idx, card in enumerate(cards):
+            device_path = os.path.join(card, "device")
+            bus = os.path.basename(os.path.realpath(device_path))
+            model = "GPU"
+            if shutil.which("lspci"):
+                try:
+                    out = subprocess.check_output(["lspci", "-s", bus], text=True)
+                    model = out.split(":", 2)[-1].strip()
+                except Exception:
+                    model = "GPU"
+
+            mem_mb = 0
+            for name in ("mem_info_vram_total", "mem_info_total", "local_memory_bytes"):
+                path = os.path.join(device_path, name)
+                if os.path.isfile(path):
+                    try:
+                        with open(path) as f:
+                            val = int(f.read().strip())
+                        mem_mb = val // (1024 * 1024)
+                        break
+                    except Exception:
+                        pass
+
+            width = 0
+            width_path = os.path.join(device_path, "current_link_width")
+            if os.path.isfile(width_path):
+                try:
+                    with open(width_path) as f:
+                        width = int(f.read().strip())
+                except Exception:
+                    pass
+
+            gpus.append(
+                {
+                    "index": idx,
+                    "uuid": bus,
+                    "model": model,
+                    "pci_bus": bus,
+                    "pci_width": width or 16,
+                    "memory_mb": mem_mb,
+                    "pci_link_width": width,
+                }
+            )
         if gpus:
             return gpus
     except Exception:
@@ -216,6 +272,69 @@ def get_gpu_temps() -> list[int]:
         except Exception:
             continue
     return temps
+
+
+def get_gpu_power() -> list[float]:
+    """Return GPU power draw in watts if available."""
+    try:
+        output = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=power.draw",
+                "--format=csv,noheader",
+            ],
+            text=True,
+        )
+        return [float(p.split()[0]) for p in output.strip().splitlines()]
+    except Exception:
+        pass
+
+    power = []
+    for path in glob.glob(
+        "/sys/class/drm/card*/device/hwmon/hwmon*/power*_average"
+    ):
+        try:
+            with open(path) as f:
+                val = int(f.read().strip())
+                power.append(val / 1_000_000)
+        except Exception:
+            continue
+    if not power:
+        for path in glob.glob(
+            "/sys/class/drm/card*/device/hwmon/hwmon*/power*_input"
+        ):
+            try:
+                with open(path) as f:
+                    val = int(f.read().strip())
+                    power.append(val / 1_000_000)
+            except Exception:
+                continue
+    return power
+
+
+def get_gpu_utilization() -> list[int]:
+    """Return GPU utilization percentage if available."""
+    try:
+        output = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=utilization.gpu",
+                "--format=csv,noheader",
+            ],
+            text=True,
+        )
+        return [int(u.split()[0]) for u in output.strip().splitlines()]
+    except Exception:
+        pass
+
+    util = []
+    for path in glob.glob("/sys/class/drm/card*/device/gpu_busy_percent"):
+        try:
+            with open(path) as f:
+                util.append(int(f.read().strip()))
+        except Exception:
+            continue
+    return util
 
 
 def register_worker(worker_id: str, gpus: list[dict]):
@@ -372,6 +491,8 @@ def main(argv: list[str] | None = None):
     try:
         while True:
             temps = get_gpu_temps()
+            power = get_gpu_power()
+            utilization = get_gpu_utilization()
             progress = {t.gpu.get("uuid"): t.progress for t in threads if t.current_job}
             try:
                 ts = int(time.time())
@@ -381,6 +502,8 @@ def main(argv: list[str] | None = None):
                         "name": name,
                         "status": "online",
                         "temps": temps,
+                        "power": power,
+                        "utilization": utilization,
                         "progress": progress,
                         "timestamp": ts,
                         "signature": sign_message(name, ts),
