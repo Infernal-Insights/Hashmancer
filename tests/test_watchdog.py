@@ -13,7 +13,7 @@ from tests.test_helpers import (
 
 install_stubs()
 
-import main
+import Server.main as main
 
 class FakeRedis:
     def __init__(self):

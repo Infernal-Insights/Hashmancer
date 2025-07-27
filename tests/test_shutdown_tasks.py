@@ -16,7 +16,8 @@ from tests.test_helpers import (
 install_stubs()
 
 
-import main
+import Server.main as main
+sys.modules['main'] = main
 
 @pytest.mark.asyncio
 async def test_tasks_cancelled_on_shutdown(monkeypatch):

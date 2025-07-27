@@ -18,7 +18,7 @@ install_stubs()
 
 
 
-import main
+import Server.main as main
 
 class FakeUploadFile:
     def __init__(self, name, data):

@@ -17,7 +17,7 @@ from tests.test_helpers import (
 install_stubs()
 
 
-import main
+import Server.main as main
 from utils import redis_manager
 
 class FakeRedis:

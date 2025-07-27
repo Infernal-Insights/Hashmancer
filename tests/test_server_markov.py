@@ -17,7 +17,7 @@ install_stubs()
 
 
 
-import main
+import Server.main as main
 
 class DummyRedis:
     def __init__(self):
