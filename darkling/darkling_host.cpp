@@ -104,6 +104,17 @@ struct DarklingContext {
         if(env && std::string(env)=="0") return;
         int device = 0;
         cudaGetDevice(&device);
+
+        const char* grid_env = std::getenv("DARKLING_GRID");
+        const char* block_env = std::getenv("DARKLING_BLOCK");
+        if(grid_env || block_env) {
+            if(grid_env) grid.x = std::atoi(grid_env);
+            if(block_env) block.x = std::atoi(block_env);
+            apply_power_limit(device);
+            tuned = true;
+            return;
+        }
+
         cudaDeviceProp prop{};
         cudaGetDeviceProperties(&prop, device);
 

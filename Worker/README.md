@@ -80,6 +80,22 @@ Two optional environment variables allow you to tweak how `hashcat` runs:
   when the darkling engine is used. This allows independent tuning of
   experimental kernels.
 
+Grid and block sizes for the darkling engine can also be set per GPU model in
+`~/.hashmancer/worker_config.json`.  Add a `darkling_tuning` object mapping
+model names to `grid` and `block` values.  The worker exports these as the
+`DARKLING_GRID` and `DARKLING_BLOCK` environment variables when launching
+`darkling-engine`.
+
+Example configuration:
+
+```json
+{
+  "darkling_tuning": {
+    "GeForce RTX 3060": {"grid": 256, "block": 256}
+  }
+}
+```
+
 Each detected GPU is assigned its own sidecar thread so multiple devices run in
 parallel.  Logging and watchdog tasks now execute in dedicated threads inside
 the sidecars to avoid blocking GPU kernels.
