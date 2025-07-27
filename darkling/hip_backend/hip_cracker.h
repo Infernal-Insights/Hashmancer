@@ -18,6 +18,7 @@ public:
 
 private:
     MaskJob job_{};
+    std::vector<CrackResult> results_;
 };
 
 } // namespace darkling
