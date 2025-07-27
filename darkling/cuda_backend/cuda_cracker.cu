@@ -128,6 +128,7 @@ void CudaCracker::allocate_buffers() {
 void CudaCracker::upload_batch(int start_hash, int batch_size) {
     cudaMemcpyToSymbol(d_pwd_len, &job_.mask_length, sizeof(int));
     cudaMemcpyToSymbol(d_hash_len, &job_.hash_length, sizeof(int));
+    cudaMemcpyToSymbol(d_hash_type, &job_.hash_type, sizeof(uint8_t));
     cudaMemcpyToSymbol(d_num_hashes, &batch_size, sizeof(int));
     cudaMemcpyToSymbol(d_pos_charset, pos_map_.data(), job_.mask_length);
 

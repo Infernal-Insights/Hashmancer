@@ -13,6 +13,7 @@ __constant__ uint8_t d_hashes[MAX_HASHES][20];   // supports up to SHA1
 __constant__ int d_num_hashes;
 __constant__ int d_hash_len;  // digest length (16 for MD5, 20 for SHA1)
 __constant__ int d_pwd_len;
+__constant__ uint8_t d_hash_type;  // 1=MD5,2=SHA1,3=NTLM
 
 __device__ inline uint32_t rotl32(uint32_t x, uint32_t n) {
     return (x << n) | (x >> (32 - n));
@@ -108,9 +109,58 @@ __device__ void sha1(const char *msg, int len, uint8_t out[20]) {
     }
 }
 
+// simple MD4 used for NTLM (expects UTF-16LE input)
+__device__ void md4(const uint8_t *msg, int len, uint8_t out[16]) {
+    uint32_t a=0x67452301, b=0xefcdab89, c=0x98badcfe, d=0x10325476;
+    uint8_t buffer[64];
+    for(int i=0;i<64;i++) buffer[i]=0;
+    for(int i=0;i<len;i++) buffer[i]=msg[i];
+    buffer[len]=0x80;
+    uint64_t bits=(uint64_t)len*8;
+    for(int i=0;i<8;i++) buffer[56+i]=(bits>>(8*i))&0xff;
+    uint32_t w[16];
+    for(int i=0;i<16;i++)
+        w[i]=((uint32_t)buffer[i*4])|((uint32_t)buffer[i*4+1]<<8)|((uint32_t)buffer[i*4+2]<<16)|((uint32_t)buffer[i*4+3]<<24);
+#define F(x,y,z) ((x & y) | (~x & z))
+#define G(x,y,z) ((x & y) | (x & z) | (y & z))
+#define H(x,y,z) (x ^ y ^ z)
+#define ROUND(a,b,c,d,k,s,func,add) a = rotl32(a + func(b,c,d) + w[k] + add, s)
+    ROUND(a,b,c,d,0,3,F,0);  ROUND(d,a,b,c,1,7,F,0);  ROUND(c,d,a,b,2,11,F,0); ROUND(b,c,d,a,3,19,F,0);
+    ROUND(a,b,c,d,4,3,F,0);  ROUND(d,a,b,c,5,7,F,0);  ROUND(c,d,a,b,6,11,F,0); ROUND(b,c,d,a,7,19,F,0);
+    ROUND(a,b,c,d,8,3,F,0);  ROUND(d,a,b,c,9,7,F,0);  ROUND(c,d,a,b,10,11,F,0); ROUND(b,c,d,a,11,19,F,0);
+    ROUND(a,b,c,d,12,3,F,0); ROUND(d,a,b,c,13,7,F,0); ROUND(c,d,a,b,14,11,F,0); ROUND(b,c,d,a,15,19,F,0);
+    ROUND(a,b,c,d,0,3,G,0x5a827999);  ROUND(d,a,b,c,4,5,G,0x5a827999);  ROUND(c,d,a,b,8,9,G,0x5a827999);  ROUND(b,c,d,a,12,13,G,0x5a827999);
+    ROUND(a,b,c,d,1,3,G,0x5a827999);  ROUND(d,a,b,c,5,5,G,0x5a827999);  ROUND(c,d,a,b,9,9,G,0x5a827999);  ROUND(b,c,d,a,13,13,G,0x5a827999);
+    ROUND(a,b,c,d,2,3,G,0x5a827999);  ROUND(d,a,b,c,6,5,G,0x5a827999);  ROUND(c,d,a,b,10,9,G,0x5a827999); ROUND(b,c,d,a,14,13,G,0x5a827999);
+    ROUND(a,b,c,d,3,3,G,0x5a827999);  ROUND(d,a,b,c,7,5,G,0x5a827999);  ROUND(c,d,a,b,11,9,G,0x5a827999); ROUND(b,c,d,a,15,13,G,0x5a827999);
+    ROUND(a,b,c,d,0,3,H,0x6ed9eba1); ROUND(d,a,b,c,8,9,H,0x6ed9eba1); ROUND(c,d,a,b,4,11,H,0x6ed9eba1); ROUND(b,c,d,a,12,15,H,0x6ed9eba1);
+    ROUND(a,b,c,d,2,3,H,0x6ed9eba1); ROUND(d,a,b,c,10,9,H,0x6ed9eba1); ROUND(c,d,a,b,6,11,H,0x6ed9eba1); ROUND(b,c,d,a,14,15,H,0x6ed9eba1);
+    ROUND(a,b,c,d,1,3,H,0x6ed9eba1); ROUND(d,a,b,c,9,9,H,0x6ed9eba1); ROUND(c,d,a,b,5,11,H,0x6ed9eba1); ROUND(b,c,d,a,13,15,H,0x6ed9eba1);
+    ROUND(a,b,c,d,3,3,H,0x6ed9eba1); ROUND(d,a,b,c,11,9,H,0x6ed9eba1); ROUND(c,d,a,b,7,11,H,0x6ed9eba1); ROUND(b,c,d,a,15,15,H,0x6ed9eba1);
+#undef ROUND
+#undef H
+#undef G
+#undef F
+    a+=0x67452301; b+=0xefcdab89; c+=0x98badcfe; d+=0x10325476;
+    uint32_t hv[4]={a,b,c,d};
+    for(int i=0;i<4;i++){ out[i*4]=hv[i]&0xff; out[i*4+1]=(hv[i]>>8)&0xff; out[i*4+2]=(hv[i]>>16)&0xff; out[i*4+3]=(hv[i]>>24)&0xff; }
+}
+
 __device__ void compute_hash(const char *pwd, int len, uint8_t *out) {
-    if (d_hash_len == 16) md5(pwd, len, out);
-    else sha1(pwd, len, out);
+    uint8_t type = d_hash_type;
+    if(type==0){
+        if(d_hash_len==20) type=2; else type=1;
+    }
+    if(type==3){
+        uint8_t buf[MAX_PWD_BYTES*2];
+        int ulen=0;
+        for(int i=0;i<len;i++){ buf[ulen++]=(uint8_t)pwd[i]; buf[ulen++]=0; }
+        md4(buf, ulen, out);
+    } else if(type==2){
+        sha1(pwd, len, out);
+    } else {
+        md5(pwd, len, out);
+    }
 }
 
 __device__ bool check_hash(const uint8_t *digest) {
