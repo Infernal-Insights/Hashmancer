@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7
+    volumes:
+      - redis-data:/data
+
+  server:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+
+  worker:
+    image: hashmancer-worker:latest
+    volumes:
+      - ~/.hashmancer:/root/.hashmancer
+    depends_on:
+      - redis
+      - server
+
+volumes:
+  redis-data:
