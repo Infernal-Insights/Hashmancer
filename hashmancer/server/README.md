@@ -117,6 +117,28 @@ docker run -p 8000:8000 hashmancer
 
 ---
 
+## ☁️ Cloud Deployments
+
+Provision a new VM using the sample `deploy/cloud-init/hashmancer.yaml` file. It
+updates the system, installs Hashmancer via `pip`, and then runs the interactive
+setup script so the service is ready immediately.
+
+```yaml
+#cloud-config
+package_update: true
+packages:
+  - python3-pip
+runcmd:
+  - pip3 install --upgrade pip
+  - pip3 install hashmancer
+  - python3 -m hashmancer.server.setup
+```
+
+Pass this file to your cloud provider when creating the instance to have
+`cloud-init` configure the server automatically.
+
+---
+
 ## 📊 Glyph Dashboard
 
 `main.py` now includes a tiny dashboard called **Glyph** that you can view from
