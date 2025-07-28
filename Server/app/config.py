@@ -106,3 +106,8 @@ LLM_MODEL_PATH = CONFIG.get("llm_model_path", "")
 LLM_TRAIN_EPOCHS = int(CONFIG.get("llm_train_epochs", 1))
 LLM_TRAIN_LEARNING_RATE = float(CONFIG.get("llm_train_learning_rate", 0.0001))
 
+# thresholds for worker monitoring
+TEMP_THRESHOLD = int(CONFIG.get("temp_threshold", 90))
+POWER_THRESHOLD = float(CONFIG.get("power_threshold", 250.0))
+CRASH_THRESHOLD = int(CONFIG.get("crash_threshold", 3))
+

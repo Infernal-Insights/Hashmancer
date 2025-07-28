@@ -386,6 +386,24 @@ Specify a list of origins permitted for CORS requests by adding
 
 If omitted, all origins are accepted.
 
+### Worker monitoring and logs
+
+`/worker_status` automatically checks GPU temperatures, power usage and
+per-GPU crash counts against configurable thresholds. Add the fields below to
+`~/.hashmancer/server_config.json` to customize the limits:
+
+```json
+{
+  "temp_threshold": 90,
+  "power_threshold": 250,
+  "crash_threshold": 3
+}
+```
+
+When a value exceeds its threshold an error entry is written to Redis. Recent
+records can be viewed with `/logs` and you can filter by worker using the
+`worker` query parameter.
+
 ### Trusted worker keys
 
 Restrict worker registration to known public keys by listing SHA-256 fingerprints
