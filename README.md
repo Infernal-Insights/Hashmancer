@@ -40,6 +40,15 @@ skip auto-discovery. After setup, run `python3 setup.py --upgrade` to pull the
 latest version and update dependencies. Both components generate their RSA
 signing keys automatically the first time they run if no key files are present.
 
+You can also use the helper script `scripts/install_all.sh` for a non-
+interactive install:
+
+```bash
+./scripts/install_all.sh --server --worker
+```
+The script prints commands for starting the services once installation
+finishes.
+
 Workers can enable probabilistic candidate ordering using `--probabilistic-order`.
 Use `--inverse-prob-order` to iterate from least likely candidates first. The
 server portal exposes matching checkboxes under the Markov Training section.
