@@ -187,3 +187,114 @@ def test_dispatch_skips_cracked(monkeypatch):
     job = fake.jobs[f"job:{mapping['job_id']}"]
     assert json.loads(job["hashes"]) == ["h2"]
 
+
+class DRBase(FakeRedis):
+    """Base redis stub for dispatch batch tests."""
+
+    def __init__(self):
+        super().__init__()
+        self.queue = []
+        self.store = {}
+        self.jobs = {}
+        self.streams = []
+
+    def rpop(self, name):
+        return self.queue.pop(0) if self.queue else None
+
+    def hgetall(self, key):
+        return self.store.get(key, {})
+
+    def hset(self, key, mapping=None, **kw):
+        self.jobs[key] = dict(mapping or kw)
+
+    def expire(self, key, ttl):
+        pass
+
+    def xadd(self, stream, mapping):
+        self.streams.append((stream, mapping))
+
+    def scan_iter(self, pattern):
+        return []
+
+
+def setup_common(monkeypatch, fake):
+    monkeypatch.setattr(orchestrator_agent, "r", fake)
+    monkeypatch.setattr(redis_manager, "r", fake)
+    monkeypatch.setattr(orchestrator_agent, "_LLM", None)
+    monkeypatch.setattr(orchestrator_agent, "average_benchmark_rate", lambda: 0.0)
+    monkeypatch.setattr(orchestrator_agent, "estimate_keyspace", lambda m, c: 0)
+    monkeypatch.setattr(orchestrator_agent, "compute_batch_range", lambda r, k: (0, 100))
+
+
+def test_dispatch_no_batches(monkeypatch):
+    fake = DRBase()
+    setup_common(monkeypatch, fake)
+    monkeypatch.setattr(orchestrator_agent, "compute_backlog_target", lambda: 1)
+    monkeypatch.setattr(orchestrator_agent, "pending_count", lambda *a, **k: 0)
+    monkeypatch.setattr(orchestrator_agent, "any_darkling_workers", lambda: False)
+
+    orchestrator_agent.dispatch_batches()
+
+    assert not fake.streams
+
+
+def test_dispatch_high_backlog(monkeypatch):
+    fake = DRBase()
+    fake.queue.append("1")
+    fake.store["batch:1"] = {"hashes": json.dumps(["h"]), "mask": "?d"}
+    setup_common(monkeypatch, fake)
+
+    monkeypatch.setattr(orchestrator_agent, "compute_backlog_target", lambda: 1)
+
+    def fake_pending(stream=orchestrator_agent.JOB_STREAM, group=None):
+        return 1 if stream == orchestrator_agent.JOB_STREAM else 0
+
+    monkeypatch.setattr(orchestrator_agent, "pending_count", fake_pending)
+    monkeypatch.setattr(orchestrator_agent, "any_darkling_workers", lambda: False)
+
+    orchestrator_agent.dispatch_batches()
+
+    assert not fake.streams
+
+
+def test_dispatch_high_only(monkeypatch):
+    fake = DRBase()
+    fake.queue.append("1")
+    fake.store["batch:1"] = {"hashes": json.dumps(["h"]), "mask": "?d"}
+    setup_common(monkeypatch, fake)
+
+    monkeypatch.setattr(orchestrator_agent, "compute_backlog_target", lambda: 1)
+
+    def fake_pending(stream=orchestrator_agent.JOB_STREAM, group=None):
+        if stream == orchestrator_agent.JOB_STREAM:
+            return 0
+        return 2
+
+    monkeypatch.setattr(orchestrator_agent, "pending_count", fake_pending)
+    monkeypatch.setattr(orchestrator_agent, "any_darkling_workers", lambda: True)
+
+    orchestrator_agent.dispatch_batches()
+
+    assert fake.streams
+    stream, _ = fake.streams[0]
+    assert stream == orchestrator_agent.JOB_STREAM
+
+
+def test_dispatch_priority_first(monkeypatch):
+    fake = DRBase()
+    fake.queue.append("2")
+    fake.store["batch:1"] = {"hashes": json.dumps(["p"]), "mask": "?d"}
+    fake.store["batch:2"] = {"hashes": json.dumps(["f"]), "mask": "?d"}
+    fake.prio["1"] = 10
+    setup_common(monkeypatch, fake)
+
+    monkeypatch.setattr(orchestrator_agent, "compute_backlog_target", lambda: 2)
+    monkeypatch.setattr(orchestrator_agent, "pending_count", lambda *a, **k: 0)
+    monkeypatch.setattr(orchestrator_agent, "any_darkling_workers", lambda: False)
+
+    orchestrator_agent.dispatch_batches()
+
+    ids = [fake.jobs[f"job:{m['job_id']}"]["batch_id"] for _, m in fake.streams]
+    assert ids[0] == "1"
+    assert "2" in ids
+
