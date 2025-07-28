@@ -18,7 +18,7 @@ install_stubs()
 
 
 
-import Server.main as main
+import hashmancer.server.main as main
 
 class FakeUploadFile:
     def __init__(self, name, data):

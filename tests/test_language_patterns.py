@@ -3,9 +3,9 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 
-from Server import learn_trends
-from darkling import statistics
-from Server import pattern_to_mask
+from hashmancer.server import learn_trends
+from hashmancer.darkling import statistics
+from hashmancer.server import pattern_to_mask
 
 
 class FakeRedis:

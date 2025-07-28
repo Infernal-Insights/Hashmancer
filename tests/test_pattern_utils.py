@@ -4,7 +4,7 @@ import pytest
 
 # Allow importing the Server package from the repository root
 
-from Server.pattern_utils import word_to_pattern, is_valid_pattern, is_valid_word
+from hashmancer.server.pattern_utils import word_to_pattern, is_valid_pattern, is_valid_word
 
 
 def test_word_to_pattern():

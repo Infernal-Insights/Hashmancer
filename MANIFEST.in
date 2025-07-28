@@ -1,0 +1,2 @@
+recursive-include hashmancer/server *.html *.json
+recursive-include hashmancer/server/app *

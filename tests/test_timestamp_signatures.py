@@ -3,7 +3,7 @@ import types
 import sys
 
 
-import auth_utils
+import hashmancer.server.auth_utils as auth_utils
 
 
 def _setup(monkeypatch, current_time):

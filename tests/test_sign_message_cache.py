@@ -45,7 +45,7 @@ def _run_test(module_name: str, tmp_path: Path, monkeypatch, env_var: str | None
 
 def test_worker_sign_message_load_once(monkeypatch, tmp_path):
     _run_test(
-        "Worker.hashmancer_worker.crypto_utils",
+        "hashmancer.worker.hashmancer_worker.crypto_utils",
         tmp_path,
         monkeypatch,
         env_var="PRIVATE_KEY_PATH",

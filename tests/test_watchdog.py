@@ -13,7 +13,7 @@ from tests.test_helpers import (
 
 install_stubs()
 
-import Server.main as main
+import hashmancer.server.main as main
 
 class FakeRedis:
     def __init__(self):
@@ -105,7 +105,7 @@ def test_get_worker_command(monkeypatch):
 
 
 def test_watchdog_marks_offline(monkeypatch):
-    from Server.app.background import watchdog
+    from hashmancer.server.app.background import watchdog
 
     class WRedis(FakeRedis):
         def scan_iter(self, pattern):

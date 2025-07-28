@@ -17,7 +17,7 @@ install_stubs()
 
 # Add repo paths
 
-from Server.app.background.dispatch import dispatch_loop
+from hashmancer.server.app.background.dispatch import dispatch_loop
 import orchestrator_agent
 from utils import redis_manager
 

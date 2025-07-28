@@ -18,7 +18,7 @@ install_stubs()
 
 
 
-import Server.main as main
+import hashmancer.server.main as main
 from utils import redis_manager
 from uuid import UUID
 

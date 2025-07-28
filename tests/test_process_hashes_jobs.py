@@ -19,8 +19,8 @@ install_stubs()
 
 
 
-from Server.app.background.hashes_jobs import process_hashes_jobs
-import Server.main as main
+from hashmancer.server.app.background.hashes_jobs import process_hashes_jobs
+import hashmancer.server.main as main
 sys.modules['main'] = main
 from utils import redis_manager
 from uuid import UUID

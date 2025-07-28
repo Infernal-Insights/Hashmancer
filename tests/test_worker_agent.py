@@ -2,7 +2,7 @@ import sys
 import os
 
 
-from Worker.hashmancer_worker import worker_agent
+from hashmancer.worker.hashmancer_worker import worker_agent
 
 
 class DummyResp:

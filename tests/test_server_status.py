@@ -26,7 +26,7 @@ psutil_stub.getloadavg = lambda: (1.0, 0.5, 0.25)
 sys.modules.setdefault("psutil", psutil_stub)
 
 
-import Server.main as main
+import hashmancer.server.main as main
 
 class DummyRedis:
     def scard(self, key):

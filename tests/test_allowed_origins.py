@@ -38,7 +38,7 @@ def test_allowed_origins_applied(monkeypatch, tmp_path):
     cfg.write_text(json.dumps({"allowed_origins": ["https://foo"]}))
     monkeypatch.setenv('HOME', str(tmp_path))
 
-    from Server.app import config, app
+    from hashmancer.server.app import config, app
     import importlib
     importlib.reload(config)
     importlib.reload(app)

@@ -1,7 +1,7 @@
 import sys
 import os
 
-from Worker.hashmancer_worker import flash_tuner
+from hashmancer.worker.hashmancer_worker import flash_tuner
 
 
 def test_tune_power_limit(monkeypatch):

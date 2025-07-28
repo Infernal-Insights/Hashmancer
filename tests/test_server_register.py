@@ -16,7 +16,7 @@ from tests.test_helpers import (
 install_stubs()
 
 
-import Server.main as main
+import hashmancer.server.main as main
 
 class FakeRedis:
     def __init__(self):

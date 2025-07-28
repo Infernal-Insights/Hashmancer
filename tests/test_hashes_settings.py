@@ -16,9 +16,9 @@ from tests.test_helpers import (
 install_stubs()
 
 
-import Server.main as main
+import hashmancer.server.main as main
 sys.modules['main'] = main
-from Server.app.background import hashes_jobs
+from hashmancer.server.app.background import hashes_jobs
 
 
 @pytest.mark.asyncio

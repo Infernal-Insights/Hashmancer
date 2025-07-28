@@ -4,7 +4,7 @@ import unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 
-from darkling import charsets
+from hashmancer.darkling import charsets
 
 
 def test_common_symbols_length():

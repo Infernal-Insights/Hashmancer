@@ -19,8 +19,8 @@ install_stubs()
 
 
 
-from Server.app import app as app_mod
-import Server.main as main
+from hashmancer.server.app import app as app_mod
+import hashmancer.server.main as main
 
 
 class FakeRedis:

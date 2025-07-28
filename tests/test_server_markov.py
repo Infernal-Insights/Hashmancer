@@ -17,7 +17,7 @@ install_stubs()
 
 
 
-import Server.main as main
+import hashmancer.server.main as main
 
 class DummyRedis:
     def __init__(self):

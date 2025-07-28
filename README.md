@@ -30,8 +30,8 @@ the terms interchangeably which led to confusion. The worker now stores results
 under the batch ID and only uses the job ID to acknowledge the stream entry.
 
 
-* `Server/` – FastAPI server and orchestration tools
-* `Worker/` – HTTP-based worker with GPU sidecar threads
+* `hashmancer/server` – FastAPI server and orchestration tools
+* `hashmancer/worker` – HTTP-based worker with GPU sidecar threads
 
 Run `python3 setup.py` from the repository root to configure either a server or
 worker.  Use `--server` or `--worker` flags to skip the prompt.  A worker can
@@ -88,13 +88,22 @@ Additional workers can be launched using the scale flag:
 docker compose up --scale worker=3
 ```
 
+## Packaging
+
+Build and install the wheel using `python -m build` then install from `dist`:
+
+```bash
+python -m build
+pip install dist/hashmancer-<version>-py3-none-any.whl
+```
+
 ## Tests
 
 The unit tests cover both the server and worker components. Install their
 dependencies with:
 
 ```bash
-pip install -r Server/requirements.txt -r Worker/requirements.txt -r Server/requirements-dev.txt
+pip install -r hashmancer/server/requirements.txt -r hashmancer/worker/requirements.txt -r hashmancer/server/requirements-dev.txt
 ```
 
 You can also use the provided `requirements-dev.txt` which includes the
