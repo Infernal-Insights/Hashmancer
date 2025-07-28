@@ -20,7 +20,7 @@ import asyncio
 import glob
 import sys
 from Server.server_utils import redis_manager
-from utils.event_logger import log_error, log_info
+from utils.event_logger import log_error, log_info, log_watchdog_event
 from app.background import (
     broadcast_presence,
     fetch_and_store_jobs,
@@ -114,6 +114,9 @@ from app.config import (
     LLM_MODEL_PATH,
     LLM_TRAIN_EPOCHS,
     LLM_TRAIN_LEARNING_RATE,
+    TEMP_THRESHOLD,
+    POWER_THRESHOLD,
+    CRASH_THRESHOLD,
     save_config,
     load_config,
 )
@@ -785,12 +788,50 @@ async def set_worker_status(data: WorkerStatusRequest):
         progress = getattr(data, "progress", None)
         if temps is not None:
             mapping["temps"] = json.dumps(temps)
+            try:
+                if any(int(t) >= TEMP_THRESHOLD for t in temps):
+                    log_error("worker", name, "H001", f"High temperature: {temps}")
+            except Exception:
+                pass
         if power is not None:
             mapping["power"] = json.dumps(power)
+            try:
+                if any(float(p) >= POWER_THRESHOLD for p in power):
+                    log_error("worker", name, "H002", f"High power draw: {power}")
+            except Exception:
+                pass
         if util is not None:
             mapping["utilization"] = json.dumps(util)
         if progress is not None:
             mapping["progress"] = json.dumps(progress)
+        try:
+            specs_raw = r.hget(f"worker:{name}", "specs")
+            gpus = []
+            if specs_raw:
+                info = json.loads(specs_raw)
+                gpus = info.get("hardware", {}).get("gpus", []) if isinstance(info.get("hardware"), dict) else []
+            for g in gpus:
+                crashes = int(r.hget(f"gpu:{g.get('uuid')}", "crashes") or 0)
+                if crashes >= CRASH_THRESHOLD:
+                    log_error(
+                        "worker",
+                        name,
+                        "H003",
+                        f"GPU {g.get('uuid')} crashes: {crashes}",
+                    )
+                    try:
+                        log_watchdog_event(
+                            {
+                                "worker_id": name,
+                                "type": "crash",
+                                "gpus": [g.get("uuid")],
+                                "notes": str(crashes),
+                            }
+                        )
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         r.hset(f"worker:{name}", mapping=mapping)
         return {"status": "ok"}
     except redis.exceptions.RedisError as e:
