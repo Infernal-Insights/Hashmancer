@@ -40,6 +40,7 @@ async def test_tasks_cancelled_on_shutdown(monkeypatch):
             asyncio.create_task(make_stub("poll")()),
             asyncio.create_task(make_stub("process")()),
             asyncio.create_task(make_stub("dispatch")()),
+            asyncio.create_task(make_stub("watchdog")()),
         ]
 
     monkeypatch.setattr(main, 'start_loops', fake_start_loops)
@@ -53,9 +54,9 @@ async def test_tasks_cancelled_on_shutdown(monkeypatch):
     await main.start_broadcast()
     await asyncio.sleep(0)
 
-    assert len(main.BACKGROUND_TASKS) - before == 4
+    assert len(main.BACKGROUND_TASKS) - before == 5
 
     await main.shutdown_event()
 
-    assert cancelled == {'bcast', 'poll', 'process', 'dispatch'}
+    assert cancelled == {'bcast', 'poll', 'process', 'dispatch', 'watchdog'}
     assert main.BACKGROUND_TASKS == []

@@ -563,7 +563,7 @@ def run_hashcat_benchmark(gpu: dict, engine: str = "hashcat") -> dict[str, float
         except Exception as e:
             log_error(
                 "sidecar",
-                self.worker_id,
+                gpu.get("uuid", ""),
                 "W005",
                 f"Benchmark failed for {gpu.get('uuid')} mode {mode}",
                 e,

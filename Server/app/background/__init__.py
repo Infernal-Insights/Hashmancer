@@ -8,6 +8,7 @@ from .broadcast import broadcast_presence
 from .hashes_jobs import poll_hashes_jobs, process_hashes_jobs
 from .hashes_jobs import fetch_and_store_jobs  # re-export for convenience
 from .dispatch import dispatch_loop
+from .watchdog import watchdog_loop
 
 __all__ = [
     "broadcast_presence",
@@ -15,6 +16,7 @@ __all__ = [
     "poll_hashes_jobs",
     "process_hashes_jobs",
     "dispatch_loop",
+    "watchdog_loop",
     "start_loops",
     "stop_loops",
 ]
@@ -34,6 +36,7 @@ def start_loops() -> List[asyncio.Task]:
     tasks.append(asyncio.create_task(poll_hashes_jobs()))
     tasks.append(asyncio.create_task(process_hashes_jobs()))
     tasks.append(asyncio.create_task(dispatch_loop()))
+    tasks.append(asyncio.create_task(watchdog_loop()))
     return tasks
 
 

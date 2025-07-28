@@ -102,3 +102,51 @@ def test_get_worker_command(monkeypatch):
     monkeypatch.setattr(main, "verify_signature", lambda *a: False)
     data = asyncio.run(main.get_worker_command("alpha", 0, "sig"))
     assert data["status"] == "unauthorized"
+
+
+def test_watchdog_marks_offline(monkeypatch):
+    from Server.app.background import watchdog
+
+    class WRedis(FakeRedis):
+        def scan_iter(self, pattern):
+            return [k for k in self.store if k.startswith("worker:")]
+
+        def hset(self, key, field=None, value=None, mapping=None, **kwargs):
+            if mapping is not None:
+                self.store.setdefault(key, {}).update(mapping)
+            elif field is not None:
+                self.store.setdefault(key, {})[field] = value
+            elif kwargs:
+                self.store.setdefault(key, {}).update(kwargs)
+
+    fake = WRedis()
+    fake.hset("worker:old", mapping={"last_seen": "0", "status": "idle"})
+    fake.hset("worker:new", mapping={"last_seen": "260", "status": "idle"})
+
+    events = []
+
+    monkeypatch.setattr(main, "r", fake)
+    import sys
+    sys.modules['main'] = main
+    monkeypatch.setattr(watchdog, "STATUS_INTERVAL", 10)
+    monkeypatch.setattr(watchdog, "log_watchdog_event", lambda p: events.append(p))
+    monkeypatch.setattr(watchdog, "log_error", lambda *a, **k: None)
+    monkeypatch.setattr(watchdog.time, "time", lambda: 300)
+
+    async def run_once():
+        async def fake_sleep(t):
+            raise StopAsyncIteration
+        orig = asyncio.sleep
+        try:
+            asyncio.sleep = fake_sleep
+            await watchdog.watchdog_loop()
+        except StopAsyncIteration:
+            pass
+        finally:
+            asyncio.sleep = orig
+
+    asyncio.run(run_once())
+
+    assert fake.store["worker:old"]["status"] == "offline"
+    assert fake.store["worker:new"]["status"] == "idle"
+    assert events and events[0]["worker_id"] == "old"
