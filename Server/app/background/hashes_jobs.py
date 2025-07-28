@@ -3,7 +3,7 @@ import json
 import os
 import redis
 
-from utils import redis_manager
+from Server.server_utils import redis_manager
 from utils.event_logger import log_error
 from app.config import (
     HASHES_SETTINGS,

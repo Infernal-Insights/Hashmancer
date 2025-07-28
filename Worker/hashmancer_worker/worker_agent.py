@@ -5,6 +5,7 @@ import time
 import uuid
 import redis
 import logging
+import utils.event_logger as event_logger
 import shutil
 
 try:
@@ -72,6 +73,7 @@ if str(REDIS_SSL).lower() in {"1", "true", "yes"}:
         redis_opts["ssl_keyfile"] = REDIS_SSL_KEY
 
 r = redis.Redis(**redis_opts)
+event_logger.r = r
 
 
 def _redis_write(func, *args, **kwargs):
@@ -237,7 +239,12 @@ def detect_gpus() -> list[dict]:
     except Exception:
         pass
 
-    logging.error("No GPUs detected. Ensure drivers are installed and accessible")
+    event_logger.log_error(
+        "worker",
+        "unassigned",
+        "W000",
+        "No GPUs detected. Ensure drivers are installed and accessible",
+    )
     return []
 
 
@@ -426,6 +433,7 @@ def main(argv: list[str] | None = None):
     if argv is None:
         argv = []
     logging.basicConfig(level=logging.INFO)
+    event_logger.r = r
     parser = argparse.ArgumentParser(description="Hashmancer worker agent")
     parser.add_argument(
         "--probabilistic-order",
@@ -496,9 +504,11 @@ def main(argv: list[str] | None = None):
         try:
             requests.post(f"{SERVER_URL}/submit_benchmark", json=payload, timeout=10)
         except Exception as e:
-            logging.warning(
-                "Failed to submit benchmark for %s: %s",
-                gpu.get("uuid"),
+            event_logger.log_error(
+                "worker",
+                name,
+                "W001",
+                f"Failed to submit benchmark for {gpu.get('uuid')}",
                 e,
             )
 
@@ -530,7 +540,7 @@ def main(argv: list[str] | None = None):
         t.start()
     flash_mgr = GPUFlashManager(name, SERVER_URL, gpus)
     flash_mgr.start()
-    logging.info("Worker %s started with %d GPUs", name, len(gpus))
+    event_logger.log_info("worker", name, f"Worker {name} started with {len(gpus)} GPUs")
     try:
         while True:
             temps = get_gpu_temps()
@@ -558,7 +568,7 @@ def main(argv: list[str] | None = None):
             check_worker_command(name)
             time.sleep(STATUS_INTERVAL)
     except KeyboardInterrupt:
-        logging.info("Stopping worker...")
+        event_logger.log_info("worker", name, "Stopping worker...")
         for t in threads:
             t.running = False
         flash_mgr.running = False

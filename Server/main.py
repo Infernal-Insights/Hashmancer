@@ -19,7 +19,7 @@ import uuid
 import asyncio
 import glob
 import sys
-from utils import redis_manager
+from Server.server_utils import redis_manager
 from utils.event_logger import log_error, log_info
 from app.background import (
     broadcast_presence,
