@@ -65,6 +65,12 @@ cd hashmancer-server
 python3 ../setup.py --server
 ```
 
+To configure a worker on the same machine in the same run use:
+
+```bash
+python3 ../setup.py --server --worker
+```
+
 Run `python3 ../setup.py --upgrade` later to pull updates and refresh
 dependencies.
 
@@ -86,13 +92,11 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ## 🔧 Systemd Service
 
-To install manually:
+`setup.py` automatically installs and starts the `hashmancer-server.service` for
+you. If you ever need to reinstall it manually run:
 
 ```bash
-sudo cp hashmancer-server.service /etc/systemd/system/
-sudo systemctl daemon-reexec
-sudo systemctl enable hashmancer-server
-sudo systemctl start hashmancer-server
+sudo systemctl enable --now hashmancer-server
 ```
 
 ---

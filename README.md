@@ -34,11 +34,11 @@ under the batch ID and only uses the job ID to acknowledge the stream entry.
 * `hashmancer/worker` – HTTP-based worker with GPU sidecar threads
 
 Run `python3 setup.py` from the repository root to configure either a server or
-worker.  Use `--server` or `--worker` flags to skip the prompt.  A worker can
-also supply `--server-ip` to skip auto-discovery. After setup, run
-`python3 setup.py --upgrade` to pull the latest version and update dependencies.
-Both components generate their RSA signing keys automatically the first time
-they run if no key files are present.
+worker.  Use `--server` or `--worker` flags to skip the prompt, or pass both to
+install the services in one step.  A worker can also supply `--server-ip` to
+skip auto-discovery. After setup, run `python3 setup.py --upgrade` to pull the
+latest version and update dependencies. Both components generate their RSA
+signing keys automatically the first time they run if no key files are present.
 
 Workers can enable probabilistic candidate ordering using `--probabilistic-order`.
 Use `--inverse-prob-order` to iterate from least likely candidates first. The

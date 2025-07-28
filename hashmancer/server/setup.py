@@ -81,8 +81,13 @@ WantedBy=multi-user.target
 
     subprocess.run(["sudo", "mv", "/tmp/hashmancer-server.service", SERVICE_FILE])
     subprocess.run(["sudo", "systemctl", "daemon-reexec"])
-    subprocess.run(["sudo", "systemctl", "enable", "hashmancer-server.service"])
-    subprocess.run(["sudo", "systemctl", "start", "hashmancer-server.service"])
+    subprocess.run([
+        "sudo",
+        "systemctl",
+        "enable",
+        "--now",
+        "hashmancer-server.service",
+    ])
     print("✅ Systemd service installed and started.")
 
 
