@@ -25,9 +25,10 @@ heartbeat interval can be customized with `STATUS_INTERVAL` (seconds).
 ## Setup
 
 Run `python3 ../setup.py --worker` from the repository root to install
-dependencies and configure the worker. This command now also installs and
-starts a `hashmancer-worker` systemd service so the worker launches
-automatically on boot. Passing `--server-ip` skips broadcast discovery.
+dependencies and configure the worker. This command installs and starts a
+`hashmancer-worker` systemd service so the worker launches automatically on
+boot. You can combine `--server --worker` to set up both components at once.
+Passing `--server-ip` skips broadcast discovery.
 Use `python3 ../setup.py --upgrade` anytime to pull the latest code and
 update dependencies. If `DARKLING_ENGINE_URL` is set the setup script will
 fetch a prebuilt `darkling-engine` binary from the provided URL. Set

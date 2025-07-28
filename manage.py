@@ -127,8 +127,13 @@ WantedBy=multi-user.target
 
     subprocess.run(["sudo", "mv", "/tmp/hashmancer-worker.service", WORKER_SERVICE_FILE])
     subprocess.run(["sudo", "systemctl", "daemon-reexec"])
-    subprocess.run(["sudo", "systemctl", "enable", "hashmancer-worker.service"])
-    subprocess.run(["sudo", "systemctl", "start", "hashmancer-worker.service"])
+    subprocess.run([
+        "sudo",
+        "systemctl",
+        "enable",
+        "--now",
+        "hashmancer-worker.service",
+    ])
     print("✅ Worker systemd service installed and started.")
 
 
@@ -187,7 +192,19 @@ def main():
         else:
             args.worker = True
 
-    if args.server:
+    if args.server and args.worker:
+        run_server_setup()
+        try:
+            with open(CONFIG_DIR / "server_config.json") as f:
+                conf = json.load(f)
+            url = conf.get("server_url", "http://127.0.0.1")
+            port = conf.get("server_port", "8000")
+            server_url = url if url.startswith("http") else f"http://{url}"
+            server_url = f"{server_url.rstrip('/')}:{port}"
+        except Exception:
+            server_url = None
+        run_worker_setup(server_url)
+    elif args.server:
         run_server_setup()
     else:
         run_worker_setup(args.server_ip)
