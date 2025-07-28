@@ -73,6 +73,21 @@ access, restrict the port to their IPs with firewall rules (`iptables` or
 `ufw`). It's best to place Redis behind a VPN or require TLS with client
 certificates when exposing it over the internet.
 
+## Docker Compose
+
+The repository includes a `docker-compose.yml` for running Redis, the server
+and a worker. Start everything with one command:
+
+```bash
+docker compose up --build
+```
+
+Additional workers can be launched using the scale flag:
+
+```bash
+docker compose up --scale worker=3
+```
+
 ## Tests
 
 The unit tests cover both the server and worker components. Install their
