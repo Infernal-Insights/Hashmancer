@@ -10,6 +10,7 @@ Both NVIDIA, AMD, and Intel GPUs are supported.
 
 - `hashmancer_worker/worker_agent.py` – registers with `/register_worker` and spawns GPU sidecars
 - `hashmancer_worker/gpu_sidecar.py` – fetches batches via `/get_batch` and submits results
+- `utils/event_logger.py` – shared logger that records events to Redis
 
 The worker expects a Redis instance for caching. Configure `REDIS_HOST` and
 `REDIS_PORT`. When batches reference `wordlist_key`, `REDIS_HOST` must point to

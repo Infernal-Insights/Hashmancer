@@ -195,12 +195,14 @@ Results are stored under `benchmark:<gpu_uuid>` and aggregated totals are kept i
 ```
 hashmancer-server/
 ├── main.py
-├── event_logger.py
-├── redis_manager.py
+├── server_utils/
+│   └── redis_manager.py
 ├── waifus.py
 ├── hashescom_client.py
 ├── ...
 └── setup.py
+utils/
+└── event_logger.py
 ```
 
 ---
