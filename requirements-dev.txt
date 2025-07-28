@@ -1,4 +1,4 @@
 # Development and test requirements
--r Server/requirements.txt
--r Worker/requirements.txt
--r Server/requirements-dev.txt
+-r hashmancer/server/requirements.txt
+-r hashmancer/worker/requirements.txt
+-r hashmancer/server/requirements-dev.txt

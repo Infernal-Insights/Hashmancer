@@ -3,7 +3,7 @@ import os
 import pytest
 
 
-from Worker.hashmancer_worker import bios_flasher
+from hashmancer.worker.hashmancer_worker import bios_flasher
 
 
 class DummyResp:

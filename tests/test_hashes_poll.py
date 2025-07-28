@@ -14,8 +14,8 @@ from tests.test_helpers import (
 install_stubs()
 
 
-from Server.app.background.hashes_jobs import fetch_and_store_jobs
-import Server.main as main
+from hashmancer.server.app.background.hashes_jobs import fetch_and_store_jobs
+import hashmancer.server.main as main
 sys.modules['main'] = main
 import hashescom_client
 

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hashmancer"
+version = "0.1.0"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+hashmancer-server = "hashmancer.server.__main__:main"
+hashmancer-worker = "hashmancer.worker.hashmancer_worker.worker_agent:main"
+
+[tool.setuptools.packages.find]
+where = ["hashmancer"]
+
+[tool.setuptools.package-data]
+"hashmancer.server" = [
+    "*.html",
+    "app/**/*",
+]

@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 
 
-from Worker.hashmancer_worker import gpu_sidecar
+from hashmancer.worker.hashmancer_worker import gpu_sidecar
 
 
 class FakeRedis:

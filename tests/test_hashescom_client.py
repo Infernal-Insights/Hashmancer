@@ -3,7 +3,7 @@ import sys
 import asyncio
 
 
-from Server import hashescom_client
+from hashmancer.server import hashescom_client
 
 class DummyResp:
     def __init__(self, json_data, status=200):

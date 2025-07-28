@@ -3,7 +3,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 
-from darkling import statistics
+from hashmancer.darkling import statistics
 
 
 def test_probability_order_indices():

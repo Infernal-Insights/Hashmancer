@@ -11,7 +11,7 @@ def _run_worker(tmp_path: Path):
     pub = tmp_path / "nested" / "worker_pub.pem"
     os.environ["PRIVATE_KEY_PATH"] = str(priv)
     os.environ["PUBLIC_KEY_PATH"] = str(pub)
-    module = importlib.import_module("Worker.hashmancer_worker.crypto_utils")
+    module = importlib.import_module("hashmancer.worker.hashmancer_worker.crypto_utils")
     module = importlib.reload(module)
     module._PRIVATE_KEY = None
     module.sign_message("msg")

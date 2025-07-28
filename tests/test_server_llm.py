@@ -17,7 +17,7 @@ install_stubs()
 
 
 
-import Server.main as main
+import hashmancer.server.main as main
 
 
 def test_train_llm_invokes_helper(monkeypatch, tmp_path):
