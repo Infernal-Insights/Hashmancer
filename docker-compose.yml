@@ -14,7 +14,9 @@ services:
       - redis
 
   worker:
-    image: hashmancer-worker:latest
+    build:
+      context: .
+      dockerfile: Worker/Dockerfile
     volumes:
       - ~/.hashmancer:/root/.hashmancer
     depends_on:
