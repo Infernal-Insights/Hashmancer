@@ -15,6 +15,13 @@ def _ensure_paths():
 
 _ensure_paths()
 
+import types
+from hashmancer.darkling import charsets
+
+darkling_mod = types.ModuleType("darkling")
+darkling_mod.charsets = charsets
+sys.modules.setdefault("darkling", darkling_mod)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def add_repo_to_path():
