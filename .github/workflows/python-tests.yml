@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  release:
+    types: [published]
 
 jobs:
   tests:
@@ -19,3 +21,25 @@ jobs:
         run: flake8 --config .flake8 .
       - name: Run tests
         run: pytest -q
+
+  publish:
+    if: github.event_name == 'release'
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install build tool
+        run: pip install build
+      - name: Build wheel
+        run: python -m build
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          path: dist/*.whl
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

@@ -97,6 +97,11 @@ python -m build
 pip install dist/hashmancer-<version>-py3-none-any.whl
 ```
 
+GitHub releases trigger a publish workflow. Configure a `PYPI_API_TOKEN`
+repository secret so the job can upload the wheel to PyPI using
+`pypa/gh-action-pypi-publish`. If the secret is omitted the release job only
+attaches the wheel artifact.
+
 ## Tests
 
 The unit tests cover both the server and worker components. Install their
