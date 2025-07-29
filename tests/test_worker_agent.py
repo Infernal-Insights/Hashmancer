@@ -115,7 +115,7 @@ def test_benchmark_low_bw_gpu(monkeypatch):
         "detect_gpus",
         lambda: [{"uuid": "g1", "index": 0, "pci_link_width": 4}],
     )
-    monkeypatch.setattr(worker_agent, "register_worker", lambda wid, g: "name")
+    monkeypatch.setattr(worker_agent, "register_worker", lambda wid, g, p=None: "name")
 
     monkeypatch.setattr(
         worker_agent.requests,
@@ -204,7 +204,7 @@ def test_prob_order_from_server(monkeypatch):
     monkeypatch.setattr(
         worker_agent, "detect_gpus", lambda: [{"uuid": "g1", "index": 0}]
     )
-    monkeypatch.setattr(worker_agent, "register_worker", lambda wid, g: "name")
+    monkeypatch.setattr(worker_agent, "register_worker", lambda wid, g, p=None: "name")
 
     monkeypatch.setattr(
         worker_agent.requests,

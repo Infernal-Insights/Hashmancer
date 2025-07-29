@@ -338,6 +338,10 @@ async def register_worker(info: RegisterWorkerRequest) -> dict[str, str]:
         if not verify_signature_with_key(info.pubkey, worker_id, info.timestamp, info.signature):
             raise HTTPException(status_code=401, detail="unauthorized")
 
+        pin = CONFIG.get("worker_pin")
+        if pin and info.pin != pin:
+            raise HTTPException(status_code=401, detail="invalid pin")
+
         if TRUSTED_KEY_FINGERPRINTS:
             fp = fingerprint_public_key(info.pubkey)
             if fp not in TRUSTED_KEY_FINGERPRINTS:

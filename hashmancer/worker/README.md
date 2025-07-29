@@ -52,6 +52,13 @@ Start a worker with:
 python -m hashmancer.worker.hashmancer_worker.worker_agent
 ```
 
+Include a PIN with `--pin` or the `WORKER_PIN` environment variable if the
+server requires one:
+
+```bash
+WORKER_PIN=1234 python -m hashmancer.worker.hashmancer_worker.worker_agent --pin 1234
+```
+
 Each sidecar launches `hashcat` for incoming batches and streams per-GPU
 hashrate statistics back to the server.  Restore files are uploaded if a job is
 interrupted so the server can requeue work.  Wordlists are cached in VRAM on

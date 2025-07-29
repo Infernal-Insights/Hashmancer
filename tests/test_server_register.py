@@ -56,6 +56,7 @@ def test_register_worker_policy(monkeypatch):
         signature = 's'
         pubkey = 'p'
         timestamp = 0
+        pin = None
         mode = 'eco'
         provider = 'on-prem'
         hardware = {}
@@ -73,6 +74,7 @@ def _build_req():
         'signature': 's',
         'pubkey': 'p',
         'timestamp': 0,
+        'pin': None,
         'mode': 'eco',
         'provider': 'on-prem',
         'hardware': {}
@@ -102,3 +104,31 @@ def test_untrusted_key_rejected(monkeypatch):
 
     with pytest.raises(main.HTTPException):
         asyncio.run(main.register_worker(_build_req()))
+
+
+def test_worker_pin_required(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(main, 'r', fake)
+    monkeypatch.setattr(main, 'verify_signature_with_key', lambda *a: True)
+    monkeypatch.setattr(main, 'assign_waifu', lambda s: 'P')
+    monkeypatch.setattr(main, 'TRUSTED_KEY_FINGERPRINTS', set())
+    monkeypatch.setitem(main.CONFIG, 'worker_pin', '123')
+
+    req = _build_req()
+    req.pin = 'wrong'
+    with pytest.raises(main.HTTPException):
+        asyncio.run(main.register_worker(req))
+
+
+def test_worker_pin_valid(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(main, 'r', fake)
+    monkeypatch.setattr(main, 'verify_signature_with_key', lambda *a: True)
+    monkeypatch.setattr(main, 'assign_waifu', lambda s: 'Okie')
+    monkeypatch.setattr(main, 'TRUSTED_KEY_FINGERPRINTS', set())
+    monkeypatch.setitem(main.CONFIG, 'worker_pin', '123')
+
+    req = _build_req()
+    req.pin = '123'
+    resp = asyncio.run(main.register_worker(req))
+    assert resp['status'] == 'ok'

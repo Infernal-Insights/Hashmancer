@@ -15,6 +15,7 @@ class RegisterWorkerRequest(BaseModel):
     timestamp: int
     signature: str
     pubkey: str
+    pin: str | None = None
     mode: str = "eco"
     provider: str = "on-prem"
     hardware: dict = {}

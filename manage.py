@@ -30,11 +30,11 @@ def discover_server(timeout: int = 5, port: int = 50000) -> str | None:
             return None
 
 
-def run_server_setup():
+def run_server_setup(pin: str | None = None):
     from hashmancer.server import setup as srv_setup
 
     srv_setup.install_dependencies()
-    srv_setup.configure()
+    srv_setup.configure(pin)
 
 
 def upgrade_repo() -> None:
@@ -163,6 +163,7 @@ def main():
     parser.add_argument("--server", action="store_true", help="setup a server")
     parser.add_argument("--worker", action="store_true", help="setup a worker")
     parser.add_argument("--server-ip", help="server IP or URL for worker setup")
+    parser.add_argument("--pin", help="worker registration PIN")
     parser.add_argument(
         "--upgrade",
         action="store_true",
@@ -196,7 +197,7 @@ def main():
             args.worker = True
 
     if args.server and args.worker:
-        run_server_setup()
+        run_server_setup(args.pin)
         try:
             with open(CONFIG_DIR / "server_config.json") as f:
                 conf = json.load(f)
@@ -209,7 +210,7 @@ def main():
             server_url = None
         run_worker_setup(server_url)
     elif args.server:
-        run_server_setup()
+        run_server_setup(args.pin)
     else:
         run_worker_setup(args.server_ip)
 

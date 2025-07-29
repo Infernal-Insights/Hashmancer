@@ -346,7 +346,7 @@ def get_gpu_utilization() -> list[int]:
     return util
 
 
-def register_worker(worker_id: str, gpus: list[GPUInfo | dict]):
+def register_worker(worker_id: str, gpus: list[GPUInfo | dict], pin: str | None = None):
     ip = socket.gethostbyname(socket.gethostname())
     ts = int(time.time())
     _redis_write(
@@ -379,6 +379,7 @@ def register_worker(worker_id: str, gpus: list[GPUInfo | dict]):
         "timestamp": int(time.time()),
         "signature": None,
     }
+    payload["pin"] = pin
     payload["signature"] = sign_message(worker_id, payload["timestamp"])
 
     name = None
@@ -451,6 +452,8 @@ def main(argv: list[str] | None = None):
     global REDIS_PASSWORD, REDIS_SSL, REDIS_SSL_CERT, REDIS_SSL_KEY, REDIS_SSL_CA_CERT
     global GPU_TUNING
 
+    worker_pin = os.getenv("WORKER_PIN")
+
     SERVER_URL = os.getenv("SERVER_URL", SERVER_URL)
     STATUS_INTERVAL = int(os.getenv("STATUS_INTERVAL", str(STATUS_INTERVAL)))
     REDIS_HOST = os.getenv("REDIS_HOST", REDIS_HOST)
@@ -506,7 +509,11 @@ def main(argv: list[str] | None = None):
         action="store_true",
         help="iterate candidates from least likely first",
     )
+    parser.add_argument("--pin", help="worker registration PIN")
     args = parser.parse_args(argv)
+
+    if args.pin:
+        worker_pin = args.pin
 
     probabilistic_order = False
     markov_lang = "english"
@@ -523,7 +530,7 @@ def main(argv: list[str] | None = None):
                 gdict["darkling_grid"] = params["grid"]
             if "block" in params:
                 gdict["darkling_block"] = params["block"]
-    name = register_worker(worker_id, gpus)
+    name = register_worker(worker_id, gpus, worker_pin)
     # benchmark GPUs once before starting normal job processing
     low_bw_engine = "hashcat"
     try:

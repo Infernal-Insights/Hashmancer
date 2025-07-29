@@ -71,6 +71,7 @@ STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 PORTAL_KEY = CONFIG.get("portal_key")
 PORTAL_PASSKEY = CONFIG.get("portal_passkey")
+WORKER_PIN = CONFIG.get("worker_pin")
 SESSION_TTL = 3600
 
 MAX_IMPORT_SIZE = int(CONFIG.get("max_import_size", 1_048_576))
