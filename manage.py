@@ -90,7 +90,7 @@ def download_prebuilt_engine() -> None:
 
 def worker_install_deps():
     print("📦 Installing worker dependencies...")
-    subprocess.run(["pip3", "install", "-r", "Worker/requirements.txt"], check=False)
+    subprocess.run(["pip3", "install", "-r", "hashmancer/worker/requirements.txt"], check=False)
     subprocess.run(["sudo", "apt", "install", "-y", "redis-server", "hashcat"], check=False)
     download_prebuilt_engine()
 
@@ -106,7 +106,7 @@ def worker_configure(server_url: str):
 
 def configure_worker_systemd() -> None:
     python_path = subprocess.getoutput("which python3")
-    working_dir = os.path.abspath("Worker")
+    working_dir = os.path.abspath("docker/worker")
     bin_path = CONFIG_DIR / "bin"
     service = f"""[Unit]
 Description=Hashmancer Worker
