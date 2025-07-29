@@ -26,7 +26,6 @@ from .bios_flasher import GPUFlashManager
 from .crypto_utils import load_public_key_pem, sign_message
 from hashmancer.ascii_logo import print_logo
 import argparse
-from pathlib import Path
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
@@ -108,7 +107,6 @@ def detect_gpus() -> list[dict]:
                     "uuid": uuid_str,
                     "model": name,
                     "pci_bus": bus,
-                    "pci_width": int(width),
                     "memory_mb": int(mem.split()[0]),
                     "pci_link_width": int(width),
                 }
@@ -145,7 +143,6 @@ def detect_gpus() -> list[dict]:
                     "uuid": uuid_str,
                     "model": "AMD GPU",
                     "pci_bus": "",
-                    "pci_width": 16,
                     "memory_mb": 0,
                     "pci_link_width": 16,
                 }
@@ -205,9 +202,8 @@ def detect_gpus() -> list[dict]:
                     "uuid": bus,
                     "model": model,
                     "pci_bus": bus,
-                    "pci_width": width or 16,
                     "memory_mb": mem_mb,
-                    "pci_link_width": width,
+                    "pci_link_width": width or 16,
                 }
             )
         if gpus:
@@ -229,7 +225,6 @@ def detect_gpus() -> list[dict]:
                         "uuid": bus,
                         "model": model,
                         "pci_bus": bus,
-                        "pci_width": 16,
                         "memory_mb": 0,
                         "pci_link_width": 0,
                     }
@@ -485,7 +480,7 @@ def main(argv: list[str] | None = None):
     for gpu in gpus:
         engine = "hashcat"
         if (
-            gpu.get("pci_link_width", gpu.get("pci_width", 16)) <= 4
+            gpu.get("pci_link_width", 16) <= 4
             and low_bw_engine == "darkling"
         ):
             engine = "darkling-engine"
@@ -514,28 +509,16 @@ def main(argv: list[str] | None = None):
 
     threads = []
     for gpu in gpus:
-        try:
-            threads.append(
-                GPUSidecar(
-                    name,
-                    gpu,
-                    SERVER_URL,
-                    probabilistic_order=probabilistic_order,
-                    markov_lang=markov_lang,
-                    inverse_order=inverse_prob_order,
-                )
+        threads.append(
+            GPUSidecar(
+                name,
+                gpu,
+                SERVER_URL,
+                probabilistic_order=probabilistic_order,
+                markov_lang=markov_lang,
+                inverse_order=inverse_prob_order,
             )
-        except TypeError:
-            threads.append(
-                GPUSidecar(
-                    name,
-                    gpu,
-                    SERVER_URL,
-                    probabilistic_order=probabilistic_order,
-                    markov_lang=markov_lang,
-                    inverse_order=inverse_prob_order,
-                )
-            )
+        )
     for t in threads:
         t.start()
     flash_mgr = GPUFlashManager(name, SERVER_URL, gpus)
