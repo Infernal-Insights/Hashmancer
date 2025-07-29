@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import requests
 from hashmancer.ascii_logo import print_logo
+from hashmancer.utils import event_logger
 
 CONFIG_DIR = Path.home() / ".hashmancer"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -24,7 +25,8 @@ def discover_server(timeout: int = 5, port: int = 50000) -> str | None:
             data, _ = s.recvfrom(1024)
             info = json.loads(data.decode())
             return info.get("server_url")
-        except Exception:
+        except (socket.timeout, json.JSONDecodeError, OSError) as e:
+            event_logger.log_error("manage", "system", "M001", "Server discovery failed", e)
             return None
 
 
@@ -81,7 +83,8 @@ def download_prebuilt_engine() -> None:
         dest.write_bytes(resp.content)
         dest.chmod(0o755)
         print(f"Downloaded darkling-engine to {dest}")
-    except Exception as e:
+    except (requests.RequestException, OSError) as e:
+        event_logger.log_error("manage", "system", "M002", "Download prebuilt engine failed", e)
         print(f"⚠️  Failed to download prebuilt engine: {e}")
 
 
@@ -201,7 +204,8 @@ def main():
             port = conf.get("server_port", "8000")
             server_url = url if url.startswith("http") else f"http://{url}"
             server_url = f"{server_url.rstrip('/')}:{port}"
-        except Exception:
+        except (OSError, json.JSONDecodeError) as e:
+            event_logger.log_error("manage", "system", "M003", "Failed to read server config", e)
             server_url = None
         run_worker_setup(server_url)
     elif args.server:

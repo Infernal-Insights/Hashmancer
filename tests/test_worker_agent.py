@@ -120,7 +120,7 @@ def test_benchmark_low_bw_gpu(monkeypatch):
     monkeypatch.setattr(
         worker_agent.requests,
         "get",
-        lambda url, timeout=5: DummyResp(
+        lambda url, timeout=5, **kwargs: DummyResp(
             {
                 "low_bw_engine": "darkling",
                 "probabilistic_order": False,
@@ -209,7 +209,7 @@ def test_prob_order_from_server(monkeypatch):
     monkeypatch.setattr(
         worker_agent.requests,
         "get",
-        lambda url, timeout=5: DummyResp(
+        lambda url, timeout=5, **kwargs: DummyResp(
             {
                 "low_bw_engine": "hashcat",
                 "probabilistic_order": True,

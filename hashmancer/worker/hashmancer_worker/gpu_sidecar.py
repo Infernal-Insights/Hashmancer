@@ -105,8 +105,8 @@ class GPUSidecar(threading.Thread):
             resp = requests.get(f"{self.server_url}/server_status", timeout=5)
             data = resp.json()
             self.low_bw_engine = data.get("low_bw_engine", "hashcat")
-        except Exception:
-            pass
+        except (requests.RequestException, json.JSONDecodeError) as e:
+            log_error("sidecar", self.worker_id, "W003", "Failed to get server status", e)
         self.darkling_ctx = DarklingContext()
         log_info("sidecar", self.worker_id, f"Sidecar start {self.gpu.get('uuid')}")
 
@@ -165,7 +165,7 @@ class GPUSidecar(threading.Thread):
                     e,
                 )
                 return
-            except Exception as e:
+            except OSError as e:
                 log_error(
                     "sidecar",
                     self.worker_id,
@@ -193,7 +193,7 @@ class GPUSidecar(threading.Thread):
                         time.sleep(5)
                         continue
                     self.execute_job(data)
-                except Exception as e:
+                except (requests.RequestException, json.JSONDecodeError) as e:
                     log_error(
                         "sidecar",
                         self.worker_id,
@@ -230,8 +230,8 @@ class GPUSidecar(threading.Thread):
                             f"vram:{self.gpu['uuid']}:{job_id}:wordlist",
                             f.read(),
                         )
-                except Exception:
-                    pass
+                except OSError as e:
+                    log_error("sidecar", self.worker_id, "W004", "Wordlist cache failed", e)
 
         log_info(
             "sidecar",
@@ -272,7 +272,7 @@ class GPUSidecar(threading.Thread):
 
         try:
             requests.post(f"{self.server_url}/{endpoint}", json=payload, timeout=10)
-        except Exception as e:
+        except requests.RequestException as e:
             log_error(
                 "sidecar",
                 self.worker_id,
@@ -324,7 +324,7 @@ class GPUSidecar(threading.Thread):
             if mask_charsets and not skip_charsets:
                 try:
                     cs_map = json.loads(mask_charsets)
-                except Exception:
+                except json.JSONDecodeError:
                     cs_map = {}
                 for key, charset in sorted(cs_map.items()):
                     if key.startswith("?") and len(key) == 2 and key[1].isdigit():
@@ -401,7 +401,7 @@ class GPUSidecar(threading.Thread):
                                     },
                                     timeout=5,
                                 )
-                            except Exception:
+                            except requests.RequestException:
                                 pass
                     except json.JSONDecodeError:
                         continue
@@ -428,7 +428,7 @@ class GPUSidecar(threading.Thread):
                             files={"file": (restore.name, f)},
                             timeout=5,
                         )
-                except Exception:
+                except requests.RequestException:
                     pass
         finally:
             try:
@@ -441,7 +441,7 @@ class GPUSidecar(threading.Thread):
                     and wordlist_path.endswith(".wl")
                 ):
                     Path(wordlist_path).unlink(missing_ok=True)
-            except Exception:
+            except OSError:
                 pass
 
         return founds
@@ -477,7 +477,7 @@ class GPUSidecar(threading.Thread):
         if mask_charsets:
             try:
                 cs_map = json.loads(mask_charsets)
-            except Exception:
+            except json.JSONDecodeError:
                 cs_map = {}
 
         reload_cs = not self.darkling_ctx.matches(cs_map)
@@ -585,7 +585,7 @@ def run_hashcat_benchmark(gpu: dict, engine: str = "hashcat") -> dict[str, float
             )
             results[name] = 0.0
             continue
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             log_error(
                 "sidecar",
                 gpu.get("uuid", ""),
@@ -604,7 +604,7 @@ def run_hashcat_benchmark(gpu: dict, engine: str = "hashcat") -> dict[str, float
                     value = float(parts[0])
                     unit = parts[1] if len(parts) > 1 else "H/s"
                     rate = value * unit_map.get(unit, 1)
-                except Exception:
+                except (ValueError, IndexError):
                     rate = 0.0
                 break
 
@@ -663,7 +663,7 @@ def run_darkling_benchmark(gpu: dict) -> dict[str, float]:
                         rate = float(speeds[0])
                 except json.JSONDecodeError:
                     continue
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             log_error(
                 "sidecar",
                 gpu.get("uuid", ""),

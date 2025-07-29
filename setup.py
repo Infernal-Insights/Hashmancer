@@ -4,14 +4,15 @@ from pathlib import Path
 
 try:
     from manage import main  # type: ignore
-except Exception:  # pragma: no cover - fallback when not on path
+except ImportError:  # pragma: no cover - fallback when not on path
     def main() -> None:  # type: ignore
         raise RuntimeError("manage script unavailable")
 import os
 import shutil
+from hashmancer.utils import event_logger
 try:
     import requests
-except Exception:  # pragma: no cover - optional during build
+except ImportError:  # pragma: no cover - optional during build
     requests = None  # type: ignore
 
 CONFIG_DIR = Path.home() / ".hashmancer"
@@ -52,6 +53,7 @@ def download_prebuilt_engine() -> None:
         dest.write_bytes(resp.content)
         dest.chmod(0o755)
         print(f"Downloaded darkling-engine to {dest}")
-    except Exception as e:
+    except (requests.RequestException, OSError) as e:
+        event_logger.log_error("setup", "system", "S001", "Download prebuilt engine failed", e)
         print(f"⚠️  Failed to download prebuilt engine: {e}")
 

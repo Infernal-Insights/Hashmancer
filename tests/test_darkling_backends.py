@@ -9,7 +9,7 @@ ROOT = os.path.dirname(os.path.dirname(__file__))
 
 try:
     import pyopencl as cl
-except Exception:
+except ImportError:
     cl = None
 
 OPENCL_KERNEL = os.path.join(ROOT, 'darkling', 'intel_backend', 'opencl_kernel.cl')
