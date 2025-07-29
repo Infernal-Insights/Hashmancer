@@ -1,14 +1,13 @@
 #ifndef DARKLING_ENGINE_H
 #define DARKLING_ENGINE_H
 #include <stdint.h>
+#include "gpu_shared_types.h"
 
-#define MAX_MASK_LEN 32
 #define MAX_UTF8_BYTES 4
 #define MAX_CUSTOM_SETS 16
 #define MAX_CHARSET_CHARS 256
 #define MAX_PWD_BYTES (MAX_MASK_LEN * MAX_UTF8_BYTES)
 #define MAX_CHARSET_SIZE (MAX_CHARSET_CHARS * MAX_UTF8_BYTES)
-#define MAX_HASHES 2048
 
 #ifdef __cplusplus
 extern "C" {

@@ -6,7 +6,7 @@ from tests.test_helpers import (
     fastapi_stub,
     cors_stub,
     resp_stub,
-    pydantic_stub,
+
     install_stubs,
     FakeApp,
 )

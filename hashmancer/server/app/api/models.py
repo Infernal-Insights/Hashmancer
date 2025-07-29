@@ -1,14 +1,6 @@
 from __future__ import annotations
 from typing import Any
-try:
-    from pydantic import BaseModel, validator
-except Exception:  # pragma: no cover - stubs
-    class BaseModel:
-        pass
-    def validator(*a, **k):  # type: ignore
-        def wrapper(f):
-            return f
-        return wrapper
+from pydantic import BaseModel, validator
 
 class LoginRequest(BaseModel):
     passkey: str

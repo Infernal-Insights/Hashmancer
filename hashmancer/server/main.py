@@ -29,6 +29,7 @@ from hashmancer.ascii_logo import print_logo
 import os
 import redis
 from .redis_utils import get_redis
+from hashmancer.utils.gpu_constants import MAX_MASK_LEN
 import json
 import uuid
 import asyncio
@@ -147,7 +148,7 @@ JOB_STREAM = "jobs"
 HTTP_GROUP = "http-workers"
 LOW_BW_JOB_STREAM = "darkling-jobs"
 LOW_BW_GROUP = "darkling-workers"
-MAX_MASK_LENGTH = 32
+MAX_MASK_LENGTH = MAX_MASK_LEN
 
 
 def create_background_task(coro: Coroutine[Any, Any, Any]) -> asyncio.Task:

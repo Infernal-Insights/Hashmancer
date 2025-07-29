@@ -3,11 +3,12 @@ import time
 import threading
 import redis
 from hashmancer.utils.event_logger import log_error, log_info
-
-try:
-    from redis.exceptions import RedisError
-except Exception:  # fallback for bundled stub
-    from redis import RedisError
+from redis.exceptions import RedisError
+from ...utils.gpu_constants import (
+    MAX_HASHES,
+    MAX_MASK_LEN,
+    MAX_RESULT_BUFFER,
+)
 import requests
 import json
 import subprocess
@@ -54,12 +55,8 @@ def _safe_redis_call(func, *args, default=None, **kwargs):
 
 
 # Maximum number of digests the darkling engine can accept in a single
-# launch.  This must match the constant defined in the CUDA/CL sources.
-MAX_HASHES = 2048
-# These limits mirror the values in gpu_shared_types.h
+# launch.  This is loaded from gpu_shared_types.h along with other limits.
 MAX_CHARSETS = 16
-MAX_MASK_LEN = 32
-MAX_RESULT_BUFFER = 512
 
 
 class DarklingContext:
