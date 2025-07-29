@@ -1395,6 +1395,16 @@ async def list_jobs():
         return []
 
 
+@app.get("/hash_batches/{hash_value}")
+async def get_hash_batches(hash_value: str):
+    """Return batch IDs that include the given hash."""
+    try:
+        return redis_manager.get_hash_batches(hash_value)
+    except redis.exceptions.RedisError as e:
+        log_error("server", "system", "SRED", "Redis unavailable", e)
+        return []
+
+
 @app.get("/found_results")
 async def list_found_results(limit: int = 100):
     """Return recent found results."""

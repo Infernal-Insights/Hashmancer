@@ -71,3 +71,16 @@ def test_store_and_get_batch(monkeypatch):
     assert data["mask"] == "?a"
     assert data["keyspace"] == 10
     assert batch_id in fake.smembers("hash_batches:h")
+
+
+def test_get_hash_batches(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(redis_manager, "r", fake)
+    monkeypatch.setattr(redis_manager.uuid, "uuid4", lambda: UUID("22222222-2222-2222-2222-222222222222"))
+    monkeypatch.setattr(redis_manager.orchestrator_agent, "build_mask_charsets", lambda: {})
+    monkeypatch.setattr(redis_manager.orchestrator_agent, "estimate_keyspace", lambda m, c: 10)
+
+    batch_id = redis_manager.store_batch(["x", "y"])
+    batches = redis_manager.get_hash_batches("x")
+    assert batch_id in batches
+    assert redis_manager.get_hash_batches("missing") == []

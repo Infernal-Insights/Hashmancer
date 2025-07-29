@@ -104,3 +104,12 @@ def update_status(batch_id: str, status: str) -> None:
             r.persist(f"batch:{batch_id}")
     except redis.exceptions.RedisError as e:
         logging.warning("Redis unavailable: %s", e)
+
+
+def get_hash_batches(hash_value: str) -> list[str]:
+    """Return batch IDs associated with the given hash."""
+    try:
+        return list(r.smembers(f"hash_batches:{hash_value}"))
+    except redis.exceptions.RedisError as e:
+        logging.warning("Redis unavailable: %s", e)
+        return []
