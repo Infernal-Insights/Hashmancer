@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import subprocess
 import pytest
 from pathlib import Path
 
@@ -388,7 +389,7 @@ def test_run_darkling_benchmark(monkeypatch):
             return DummyProc(["{\"speed\": [10]}"], "/tmp/db1.out")
         if mode == 100:
             return DummyProc(["{\"speed\": [20]}"], "/tmp/db2.out")
-        raise Exception("unsupported")
+        raise subprocess.SubprocessError("unsupported")
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
 

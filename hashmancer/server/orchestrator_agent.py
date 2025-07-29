@@ -18,14 +18,14 @@ from hashmancer.server.server_utils import redis_manager
 
 try:  # optional local LLM orchestrator
     from llm_orchestrator import LLMOrchestrator  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
+except ImportError:  # pragma: no cover - optional dependency
     LLMOrchestrator = None
 
 _LLM = None
 if LLMOrchestrator and os.getenv("LLM_MODEL_PATH"):
     try:
         _LLM = LLMOrchestrator(os.getenv("LLM_MODEL_PATH"))
-    except Exception as e:  # pragma: no cover - optional component
+    except RuntimeError as e:  # pragma: no cover - optional component
         logging.warning("LLMOrchestrator disabled: %s", e)
 
 JOB_STREAM = os.getenv("JOB_STREAM", "jobs")
@@ -204,7 +204,7 @@ def cache_wordlist(path: str) -> str:
                 else:
                     pipe.append(redis_key, encoded)
             pipe.execute()
-    except Exception as e:
+    except OSError as e:
         log_error("orchestrator", "system", "SCACHE", "Failed to cache wordlist", e)
     return key
 
@@ -303,7 +303,7 @@ def dispatch_batches(lang: str = "English"):
 
             try:
                 hashes = json.loads(batch.get("hashes", "[]"))
-            except Exception:
+            except json.JSONDecodeError:
                 hashes = []
             hashes = [h for h in hashes if not is_already_cracked(h)]
             if not hashes:
@@ -338,12 +338,12 @@ def dispatch_batches(lang: str = "English"):
                     stream_choice = _LLM.choose_job_stream(
                         job_data, pending_high, pending_low
                     )
-                except Exception:  # pragma: no cover - optional component
+                except RuntimeError:  # pragma: no cover - optional component
                     stream_choice = "high"
                 try:
                     start, end = _LLM.suggest_batch_size(job_data)
                     job_data.update({"start": start, "end": end})
-                except Exception:
+                except RuntimeError:
                     pass
             else:
                 if attack == "mask" and darkling and pending_low < backlog_target:
@@ -372,7 +372,7 @@ def dispatch_batches(lang: str = "English"):
                                         lengths.append(len(word))
                             if lengths:
                                 mask_length = round(sum(lengths) / len(lengths))
-                        except Exception:
+                        except OSError:
                             pass
 
                     pattern = generate_mask(mask_length)
@@ -440,7 +440,7 @@ def dispatch_batches(lang: str = "English"):
                                     lengths.append(len(word))
                         if lengths:
                             mask_length = round(sum(lengths) / len(lengths))
-                    except Exception:
+                    except OSError:
                         pass
 
                 pattern = generate_mask(mask_length)

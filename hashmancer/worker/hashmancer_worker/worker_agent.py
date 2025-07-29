@@ -11,7 +11,7 @@ from .gpu_types import GPUInfo
 
 try:
     from redis.exceptions import RedisError
-except Exception:  # fallback for bundled stub
+except ImportError:  # fallback for bundled stub
     from redis import RedisError
 import requests
 from pathlib import Path
@@ -85,8 +85,14 @@ def detect_gpus() -> list[GPUInfo]:
                         vendor="nvidia",
                     )
                 )
-            except Exception as e:
-                event_logger.log_error("worker", "unassigned", "W099", "Failed to parse nvidia-smi output", e)
+            except (ValueError, IndexError) as e:
+                event_logger.log_error(
+                    "worker",
+                    "unassigned",
+                    "W099",
+                    "Failed to parse nvidia-smi output",
+                    e,
+                )
         if gpus:
             return gpus
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
@@ -136,8 +142,10 @@ def detect_gpus() -> list[GPUInfo]:
             elif current and line.startswith("GPU") and "VRAM Total" in line:
                 try:
                     current["memory_mb"] = int(line.split()[-2])
-                except Exception:
-                    pass
+                except (ValueError, IndexError) as e:
+                    event_logger.log_error(
+                        "worker", "unassigned", "W099", "rocm-smi parse error", e
+                    )
         if current:
             gpus.append(
                 GPUInfo(
@@ -167,7 +175,10 @@ def detect_gpus() -> list[GPUInfo]:
                 try:
                     out = subprocess.check_output(["lspci", "-s", bus], text=True)
                     model = out.split(":", 2)[-1].strip()
-                except Exception:
+                except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                    event_logger.log_error(
+                        "worker", "unassigned", "W099", "lspci parse error", e
+                    )
                     model = "GPU"
 
             mem_mb = 0
@@ -179,8 +190,10 @@ def detect_gpus() -> list[GPUInfo]:
                             val = int(f.read().strip())
                         mem_mb = val // (1024 * 1024)
                         break
-                    except Exception:
-                        pass
+                    except (OSError, ValueError) as e:
+                        event_logger.log_error(
+                            "worker", "unassigned", "W099", "sysfs memory read error", e
+                        )
 
             width = 0
             width_path = os.path.join(device_path, "current_link_width")
@@ -188,8 +201,10 @@ def detect_gpus() -> list[GPUInfo]:
                 try:
                     with open(width_path) as f:
                         width = int(f.read().strip())
-                except Exception:
-                    pass
+                except (OSError, ValueError) as e:
+                    event_logger.log_error(
+                        "worker", "unassigned", "W099", "sysfs width read error", e
+                    )
 
             gpus.append(
                 GPUInfo(
@@ -203,8 +218,8 @@ def detect_gpus() -> list[GPUInfo]:
             )
         if gpus:
             return gpus
-    except Exception:
-        pass
+    except OSError as e:
+        event_logger.log_error("worker", "unassigned", "W099", "sysfs scan failed", e)
 
     # Generic detection via lspci for Intel or unknown GPUs
     try:
@@ -226,8 +241,8 @@ def detect_gpus() -> list[GPUInfo]:
                 )
         if gpus:
             return gpus
-    except Exception:
-        pass
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        event_logger.log_error("worker", "unassigned", "W099", "lspci detection failed", e)
 
     event_logger.log_error(
         "worker",
@@ -250,8 +265,8 @@ def get_gpu_temps() -> list[int]:
             text=True,
         )
         return [int(t.strip()) for t in output.strip().splitlines()]
-    except Exception:
-        pass
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        event_logger.log_error("worker", "unassigned", "W100", "Temperature read failed", e)
 
     temps = []
     for path in glob.glob("/sys/class/drm/card*/device/hwmon/hwmon*/temp*_input"):
@@ -259,7 +274,8 @@ def get_gpu_temps() -> list[int]:
             with open(path) as f:
                 val = int(f.read().strip())
                 temps.append(val // 1000)
-        except Exception:
+        except (OSError, ValueError) as e:
+            event_logger.log_error("worker", "unassigned", "W100", "Temperature file error", e)
             continue
     return temps
 
@@ -276,8 +292,8 @@ def get_gpu_power() -> list[float]:
             text=True,
         )
         return [float(p.split()[0]) for p in output.strip().splitlines()]
-    except Exception:
-        pass
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        event_logger.log_error("worker", "unassigned", "W101", "Power read failed", e)
 
     power = []
     for path in glob.glob(
@@ -287,7 +303,8 @@ def get_gpu_power() -> list[float]:
             with open(path) as f:
                 val = int(f.read().strip())
                 power.append(val / 1_000_000)
-        except Exception:
+        except (OSError, ValueError) as e:
+            event_logger.log_error("worker", "unassigned", "W101", "Power file error", e)
             continue
     if not power:
         for path in glob.glob(
@@ -297,7 +314,8 @@ def get_gpu_power() -> list[float]:
                 with open(path) as f:
                     val = int(f.read().strip())
                     power.append(val / 1_000_000)
-            except Exception:
+            except (OSError, ValueError) as e:
+                event_logger.log_error("worker", "unassigned", "W101", "Power file error", e)
                 continue
     return power
 
@@ -314,15 +332,16 @@ def get_gpu_utilization() -> list[int]:
             text=True,
         )
         return [int(u.split()[0]) for u in output.strip().splitlines()]
-    except Exception:
-        pass
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        event_logger.log_error("worker", "unassigned", "W102", "Utilization read failed", e)
 
     util = []
     for path in glob.glob("/sys/class/drm/card*/device/gpu_busy_percent"):
         try:
             with open(path) as f:
                 util.append(int(f.read().strip()))
-        except Exception:
+        except (OSError, ValueError) as e:
+            event_logger.log_error("worker", "unassigned", "W102", "Utilization file error", e)
             continue
     return util
 
@@ -370,7 +389,8 @@ def register_worker(worker_id: str, gpus: list[GPUInfo | dict]):
             name = data.get("waifu")
         else:
             name = data.get("message")
-    except Exception:
+    except requests.RequestException as e:
+        event_logger.log_error("worker", worker_id, "W001", "Worker registration failed", e)
         name = None
 
     if name:
@@ -413,7 +433,8 @@ def check_worker_command(name: str) -> None:
             timeout=5,
         )
         data = resp.json()
-    except Exception:
+    except requests.RequestException as e:
+        event_logger.log_error("worker", name, "W002", "Command check failed", e)
         return
     if data.get("status") != "ok":
         return
@@ -453,8 +474,8 @@ def main(argv: list[str] | None = None):
             REDIS_SSL_KEY = os.getenv("REDIS_SSL_KEY", cfg.get("redis_ssl_key", REDIS_SSL_KEY))
             REDIS_SSL_CA_CERT = os.getenv("REDIS_SSL_CA_CERT", cfg.get("redis_ssl_ca_cert", REDIS_SSL_CA_CERT))
             GPU_TUNING = cfg.get("darkling_tuning", {})
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError) as e:
+            event_logger.log_error("worker", "unassigned", "W099", "Failed to load config", e)
 
     redis_opts: dict[str, str | int | bool] = {
         "host": REDIS_HOST,
@@ -518,10 +539,10 @@ def main(argv: list[str] | None = None):
         else:
             inverse_prob_order = True
         markov_lang = data.get("markov_lang", "english")
-    except Exception:
+    except (requests.RequestException, json.JSONDecodeError) as e:
         probabilistic_order = args.probabilistic_order
         inverse_prob_order = args.inverse_prob_order
-        pass
+        event_logger.log_error("worker", worker_id, "W001", "Failed to fetch server status", e)
 
     for gpu in gpus:
         engine = "hashcat"
@@ -543,8 +564,10 @@ def main(argv: list[str] | None = None):
         }
         payload["signature"] = sign_message(name, payload["timestamp"])
         try:
-            requests.post(f"{SERVER_URL}/submit_benchmark", json=payload, timeout=10)
-        except Exception as e:
+            requests.post(
+                f"{SERVER_URL}/submit_benchmark", json=payload, timeout=10
+            )
+        except requests.RequestException as e:
             event_logger.log_error(
                 "worker",
                 name,
@@ -595,8 +618,8 @@ def main(argv: list[str] | None = None):
                     },
                     timeout=5,
                 )
-            except Exception:
-                pass
+            except requests.RequestException as e:
+                event_logger.log_error("worker", name, "W002", "Failed to send status", e)
             check_worker_command(name)
             time.sleep(STATUS_INTERVAL)
     except KeyboardInterrupt:
