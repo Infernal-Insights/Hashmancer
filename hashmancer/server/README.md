@@ -187,6 +187,7 @@ performance over time.
 
 Redis errors return `500` with `{\"detail\": \"redis unavailable\"}`.
 Filesystem failures return `{\"detail\": \"filesystem error\"}`.
+Validation failures return `400` with messages like `{\"detail\": \"mask too long\"}` or `{\"detail\": \"file too large\"}`.
 
 ---
 
