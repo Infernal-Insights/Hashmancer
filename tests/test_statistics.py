@@ -1,5 +1,6 @@
 import os
 import sys
+import pytest
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 
@@ -23,4 +24,11 @@ def test_probability_order_inverse():
         "?1?2", charset_map, markov, inverse=True
     )
     assert order[:4] == [3, 2, 0, 1]
+
+
+def test_build_markov_validation():
+    with pytest.raises(ValueError):
+        statistics.build_markov([("abc", 1)])
+    with pytest.raises(ValueError):
+        statistics.build_markov([("$U$l", -1)])
 
