@@ -25,7 +25,7 @@ __all__ = [
 def start_loops() -> List[asyncio.Task]:
     """Start all background loops and return the created tasks."""
     try:
-        import main  # type: ignore
+        from hashmancer.server import main  # type: ignore
         broadcast_enabled = getattr(main, "BROADCAST_ENABLED", BROADCAST_ENABLED)
     except Exception:  # pragma: no cover - import fallback
         broadcast_enabled = BROADCAST_ENABLED

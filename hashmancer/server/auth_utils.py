@@ -1,5 +1,4 @@
 import base64
-import redis
 from .redis_utils import get_redis
 import logging
 import time

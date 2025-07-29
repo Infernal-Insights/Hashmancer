@@ -1,10 +1,18 @@
 """Entry module exposing helper functions for installation scripts."""
 
-from manage import main
 from pathlib import Path
+
+try:
+    from manage import main  # type: ignore
+except Exception:  # pragma: no cover - fallback when not on path
+    def main() -> None:  # type: ignore
+        raise RuntimeError("manage script unavailable")
 import os
 import shutil
-import requests
+try:
+    import requests
+except Exception:  # pragma: no cover - optional during build
+    requests = None  # type: ignore
 
 CONFIG_DIR = Path.home() / ".hashmancer"
 
@@ -47,5 +55,3 @@ def download_prebuilt_engine() -> None:
     except Exception as e:
         print(f"⚠️  Failed to download prebuilt engine: {e}")
 
-if __name__ == "__main__":
-    main()

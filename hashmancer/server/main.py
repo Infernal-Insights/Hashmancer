@@ -22,11 +22,6 @@ import sys
 from hashmancer.server.server_utils import redis_manager
 from hashmancer.utils.event_logger import log_error, log_info, log_watchdog_event
 from .app.background import (
-    broadcast_presence,
-    fetch_and_store_jobs,
-    poll_hashes_jobs,
-    process_hashes_jobs,
-    dispatch_loop,
     start_loops,
     stop_loops,
 )
@@ -40,7 +35,6 @@ import time
 import hmac
 import hashlib
 import csv
-import io
 import tempfile
 from filelock import FileLock
 
@@ -74,7 +68,6 @@ from .app.api.models import (
     MarkovLangRequest,
 )
 from argon2 import PasswordHasher
-from hashmancer.ascii_logo import print_logo
 from .pattern_to_mask import get_top_masks
 import psutil
 from . import wordlist_db
@@ -82,48 +75,39 @@ from typing import Any
 from collections.abc import Coroutine
 from hashmancer.hash_algos import HASHCAT_ALGOS
 from .app import config as _config
-from .app.config import (
-    CONFIG,
-    CONFIG_FILE,
-    WORDLISTS_DIR,
-    MASKS_DIR,
-    RULES_DIR,
-    RESTORE_DIR,
-    STORAGE_DIR,
-    WORDLIST_DB_PATH,
-    TRUSTED_KEYS_FILE,
-    TRUSTED_KEY_FINGERPRINTS,
-    FOUNDS_FILE,
-    PORTAL_KEY,
-    PORTAL_PASSKEY,
-    SESSION_TTL,
-    MAX_IMPORT_SIZE,
-    LOW_BW_ENGINE,
-    BROADCAST_ENABLED,
-    WATCHDOG_TOKEN,
-    HASHES_SETTINGS,
-    HASHES_POLL_INTERVAL,
-    HASHES_ALGORITHMS,
-    HASHES_DEFAULT_PRIORITY,
-    PREDEFINED_MASKS,
-    HASHES_ALGO_PARAMS,
-    PROBABILISTIC_ORDER,
-    INVERSE_PROB_ORDER,
-    MARKOV_LANG,
-    LLM_ENABLED,
-    LLM_MODEL_PATH,
-    LLM_TRAIN_EPOCHS,
-    LLM_TRAIN_LEARNING_RATE,
-    TEMP_THRESHOLD,
-    POWER_THRESHOLD,
-    CRASH_THRESHOLD,
-    save_config,
-    load_config,
-)
+from .app.config import save_config, load_config
 
 # reload configuration in case HOME changed before import
 load_config()
 CONFIG = _config.CONFIG  # refresh local reference after reload
+BROADCAST_ENABLED = _config.BROADCAST_ENABLED
+WATCHDOG_TOKEN = _config.WATCHDOG_TOKEN
+WORDLISTS_DIR = _config.WORDLISTS_DIR
+MASKS_DIR = _config.MASKS_DIR
+RULES_DIR = _config.RULES_DIR
+RESTORE_DIR = _config.RESTORE_DIR
+TRUSTED_KEY_FINGERPRINTS = _config.TRUSTED_KEY_FINGERPRINTS
+FOUNDS_FILE = _config.FOUNDS_FILE
+PORTAL_PASSKEY = _config.PORTAL_PASSKEY
+SESSION_TTL = _config.SESSION_TTL
+MAX_IMPORT_SIZE = _config.MAX_IMPORT_SIZE
+LOW_BW_ENGINE = _config.LOW_BW_ENGINE
+HASHES_SETTINGS = _config.HASHES_SETTINGS
+HASHES_POLL_INTERVAL = _config.HASHES_POLL_INTERVAL
+HASHES_ALGORITHMS = _config.HASHES_ALGORITHMS
+HASHES_DEFAULT_PRIORITY = _config.HASHES_DEFAULT_PRIORITY
+PREDEFINED_MASKS = _config.PREDEFINED_MASKS
+HASHES_ALGO_PARAMS = _config.HASHES_ALGO_PARAMS
+PROBABILISTIC_ORDER = _config.PROBABILISTIC_ORDER
+INVERSE_PROB_ORDER = _config.INVERSE_PROB_ORDER
+MARKOV_LANG = _config.MARKOV_LANG
+LLM_ENABLED = _config.LLM_ENABLED
+LLM_MODEL_PATH = _config.LLM_MODEL_PATH
+LLM_TRAIN_EPOCHS = _config.LLM_TRAIN_EPOCHS
+LLM_TRAIN_LEARNING_RATE = _config.LLM_TRAIN_LEARNING_RATE
+TEMP_THRESHOLD = _config.TEMP_THRESHOLD
+POWER_THRESHOLD = _config.POWER_THRESHOLD
+CRASH_THRESHOLD = _config.CRASH_THRESHOLD
 
 import importlib
 from .app import app as _app_module
@@ -1376,8 +1360,10 @@ async def set_hashes_api_key(req: ApiKeyRequest):
     os.environ["HASHES_COM_API_KEY"] = req.api_key
     # refresh module level variable
     import importlib
+    from hashmancer.server import hashescom_client
 
-    importlib.reload(sys.modules["Server.hashescom_client"])  # type: ignore
+    _ = hashescom_client
+    importlib.reload(sys.modules["hashmancer.server.hashescom_client"])
     return {"status": "ok"}
 
 
@@ -1400,7 +1386,6 @@ async def get_hashes_algo_params():
 async def set_hashes_algo_params(req: AlgoParamsRequest):
     algo = req.algo.lower()
     CONFIG.setdefault("hashes_algo_params", {})[algo] = req.params
-    global HASHES_ALGO_PARAMS
     HASHES_ALGO_PARAMS[algo] = req.params
     save_config()
     return {"status": "ok"}

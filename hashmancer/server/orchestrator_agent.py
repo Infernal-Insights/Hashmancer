@@ -5,7 +5,6 @@ import time
 import uuid
 import redis
 import base64
-import gzip
 import zlib
 import hashlib
 import re
