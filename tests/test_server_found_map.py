@@ -38,6 +38,9 @@ class FakeRedis:
         else:
             self.store.setdefault(key, {})[field] = value
 
+    def persist(self, key):
+        pass
+
 
 async def call():
     payload = type(
