@@ -48,6 +48,8 @@ def load_private_key():
             key_data = f.read()
     except FileNotFoundError:
         return generate_keypair()
+    except Exception:
+        raise
     return serialization.load_pem_private_key(key_data, password=None)
 
 

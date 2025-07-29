@@ -107,6 +107,7 @@ class GPUSidecar(threading.Thread):
         except Exception:
             pass
         self.darkling_ctx = DarklingContext()
+        log_info("sidecar", self.worker_id, f"Sidecar start {self.gpu.get('uuid')}")
 
     def stop(self):
         """Signal the sidecar thread to terminate."""
@@ -145,14 +146,24 @@ class GPUSidecar(threading.Thread):
                 ],
             ]
 
+        timeout = float(os.getenv("GPU_POWER_TIMEOUT", "5"))
         for cmd in commands:
             try:
                 subprocess.check_call(
-                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout
                 )
                 return
             except FileNotFoundError:
                 continue
+            except subprocess.CalledProcessError as e:
+                log_error(
+                    "sidecar",
+                    self.worker_id,
+                    "W002",
+                    f"Power limit command failed: {' '.join(cmd)}",
+                    e,
+                )
+                return
             except Exception as e:
                 log_error(
                     "sidecar",
@@ -192,6 +203,7 @@ class GPUSidecar(threading.Thread):
                     time.sleep(5)
         finally:
             self.darkling_ctx.cleanup()
+            log_info("sidecar", self.worker_id, f"Sidecar stop {self.gpu.get('uuid')}")
 
     def execute_job(self, batch: dict):
         """Run hashcat for the provided batch and submit the results."""
@@ -538,9 +550,9 @@ def run_hashcat_benchmark(gpu: dict, engine: str = "hashcat") -> dict[str, float
     """
 
     modes = [
-        (HASHCAT_ALGOS.get("MD5", 0), "MD5"),
-        (HASHCAT_ALGOS.get("SHA1", 100), "SHA1"),
-        (HASHCAT_ALGOS.get("NTLM", 1000), "NTLM"),
+        (HASHCAT_ALGOS.get("MD5"), "MD5"),
+        (HASHCAT_ALGOS.get("SHA1"), "SHA1"),
+        (HASHCAT_ALGOS.get("NTLM"), "NTLM"),
     ]
     index = str(gpu.get("index", 0))
     results: dict[str, float] = {}
@@ -556,9 +568,22 @@ def run_hashcat_benchmark(gpu: dict, engine: str = "hashcat") -> dict[str, float
     }
 
     for mode, name in modes:
+        if mode is None:
+            results[name] = 0.0
+            continue
         cmd = [engine, "--benchmark", "-m", str(mode), "-d", index]
         try:
             output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
+        except subprocess.CalledProcessError as e:
+            log_error(
+                "sidecar",
+                gpu.get("uuid", ""),
+                "W005",
+                f"Benchmark failed for {gpu.get('uuid')} mode {mode}",
+                e,
+            )
+            results[name] = 0.0
+            continue
         except Exception as e:
             log_error(
                 "sidecar",

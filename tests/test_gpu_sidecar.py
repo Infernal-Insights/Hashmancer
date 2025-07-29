@@ -192,7 +192,7 @@ def test_power_limit_nvidia(monkeypatch):
 
     cmds = {}
 
-    def fake_check_call(cmd, stdout=None, stderr=None):
+    def fake_check_call(cmd, stdout=None, stderr=None, **kwargs):
         cmds["cmd"] = cmd
 
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
@@ -226,7 +226,7 @@ def test_power_limit_rocm(monkeypatch):
 
     call_order = []
 
-    def fake_check_call(cmd, stdout=None, stderr=None):
+    def fake_check_call(cmd, stdout=None, stderr=None, **kwargs):
         call_order.append(cmd[0])
         if cmd[0] == "nvidia-smi":
             raise FileNotFoundError()
@@ -263,7 +263,7 @@ def test_power_overdrive_rocm(monkeypatch):
     cmds = {}
     call_order = []
 
-    def fake_check_call(cmd, stdout=None, stderr=None):
+    def fake_check_call(cmd, stdout=None, stderr=None, **kwargs):
         call_order.append(cmd[0])
         if cmd[0] == "nvidia-smi":
             raise FileNotFoundError()
@@ -300,7 +300,7 @@ def test_power_limit_intel(monkeypatch):
 
     cmds = {}
 
-    def fake_check_call(cmd, stdout=None, stderr=None):
+    def fake_check_call(cmd, stdout=None, stderr=None, **kwargs):
         if cmd[0] in ("nvidia-smi", "rocm-smi"):
             raise FileNotFoundError()
         cmds["cmd"] = cmd
@@ -413,6 +413,19 @@ def test_parse_benchmark_units(monkeypatch):
     gpu = {"uuid": "gpu", "index": 0}
     rates = gpu_sidecar.run_hashcat_benchmark(gpu)
     assert rates == {"MD5": 1.5e9, "SHA1": 500e3, "NTLM": 2.5e12}
+
+
+def test_parse_benchmark_unknown_unit(monkeypatch):
+    outputs = {0: "Speed.#1.........: 7.5 QQ/s (42.00ms)\n"}
+
+    def fake_check_output(cmd, stderr=None, text=None):
+        return outputs[0]
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "check_output", fake_check_output)
+
+    gpu = {"uuid": "gpu", "index": 0}
+    rates = gpu_sidecar.run_hashcat_benchmark(gpu)
+    assert rates["MD5"] == 7.5
 
 
 def test_darkling_mask_length_limit(monkeypatch):

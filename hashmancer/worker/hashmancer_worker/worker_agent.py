@@ -7,6 +7,7 @@ import redis
 import logging
 import hashmancer.utils.event_logger as event_logger
 import shutil
+from .gpu_types import GPUInfo
 
 try:
     from redis.exceptions import RedisError
@@ -27,67 +28,38 @@ from .crypto_utils import load_public_key_pem, sign_message
 from hashmancer.ascii_logo import print_logo
 import argparse
 
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
-REDIS_SSL = os.getenv("REDIS_SSL", "0")
-REDIS_SSL_CERT = os.getenv("REDIS_SSL_CERT")
-REDIS_SSL_KEY = os.getenv("REDIS_SSL_KEY")
-REDIS_SSL_CA_CERT = os.getenv("REDIS_SSL_CA_CERT")
-SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
-STATUS_INTERVAL = int(os.getenv("STATUS_INTERVAL", "30"))
+# defaults used before configuration is parsed in ``main``
+SERVER_URL = "http://localhost:8000"
+STATUS_INTERVAL = 30
+REDIS_HOST = "localhost"
+REDIS_PORT = 6379
+REDIS_PASSWORD: str | None = None
+REDIS_SSL = "0"
+REDIS_SSL_CERT: str | None = None
+REDIS_SSL_KEY: str | None = None
+REDIS_SSL_CA_CERT: str | None = None
 
 CONFIG_FILE = Path.home() / ".hashmancer" / "worker_config.json"
 GPU_TUNING: dict[str, dict] = {}
-if CONFIG_FILE.exists():
-    try:
-        with open(CONFIG_FILE) as f:
-            cfg = json.load(f)
-        SERVER_URL = os.getenv("SERVER_URL", cfg.get("server_url", SERVER_URL))
-        REDIS_HOST = os.getenv("REDIS_HOST", cfg.get("redis_host", REDIS_HOST))
-        REDIS_PORT = int(os.getenv("REDIS_PORT", cfg.get("redis_port", REDIS_PORT)))
-        REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", cfg.get("redis_password", REDIS_PASSWORD))
-        REDIS_SSL = os.getenv("REDIS_SSL", str(cfg.get("redis_ssl", REDIS_SSL)))
-        REDIS_SSL_CERT = os.getenv("REDIS_SSL_CERT", cfg.get("redis_ssl_cert", REDIS_SSL_CERT))
-        REDIS_SSL_KEY = os.getenv("REDIS_SSL_KEY", cfg.get("redis_ssl_key", REDIS_SSL_KEY))
-        REDIS_SSL_CA_CERT = os.getenv("REDIS_SSL_CA_CERT", cfg.get("redis_ssl_ca_cert", REDIS_SSL_CA_CERT))
-        GPU_TUNING = cfg.get("darkling_tuning", {})
-    except Exception:
-        pass
-
-redis_opts: dict[str, str | int | bool] = {
-    "host": REDIS_HOST,
-    "port": REDIS_PORT,
-    "decode_responses": True,
-}
-if REDIS_PASSWORD:
-    redis_opts["password"] = REDIS_PASSWORD
-if str(REDIS_SSL).lower() in {"1", "true", "yes"}:
-    redis_opts["ssl"] = True
-    if REDIS_SSL_CA_CERT:
-        redis_opts["ssl_ca_certs"] = REDIS_SSL_CA_CERT
-    if REDIS_SSL_CERT:
-        redis_opts["ssl_certfile"] = REDIS_SSL_CERT
-    if REDIS_SSL_KEY:
-        redis_opts["ssl_keyfile"] = REDIS_SSL_KEY
-
-r = redis.Redis(**redis_opts)
-event_logger.r = r
+r: redis.Redis | None = None
 
 
 def _redis_write(func, *args, **kwargs):
-    """Perform a Redis write with retry and backoff."""
+    """Perform a Redis write with retry and limited time."""
     delay = 0.5
-    while True:
+    total = 0.0
+    while total < 60:
         try:
             return func(*args, **kwargs)
         except RedisError:
             time.sleep(delay)
+            total += delay
             delay = min(delay * 2, 30)
+    raise RedisError("Redis write failed after retries")
 
 
-def detect_gpus() -> list[dict]:
-    """Return a list of GPUs with uuid, model, pci_bus, memory_mb, pci_link_width."""
+def detect_gpus() -> list[GPUInfo]:
+    """Return a list of detected GPUs."""
     # NVIDIA detection via nvidia-smi
     try:
         output = subprocess.check_output(
@@ -98,22 +70,27 @@ def detect_gpus() -> list[dict]:
             ],
             text=True,
         )
-        gpus = []
+        gpus: list[GPUInfo] = []
         for line in output.strip().splitlines():
-            idx, uuid_str, name, bus, mem, width = [x.strip() for x in line.split(",")]
-            gpus.append(
-                {
-                    "index": int(idx),
-                    "uuid": uuid_str,
-                    "model": name,
-                    "pci_bus": bus,
-                    "memory_mb": int(mem.split()[0]),
-                    "pci_link_width": int(width),
-                }
-            )
-        return gpus
-    except Exception:
-        pass
+            try:
+                idx, uuid_str, name, bus, mem, width = [x.strip() for x in line.split(",")]
+                gpus.append(
+                    GPUInfo(
+                        index=int(idx),
+                        uuid=uuid_str,
+                        model=name,
+                        pci_bus=bus,
+                        memory_mb=int(mem.split()[0]),
+                        pci_link_width=int(width),
+                        vendor="nvidia",
+                    )
+                )
+            except Exception as e:
+                event_logger.log_error("worker", "unassigned", "W099", "Failed to parse nvidia-smi output", e)
+        if gpus:
+            return gpus
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        event_logger.log_error("worker", "unassigned", "W099", "nvidia-smi failed", e)
 
     # AMD detection via rocm-smi
     try:
@@ -128,41 +105,59 @@ def detect_gpus() -> list[dict]:
             ],
             text=True,
         )
-        gpus = []
-        current = {}
+        gpus: list[GPUInfo] = []
+        current: dict | None = None
         for line in output.splitlines():
             if line.startswith("GPU") and "Unique ID" in line:
                 if current:
-                    gpus.append(current)
-                    current = {}
+                    gpus.append(
+                        GPUInfo(
+                            index=current.get("index", 0),
+                            uuid=current.get("uuid", ""),
+                            model="AMD GPU",
+                            pci_bus=current.get("pci_bus", ""),
+                            memory_mb=current.get("memory_mb", 0),
+                            pci_link_width=current.get("pci_link_width", 16),
+                            vendor="amd",
+                        )
+                    )
                 parts = line.split()
                 idx = int(parts[0].split("[")[1].split("]")[0])
                 uuid_str = parts[-1]
                 current = {
                     "index": idx,
                     "uuid": uuid_str,
-                    "model": "AMD GPU",
                     "pci_bus": "",
                     "memory_mb": 0,
                     "pci_link_width": 16,
                 }
-            elif line.startswith("GPU") and "PCI Bus" in line:
+            elif current and line.startswith("GPU") and "PCI Bus" in line:
                 current["pci_bus"] = line.split()[-1]
-            elif line.startswith("GPU") and "VRAM Total" in line:
+            elif current and line.startswith("GPU") and "VRAM Total" in line:
                 try:
                     current["memory_mb"] = int(line.split()[-2])
                 except Exception:
                     pass
         if current:
-            gpus.append(current)
+            gpus.append(
+                GPUInfo(
+                    index=current.get("index", 0),
+                    uuid=current.get("uuid", ""),
+                    model="AMD GPU",
+                    pci_bus=current.get("pci_bus", ""),
+                    memory_mb=current.get("memory_mb", 0),
+                    pci_link_width=current.get("pci_link_width", 16),
+                    vendor="amd",
+                )
+            )
         if gpus:
             return gpus
-    except Exception:
-        pass
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        event_logger.log_error("worker", "unassigned", "W099", "rocm-smi failed", e)
 
     # Generic detection via sysfs for AMD/Intel
     try:
-        gpus = []
+        gpus: list[GPUInfo] = []
         cards = sorted(glob.glob("/sys/class/drm/card[0-9]*"))
         for idx, card in enumerate(cards):
             device_path = os.path.join(card, "device")
@@ -197,14 +192,14 @@ def detect_gpus() -> list[dict]:
                     pass
 
             gpus.append(
-                {
-                    "index": idx,
-                    "uuid": bus,
-                    "model": model,
-                    "pci_bus": bus,
-                    "memory_mb": mem_mb,
-                    "pci_link_width": width or 16,
-                }
+                GPUInfo(
+                    index=idx,
+                    uuid=bus,
+                    model=model,
+                    pci_bus=bus,
+                    memory_mb=mem_mb,
+                    pci_link_width=width or 16,
+                )
             )
         if gpus:
             return gpus
@@ -214,20 +209,20 @@ def detect_gpus() -> list[dict]:
     # Generic detection via lspci for Intel or unknown GPUs
     try:
         output = subprocess.check_output(["lspci"], text=True)
-        gpus = []
+        gpus: list[GPUInfo] = []
         for line in output.splitlines():
             if "VGA compatible controller" in line or "3D controller" in line:
                 bus = line.split()[0]
                 model = line.split(":", 2)[-1].strip()
                 gpus.append(
-                    {
-                        "index": len(gpus),
-                        "uuid": bus,
-                        "model": model,
-                        "pci_bus": bus,
-                        "memory_mb": 0,
-                        "pci_link_width": 0,
-                    }
+                    GPUInfo(
+                        index=len(gpus),
+                        uuid=bus,
+                        model=model,
+                        pci_bus=bus,
+                        memory_mb=0,
+                        pci_link_width=0,
+                    )
                 )
         if gpus:
             return gpus
@@ -332,7 +327,7 @@ def get_gpu_utilization() -> list[int]:
     return util
 
 
-def register_worker(worker_id: str, gpus: list[dict]):
+def register_worker(worker_id: str, gpus: list[GPUInfo | dict]):
     ip = socket.gethostbyname(socket.gethostname())
     ts = int(time.time())
     _redis_write(
@@ -341,23 +336,26 @@ def register_worker(worker_id: str, gpus: list[dict]):
         mapping={"ip": ip, "status": "idle", "last_seen": ts},
     )
     _redis_write(r.sadd, "workers", worker_id)
+    normalized: list[GPUInfo] = []
     for g in gpus:
+        ginfo = GPUInfo(**g) if isinstance(g, dict) else g
         _redis_write(
             r.hset,
-            f"gpu:{g['uuid']}",
+            f"gpu:{ginfo.uuid}",
             mapping={
-                "model": g["model"],
-                "pci_bus": g["pci_bus"],
-                "memory_mb": g["memory_mb"],
-                "pci_link_width": g.get("pci_link_width", 0),
+                "model": ginfo.model,
+                "pci_bus": ginfo.pci_bus,
+                "memory_mb": ginfo.memory_mb,
+                "pci_link_width": ginfo.pci_link_width,
                 "worker": worker_id,
             },
         )
-        _redis_write(r.sadd, f"worker:{worker_id}:gpus", g["uuid"])
+        _redis_write(r.sadd, f"worker:{worker_id}:gpus", ginfo.uuid)
+        normalized.append(ginfo)
 
     payload = {
         "worker_id": worker_id,
-        "hardware": {"gpus": gpus},
+        "hardware": {"gpus": [g.__dict__ for g in normalized]},
         "pubkey": load_public_key_pem(),
         "timestamp": int(time.time()),
         "signature": None,
@@ -428,6 +426,53 @@ def main(argv: list[str] | None = None):
     if argv is None:
         argv = []
     logging.basicConfig(level=logging.INFO)
+    global r, SERVER_URL, STATUS_INTERVAL, REDIS_HOST, REDIS_PORT
+    global REDIS_PASSWORD, REDIS_SSL, REDIS_SSL_CERT, REDIS_SSL_KEY, REDIS_SSL_CA_CERT
+    global GPU_TUNING
+
+    SERVER_URL = os.getenv("SERVER_URL", SERVER_URL)
+    STATUS_INTERVAL = int(os.getenv("STATUS_INTERVAL", str(STATUS_INTERVAL)))
+    REDIS_HOST = os.getenv("REDIS_HOST", REDIS_HOST)
+    REDIS_PORT = int(os.getenv("REDIS_PORT", str(REDIS_PORT)))
+    REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", REDIS_PASSWORD)
+    REDIS_SSL = os.getenv("REDIS_SSL", REDIS_SSL)
+    REDIS_SSL_CERT = os.getenv("REDIS_SSL_CERT", REDIS_SSL_CERT)
+    REDIS_SSL_KEY = os.getenv("REDIS_SSL_KEY", REDIS_SSL_KEY)
+    REDIS_SSL_CA_CERT = os.getenv("REDIS_SSL_CA_CERT", REDIS_SSL_CA_CERT)
+
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE) as f:
+                cfg = json.load(f)
+            SERVER_URL = os.getenv("SERVER_URL", cfg.get("server_url", SERVER_URL))
+            REDIS_HOST = os.getenv("REDIS_HOST", cfg.get("redis_host", REDIS_HOST))
+            REDIS_PORT = int(os.getenv("REDIS_PORT", cfg.get("redis_port", REDIS_PORT)))
+            REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", cfg.get("redis_password", REDIS_PASSWORD))
+            REDIS_SSL = os.getenv("REDIS_SSL", str(cfg.get("redis_ssl", REDIS_SSL)))
+            REDIS_SSL_CERT = os.getenv("REDIS_SSL_CERT", cfg.get("redis_ssl_cert", REDIS_SSL_CERT))
+            REDIS_SSL_KEY = os.getenv("REDIS_SSL_KEY", cfg.get("redis_ssl_key", REDIS_SSL_KEY))
+            REDIS_SSL_CA_CERT = os.getenv("REDIS_SSL_CA_CERT", cfg.get("redis_ssl_ca_cert", REDIS_SSL_CA_CERT))
+            GPU_TUNING = cfg.get("darkling_tuning", {})
+        except Exception:
+            pass
+
+    redis_opts: dict[str, str | int | bool] = {
+        "host": REDIS_HOST,
+        "port": REDIS_PORT,
+        "decode_responses": True,
+    }
+    if REDIS_PASSWORD:
+        redis_opts["password"] = REDIS_PASSWORD
+    if str(REDIS_SSL).lower() in {"1", "true", "yes"}:
+        redis_opts["ssl"] = True
+        if REDIS_SSL_CA_CERT:
+            redis_opts["ssl_ca_certs"] = REDIS_SSL_CA_CERT
+        if REDIS_SSL_CERT:
+            redis_opts["ssl_certfile"] = REDIS_SSL_CERT
+        if REDIS_SSL_KEY:
+            redis_opts["ssl_keyfile"] = REDIS_SSL_KEY
+
+    r = redis.Redis(**redis_opts)
     event_logger.r = r
     parser = argparse.ArgumentParser(description="Hashmancer worker agent")
     parser.add_argument(
@@ -448,14 +493,15 @@ def main(argv: list[str] | None = None):
 
     print_logo()
     worker_id = os.getenv("WORKER_ID", str(uuid.uuid4()))
-    gpus = detect_gpus()
+    gpus = [GPUInfo(**g) if isinstance(g, dict) else g for g in detect_gpus()]
     for g in gpus:
-        params = GPU_TUNING.get(g.get("model"), {})
+        gdict = g.__dict__
+        params = GPU_TUNING.get(gdict.get("model"), {})
         if params:
             if "grid" in params:
-                g["darkling_grid"] = params["grid"]
+                gdict["darkling_grid"] = params["grid"]
             if "block" in params:
-                g["darkling_block"] = params["block"]
+                gdict["darkling_block"] = params["block"]
     name = register_worker(worker_id, gpus)
     # benchmark GPUs once before starting normal job processing
     low_bw_engine = "hashcat"
@@ -480,16 +526,16 @@ def main(argv: list[str] | None = None):
     for gpu in gpus:
         engine = "hashcat"
         if (
-            gpu.get("pci_link_width", 16) <= 4
+            gpu.pci_link_width <= 4
             and low_bw_engine == "darkling"
         ):
             engine = "darkling-engine"
-            rates = run_darkling_benchmark(gpu)
+            rates = run_darkling_benchmark(gpu.__dict__)
         else:
-            rates = run_hashcat_benchmark(gpu, engine)
+            rates = run_hashcat_benchmark(gpu.__dict__, engine)
         payload = {
             "worker_id": name,
-            "gpu_uuid": gpu.get("uuid"),
+            "gpu_uuid": gpu.uuid,
             "engine": engine,
             "hashrates": rates,
             "timestamp": int(time.time()),
@@ -503,7 +549,7 @@ def main(argv: list[str] | None = None):
                 "worker",
                 name,
                 "W001",
-                f"Failed to submit benchmark for {gpu.get('uuid')}",
+                f"Failed to submit benchmark for {gpu.uuid}",
                 e,
             )
 
@@ -512,7 +558,7 @@ def main(argv: list[str] | None = None):
         threads.append(
             GPUSidecar(
                 name,
-                gpu,
+                gpu.__dict__,
                 SERVER_URL,
                 probabilistic_order=probabilistic_order,
                 markov_lang=markov_lang,
@@ -521,7 +567,7 @@ def main(argv: list[str] | None = None):
         )
     for t in threads:
         t.start()
-    flash_mgr = GPUFlashManager(name, SERVER_URL, gpus)
+    flash_mgr = GPUFlashManager(name, SERVER_URL, [g.__dict__ for g in gpus])
     flash_mgr.start()
     event_logger.log_info("worker", name, f"Worker {name} started with {len(gpus)} GPUs")
     try:
@@ -529,7 +575,10 @@ def main(argv: list[str] | None = None):
             temps = get_gpu_temps()
             power = get_gpu_power()
             utilization = get_gpu_utilization()
-            progress = {t.gpu.get("uuid"): t.progress for t in threads if t.current_job}
+            progress = {}
+            for t in threads:
+                if t.current_job and isinstance(t.gpu, dict) and "uuid" in t.gpu:
+                    progress[t.gpu["uuid"]] = t.progress
             try:
                 ts = int(time.time())
                 requests.post(
