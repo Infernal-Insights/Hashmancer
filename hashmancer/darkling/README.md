@@ -104,6 +104,9 @@ cmake -DENABLE_HIP=ON -DENABLE_OPENCL=ON -B build
 cmake --build build
 ```
 
+During configuration the script will automatically disable a backend if the
+required toolchain is missing and print a warning message.
+
 `ENABLE_CUDA`, `ENABLE_HIP`, and `ENABLE_OPENCL` may be toggled to target a
 specific platform.  The resulting static libraries `cuda_backend`,
 `hip_backend`, and `opencl_backend` expose a `launch_darkling` entry point for
@@ -112,3 +115,10 @@ each vendor.
 Precompiled binaries are published with each release. Set the environment
 variable `DARKLING_ENGINE_URL` before running `setup.py` on a worker to
 automatically download a ready-to-use `darkling-engine`.
+
+### Runtime Configuration
+
+The dispatcher inspects the `DARKLING_GPU_BACKEND` variable to force a
+specific backend (`cuda`, `hip` or `opencl`). Grid and block overrides can be
+supplied via `DARKLING_GRID` and `DARKLING_BLOCK`. The `launcher.py` helper
+exposes `--grid` and `--block` options that set these variables for you.

@@ -3,10 +3,13 @@
 #include <vector>
 #include <array>
 
-// Max limits
+// Maximum number of custom charsets that can be referenced by a mask
 #define MAX_CHARSETS 16
+// Longest supported mask length in characters
 #define MAX_MASK_LEN 32
+// Maximum hashes processed per kernel launch
 #define MAX_HASHES 2048
+// Size of the result ring buffer on the GPU
 #define MAX_RESULT_BUFFER 512
 
 // Job Configuration (passed to GPU)

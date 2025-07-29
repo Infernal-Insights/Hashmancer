@@ -42,7 +42,15 @@ bool IntelCracker::run_batch() {
     std::string src((std::istreambuf_iterator<char>(file)),{});
     const char* sc=src.c_str(); size_t sl=src.size();
     cl_program prog=clCreateProgramWithSource(ctx,1,&sc,&sl,&err);
-    clBuildProgram(prog,0,nullptr,nullptr,nullptr,nullptr);
+    cl_int bres = clBuildProgram(prog,0,nullptr,nullptr,nullptr,nullptr);
+    if(bres != CL_SUCCESS){
+        size_t log_sz = 0;
+        clGetProgramBuildInfo(prog, dev, CL_PROGRAM_BUILD_LOG, 0, nullptr, &log_sz);
+        std::vector<char> log(log_sz);
+        clGetProgramBuildInfo(prog, dev, CL_PROGRAM_BUILD_LOG, log_sz, log.data(), nullptr);
+        std::cerr << log.data() << std::endl;
+        return false;
+    }
     cl_kernel kr=clCreateKernel(prog,"crack_kernel",&err);
 
     static uint8_t cs_bytes[MAX_CUSTOM_SETS][MAX_CHARSET_CHARS][MAX_UTF8_BYTES];
@@ -82,6 +90,7 @@ bool IntelCracker::run_batch() {
     clSetKernelArg(kr,idx++,sizeof(cl_mem),&cnt_buf);
 
     size_t global=64;
+    if(global==0) return false;
     clEnqueueNDRangeKernel(q,kr,1,nullptr,&global,nullptr,0,nullptr,nullptr);
     clFinish(q);
 

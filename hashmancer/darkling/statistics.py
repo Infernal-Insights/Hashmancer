@@ -29,9 +29,11 @@ def build_markov(records: Iterable[tuple[str, int]]) -> dict:
     start: Dict[str, int] = defaultdict(int)
     trans: List[Dict[str, Dict[str, int]]] = []
     for pattern, count in records:
+        if count < 0:
+            raise ValueError("negative count not allowed")
         tokens = TOKEN_RE.findall(pattern)
         if not tokens:
-            continue
+            raise ValueError(f"invalid pattern: {pattern}")
         start[tokens[0]] += int(count)
         for i in range(1, len(tokens)):
             while len(trans) < i:

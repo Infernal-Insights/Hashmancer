@@ -5,6 +5,11 @@
 #include <vector>
 #include <cstring>
 
+#define HIP_CHECK(x) \
+    do { hipError_t err = (x); if (err != hipSuccess) { \
+        std::cerr << "HIP error: " << hipGetErrorString(err) << " at " \
+                  << __FILE__ << ":" << __LINE__ << std::endl; return false; } } while (0)
+
 namespace darkling {
 
 HipCracker::HipCracker() {}
@@ -33,22 +38,22 @@ bool HipCracker::load_job(const MaskJob &job) {
         }
     }
 
-    hipMemcpyToSymbol(HIP_SYMBOL(d_pwd_len), &job_.mask_length, sizeof(int));
-    hipMemcpyToSymbol(HIP_SYMBOL(d_hash_len), &job_.hash_length, sizeof(int));
-    hipMemcpyToSymbol(HIP_SYMBOL(d_hash_type), &job_.hash_type, sizeof(uint8_t));
-    hipMemcpyToSymbol(HIP_SYMBOL(d_num_hashes), &job_.num_hashes, sizeof(int));
-    hipMemcpyToSymbol(HIP_SYMBOL(d_pos_charset), job_.mask_template, job_.mask_length);
+    HIP_CHECK(hipMemcpyToSymbol(HIP_SYMBOL(d_pwd_len), &job_.mask_length, sizeof(int)));
+    HIP_CHECK(hipMemcpyToSymbol(HIP_SYMBOL(d_hash_len), &job_.hash_length, sizeof(int)));
+    HIP_CHECK(hipMemcpyToSymbol(HIP_SYMBOL(d_hash_type), &job_.hash_type, sizeof(uint8_t)));
+    HIP_CHECK(hipMemcpyToSymbol(HIP_SYMBOL(d_num_hashes), &job_.num_hashes, sizeof(int)));
+    HIP_CHECK(hipMemcpyToSymbol(HIP_SYMBOL(d_pos_charset), job_.mask_template, job_.mask_length));
 
     for(int s=0; s<MAX_CUSTOM_SETS; ++s) {
-        hipMemcpyToSymbol(HIP_SYMBOL(d_charset_lens), &cs_sizes[s], sizeof(int), s*sizeof(int));
+        HIP_CHECK(hipMemcpyToSymbol(HIP_SYMBOL(d_charset_lens), &cs_sizes[s], sizeof(int), s*sizeof(int)));
         if(cs_sizes[s] > 0) {
-            hipMemcpyToSymbol(HIP_SYMBOL(d_charset_bytes), cs_bytes[s], cs_sizes[s]*MAX_UTF8_BYTES,
-                               s*MAX_CHARSET_CHARS*MAX_UTF8_BYTES);
-            hipMemcpyToSymbol(HIP_SYMBOL(d_charset_charlen), cs_lens[s], cs_sizes[s],
-                               s*MAX_CHARSET_CHARS);
+            HIP_CHECK(hipMemcpyToSymbol(HIP_SYMBOL(d_charset_bytes), cs_bytes[s], cs_sizes[s]*MAX_UTF8_BYTES,
+                               s*MAX_CHARSET_CHARS*MAX_UTF8_BYTES));
+            HIP_CHECK(hipMemcpyToSymbol(HIP_SYMBOL(d_charset_charlen), cs_lens[s], cs_sizes[s],
+                               s*MAX_CHARSET_CHARS));
         }
     }
-    hipMemcpyToSymbol(HIP_SYMBOL(d_hashes), job_.hashes, static_cast<size_t>(job_.num_hashes) * job_.hash_length);
+    HIP_CHECK(hipMemcpyToSymbol(HIP_SYMBOL(d_hashes), job_.hashes, static_cast<size_t>(job_.num_hashes) * job_.hash_length));
 
     return true;
 }
@@ -56,28 +61,30 @@ bool HipCracker::load_job(const MaskJob &job) {
 bool HipCracker::run_batch() {
     dim3 grid{64};
     dim3 block{64};
+    if(grid.x == 0 || block.x == 0)
+        return false;
 
     size_t res_size = static_cast<size_t>(MAX_RESULT_BUFFER) * MAX_PWD_BYTES;
     char* d_results = nullptr;
     int* d_count = nullptr;
-    hipMalloc(&d_results, res_size);
-    hipMalloc(&d_count, sizeof(int));
-    hipMemset(d_count, 0, sizeof(int));
+    HIP_CHECK(hipMalloc(&d_results, res_size));
+    HIP_CHECK(hipMalloc(&d_count, sizeof(int)));
+    HIP_CHECK(hipMemset(d_count, 0, sizeof(int)));
 
     uint64_t total = job_.end_index - job_.start_index;
-    hipLaunchKernelGGL(crack_kernel, grid, block, 0, 0,
+    HIP_CHECK(hipLaunchKernelGGL(crack_kernel, grid, block, 0, 0,
                        job_.start_index, total, d_results,
-                       MAX_RESULT_BUFFER, d_count);
-    hipDeviceSynchronize();
+                       MAX_RESULT_BUFFER, d_count));
+    HIP_CHECK(hipDeviceSynchronize());
 
     int h_count = 0;
-    hipMemcpy(&h_count, d_count, sizeof(int), hipMemcpyDeviceToHost);
+    HIP_CHECK(hipMemcpy(&h_count, d_count, sizeof(int), hipMemcpyDeviceToHost));
     h_count = std::min(h_count, MAX_RESULT_BUFFER);
     std::vector<char> buffer(static_cast<size_t>(h_count) * MAX_PWD_BYTES);
     if(h_count > 0)
-        hipMemcpy(buffer.data(), d_results,
+        HIP_CHECK(hipMemcpy(buffer.data(), d_results,
                   static_cast<size_t>(h_count) * MAX_PWD_BYTES,
-                  hipMemcpyDeviceToHost);
+                  hipMemcpyDeviceToHost));
 
     results_.clear();
     for(int i=0;i<h_count;i++) {

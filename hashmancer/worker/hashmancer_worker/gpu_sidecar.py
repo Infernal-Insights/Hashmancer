@@ -56,6 +56,10 @@ def _safe_redis_call(func, *args, default=None, **kwargs):
 # Maximum number of digests the darkling engine can accept in a single
 # launch.  This must match the constant defined in the CUDA/CL sources.
 MAX_HASHES = 2048
+# These limits mirror the values in gpu_shared_types.h
+MAX_CHARSETS = 16
+MAX_MASK_LEN = 32
+MAX_RESULT_BUFFER = 512
 
 
 class DarklingContext:

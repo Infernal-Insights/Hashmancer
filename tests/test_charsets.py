@@ -48,3 +48,12 @@ def test_chinese_contains_common_character():
 def test_japanese_contains_scripts():
     assert "あ" in charsets.JAPANESE
     assert "ア" in charsets.JAPANESE
+
+
+def test_all_language_alphabets_defined():
+    langs = [n[:-6] for n in dir(charsets) if n.endswith("_UPPER")]
+    for lang in langs:
+        upper = getattr(charsets, f"{lang}_UPPER")
+        lower = getattr(charsets, f"{lang}_LOWER")
+        assert upper
+        assert lower

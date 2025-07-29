@@ -5,6 +5,11 @@
 #include <iostream>
 #include <algorithm>
 
+#define CUDA_CHECK(x) \
+    do { cudaError_t err = (x); if (err != cudaSuccess) { \
+        std::cerr << "CUDA error: " << cudaGetErrorString(err) << " at " \
+                  << __FILE__ << ":" << __LINE__ << std::endl; return false; } } while (0)
+
 namespace darkling {
 
 CudaCracker::CudaCracker() {}
@@ -66,10 +71,10 @@ bool CudaCracker::load_job(const MaskJob &job) {
     std::memcpy(all_hashes_.data(), job.hashes, hash_sz);
     if (d_all_hashes_size_ != hash_sz) {
         if (d_all_hashes_) cudaFree(d_all_hashes_);
-        cudaMalloc(&d_all_hashes_, hash_sz);
+        CUDA_CHECK(cudaMalloc(&d_all_hashes_, hash_sz));
         d_all_hashes_size_ = hash_sz;
     }
-    cudaMemcpy(d_all_hashes_, all_hashes_.data(), hash_sz, cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(d_all_hashes_, all_hashes_.data(), hash_sz, cudaMemcpyHostToDevice));
 
     upload_batch(0, std::min<int>(job_.num_hashes, MAX_HASHES));
     tuned_ = false;
@@ -88,14 +93,17 @@ bool CudaCracker::run_batch() {
     size_t result_off = 0;
     int remaining = MAX_RESULT_BUFFER;
 
+    if(grid_.x == 0 || block_.x == 0)
+        return false;
+
     for (int off = 0; off < job_.num_hashes && remaining > 0; off += MAX_HASHES) {
         int batch = std::min(job_.num_hashes - off, MAX_HASHES);
         upload_batch(off, batch);
-        cudaMemset(d_count_, 0, sizeof(int));
+        CUDA_CHECK(cudaMemset(d_count_, 0, sizeof(int)));
         char* d_ptr = d_results_ + result_off * MAX_PWD_BYTES;
         launch_darkling_kernel(job_.start_index, job_.end_index, d_ptr,
                                remaining, d_count_, grid_, block_);
-        cudaDeviceSynchronize();
+        CUDA_CHECK(cudaDeviceSynchronize());
 
         int found = *h_count_;
         char* h_ptr = h_results_ + result_off * MAX_PWD_BYTES;
@@ -119,36 +127,36 @@ bool CudaCracker::run_batch() {
 void CudaCracker::allocate_buffers() {
     if (h_results_) return;
     size_t res_size = static_cast<size_t>(MAX_RESULT_BUFFER) * MAX_PWD_BYTES;
-    cudaHostAlloc(&h_results_, res_size, cudaHostAllocMapped);
-    cudaHostGetDevicePointer(&d_results_, h_results_, 0);
-    cudaHostAlloc(&h_count_, sizeof(int), cudaHostAllocMapped);
-    cudaHostGetDevicePointer(&d_count_, h_count_, 0);
+    CUDA_CHECK(cudaHostAlloc(&h_results_, res_size, cudaHostAllocMapped));
+    CUDA_CHECK(cudaHostGetDevicePointer(&d_results_, h_results_, 0));
+    CUDA_CHECK(cudaHostAlloc(&h_count_, sizeof(int), cudaHostAllocMapped));
+    CUDA_CHECK(cudaHostGetDevicePointer(&d_count_, h_count_, 0));
 }
 
 void CudaCracker::upload_batch(int start_hash, int batch_size) {
-    cudaMemcpyToSymbol(d_pwd_len, &job_.mask_length, sizeof(int));
-    cudaMemcpyToSymbol(d_hash_len, &job_.hash_length, sizeof(int));
-    cudaMemcpyToSymbol(d_hash_type, &job_.hash_type, sizeof(uint8_t));
-    cudaMemcpyToSymbol(d_num_hashes, &batch_size, sizeof(int));
-    cudaMemcpyToSymbol(d_pos_charset, pos_map_.data(), job_.mask_length);
+    CUDA_CHECK(cudaMemcpyToSymbol(d_pwd_len, &job_.mask_length, sizeof(int)));
+    CUDA_CHECK(cudaMemcpyToSymbol(d_hash_len, &job_.hash_length, sizeof(int)));
+    CUDA_CHECK(cudaMemcpyToSymbol(d_hash_type, &job_.hash_type, sizeof(uint8_t)));
+    CUDA_CHECK(cudaMemcpyToSymbol(d_num_hashes, &batch_size, sizeof(int)));
+    CUDA_CHECK(cudaMemcpyToSymbol(d_pos_charset, pos_map_.data(), job_.mask_length));
 
     for (int i = 0; i < MAX_CUSTOM_SETS; ++i) {
         int size = i < (int)charset_sizes_.size() ? charset_sizes_[i] : 0;
-        cudaMemcpyToSymbol(d_charset_lens, &size, sizeof(int), i * sizeof(int));
+        CUDA_CHECK(cudaMemcpyToSymbol(d_charset_lens, &size, sizeof(int), i * sizeof(int)));
         if (size > 0) {
-            cudaMemcpyToSymbol(d_charset_bytes, charset_byte_ptrs_[i],
+            CUDA_CHECK(cudaMemcpyToSymbol(d_charset_bytes, charset_byte_ptrs_[i],
                                size * MAX_UTF8_BYTES,
-                               i * MAX_CHARSET_CHARS * MAX_UTF8_BYTES);
-            cudaMemcpyToSymbol(d_charset_charlen, charset_len_ptrs_[i], size,
-                               i * MAX_CHARSET_CHARS);
+                               i * MAX_CHARSET_CHARS * MAX_UTF8_BYTES));
+            CUDA_CHECK(cudaMemcpyToSymbol(d_charset_charlen, charset_len_ptrs_[i], size,
+                               i * MAX_CHARSET_CHARS));
         }
     }
 
     const uint8_t* slice = d_all_hashes_ +
         static_cast<size_t>(start_hash) * job_.hash_length;
-    cudaMemcpyToSymbol(d_hashes, slice,
+    CUDA_CHECK(cudaMemcpyToSymbol(d_hashes, slice,
                        static_cast<size_t>(batch_size) * job_.hash_length,
-                       0, cudaMemcpyDeviceToDevice);
+                       0, cudaMemcpyDeviceToDevice));
 }
 
 void CudaCracker::autotune(uint64_t start, uint64_t end) {
@@ -158,23 +166,23 @@ void CudaCracker::autotune(uint64_t start, uint64_t end) {
         return;
     }
     cudaDeviceProp prop{};
-    cudaGetDeviceProperties(&prop, device_id_);
+    CUDA_CHECK(cudaGetDeviceProperties(&prop, device_id_));
     int maxThreads = prop.maxThreadsPerBlock;
     int active = 0;
-    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&active, crack_kernel,
-                                                  maxThreads, 0);
+    CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&active, crack_kernel,
+                                                  maxThreads, 0));
     grid_.x = active * prop.multiProcessorCount;
     block_.x = maxThreads;
 
-    cudaEvent_t s,e; cudaEventCreate(&s); cudaEventCreate(&e);
+    cudaEvent_t s,e; CUDA_CHECK(cudaEventCreate(&s)); CUDA_CHECK(cudaEventCreate(&e));
     int batch = std::min(job_.num_hashes, MAX_HASHES);
     upload_batch(0, batch);
-    cudaMemset(d_count_, 0, sizeof(int));
-    cudaEventRecord(s);
+    CUDA_CHECK(cudaMemset(d_count_, 0, sizeof(int)));
+    CUDA_CHECK(cudaEventRecord(s));
     launch_darkling_kernel(start, end, d_results_, MAX_RESULT_BUFFER,
                            d_count_, grid_, block_);
-    cudaEventRecord(e); cudaEventSynchronize(e);
-    float ms = 0; cudaEventElapsedTime(&ms, s, e);
+    CUDA_CHECK(cudaEventRecord(e)); CUDA_CHECK(cudaEventSynchronize(e));
+    float ms = 0; CUDA_CHECK(cudaEventElapsedTime(&ms, s, e));
     float rate = (float)(end - start) / (ms / 1000.0f);
     std::cerr << "[darkling] initial speed " << rate << " H/s\n";
     tuned_ = true;
