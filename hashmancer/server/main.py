@@ -1202,6 +1202,21 @@ async def import_hashes(file: UploadFile = File(...), hash_mode: str = "0"):
         raise HTTPException(status_code=500, detail="import failed")
 
 
+@app.post("/import_hash")
+async def import_hash(hash: str, hash_mode: str = "0"):
+    """Queue a single hash for cracking."""
+    try:
+        batch_id = redis_manager.store_batch([hash], hash_mode=hash_mode)
+        if not batch_id:
+            raise HTTPException(status_code=500, detail="import failed")
+        return {"batch_id": batch_id}
+    except HTTPException:
+        raise
+    except Exception as e:  # pragma: no cover - unexpected failure
+        log_error("server", "system", "S726", "Failed to import hashes", e)
+        raise HTTPException(status_code=500, detail="import failed")
+
+
 
 
 async def train_llm(req: TrainLLMRequest):

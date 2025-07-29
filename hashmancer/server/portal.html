@@ -109,6 +109,11 @@ body::before {
 <input type="file" id="hash-file">
 <input type="number" id="hash-mode">
 <button onclick="uploadHashes()">Upload</button>
+<div>
+  <input type="text" id="single-hash" placeholder="hash">
+  <input type="number" id="single-hash-mode" placeholder="mode">
+  <button onclick="submitHash()">Queue</button>
+</div>
 </section>
 
 <section id="masks">
@@ -292,6 +297,17 @@ async function uploadHashes(){
   await fetch('/import_hashes',{method:'POST',body:fd});
   document.getElementById('hash-file').value='';
   document.getElementById('hash-mode').value='';
+  updateMetrics();
+  loadJobs();
+}
+
+async function submitHash(){
+  const hash=document.getElementById('single-hash').value.trim();
+  if(!hash) return;
+  const mode=document.getElementById('single-hash-mode').value.trim()||'0';
+  await fetch('/import_hash',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hash,hash_mode:mode})});
+  document.getElementById('single-hash').value='';
+  document.getElementById('single-hash-mode').value='';
   updateMetrics();
   loadJobs();
 }
