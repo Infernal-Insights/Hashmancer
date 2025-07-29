@@ -38,9 +38,6 @@ sys.modules.setdefault("pattern_to_mask", pattern_mod)
 hashescom_mod = importlib.import_module("hashmancer.server.hashescom_client")
 sys.modules.setdefault("hashescom_client", hashescom_mod)
 
-server_pkg = importlib.import_module("hashmancer.server")
-sys.modules.setdefault("Server", server_pkg)
-
 from hashmancer.darkling import statistics
 darkling_mod.statistics = statistics
 
