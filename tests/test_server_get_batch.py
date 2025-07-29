@@ -2,6 +2,7 @@ import sys, os
 import asyncio
 import sys
 import os
+import pytest
 
 from tests.test_helpers import (
     fastapi_stub,
@@ -96,3 +97,29 @@ def test_get_batch_returns_batch_id(monkeypatch):
     monkeypatch.setattr(main, "verify_signature", lambda *a: True)
     asyncio.run(main.submit_no_founds(payload))
     assert fake.ack_args == (main.JOB_STREAM, main.HTTP_GROUP, "1-0")
+
+
+def test_get_batch_redis_error(monkeypatch):
+    class ErrRedis(FakeRedis):
+        def xreadgroup(self, *a, **kw):
+            raise main.redis.exceptions.RedisError()
+
+    fake = ErrRedis()
+    monkeypatch.setattr(main, "r", fake)
+    monkeypatch.setattr(redis_manager, "r", fake)
+    monkeypatch.setattr(main, "verify_signature", lambda *a: True)
+    with pytest.raises(main.HTTPException):
+        asyncio.run(main.get_batch("w", 0, "s"))
+
+
+def test_get_batch_mask_too_long(monkeypatch):
+    fake = FakeRedis()
+    long_mask = "?1" * 33
+    fake.stream = [("jobs", [("1-0", {"job_id": "job1"})])]
+    fake.store["job:job1"] = {"mask": long_mask}
+    fake.store["worker:id"] = {}
+    monkeypatch.setattr(main, "r", fake)
+    monkeypatch.setattr(redis_manager, "r", fake)
+    monkeypatch.setattr(main, "verify_signature", lambda *a: True)
+    with pytest.raises(main.HTTPException):
+        asyncio.run(main.get_batch("id", 0, "s"))

@@ -5,12 +5,27 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import HTMLResponse, FileResponse
+try:  # JSONResponse may be missing in test stubs
+    from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+except Exception:  # pragma: no cover - fallback for tests
+    from fastapi.responses import HTMLResponse, FileResponse  # type: ignore
+    class JSONResponse:  # type: ignore
+        def __init__(self, content=None, status_code=200):
+            self.content = content
+            self.status_code = status_code
+        async def __call__(self, scope, receive, send):
+            pass
+try:
+    from fastapi import Request
+except Exception:  # pragma: no cover - test stubs
+    class Request:  # type: ignore
+        pass
 import logging
 
 logging.basicConfig(level=logging.INFO)
 import subprocess
 from datetime import datetime
+from hashmancer.ascii_logo import print_logo
 import os
 import redis
 from .redis_utils import get_redis
@@ -115,11 +130,24 @@ importlib.reload(_app_module)
 app = _app_module.app
 PortalAuthMiddleware = _app_module.PortalAuthMiddleware
 
+if hasattr(app, "exception_handler"):
+    @app.exception_handler(redis.exceptions.RedisError)
+    async def _redis_error_handler(request: Request, exc: redis.exceptions.RedisError):
+        log_error("server", "system", "SRED", "Redis unavailable", exc)
+        return JSONResponse(status_code=500, content={"detail": "redis unavailable"})
+
 r = get_redis()
 password_hasher = PasswordHasher()
 
 # store references to background tasks so they can be cancelled
 BACKGROUND_TASKS: list[asyncio.Task] = []
+
+# default values overridden at startup
+JOB_STREAM = "jobs"
+HTTP_GROUP = "http-workers"
+LOW_BW_JOB_STREAM = "darkling-jobs"
+LOW_BW_GROUP = "darkling-workers"
+MAX_MASK_LENGTH = 32
 
 
 def create_background_task(coro: Coroutine[Any, Any, Any]) -> asyncio.Task:
@@ -167,7 +195,14 @@ def verify_session_token(token: str) -> bool:
     ).hexdigest()
     if not hmac.compare_digest(expected, sig):
         return False
-    return bool(r.exists(f"session:{session_id}"))
+    if not r.exists(f"session:{session_id}"):
+        logging.warning("unknown session id %s", session_id)
+        return False
+    ttl = r.ttl(f"session:{session_id}") if hasattr(r, "ttl") else SESSION_TTL
+    if ttl <= 0:
+        log_error("server", "system", "S760", "session ttl expired")
+        return False
+    return True
 
 
 def verify_hash(password: str, hash_str: str, algorithm: str) -> bool:
@@ -178,19 +213,16 @@ def verify_hash(password: str, hash_str: str, algorithm: str) -> bool:
             digest = hashlib.new("md4", password.encode("utf-16le")).hexdigest()
         else:
             digest = hashlib.new(algo, password.encode()).hexdigest()
-    except Exception:
+    except (ValueError, TypeError):
         return False
     return digest.lower() == hash_str.lower()
 
 # baseline undervolt/flash settings per GPU model
 FLASH_PRESETS_FILE = Path(__file__).with_name("flash_presets.json")
-if FLASH_PRESETS_FILE.exists():
-    try:
-        with FLASH_PRESETS_FILE.open() as f:
-            FLASH_PRESETS = json.load(f)
-    except Exception:
-        FLASH_PRESETS = {}
-else:
+try:
+    with FLASH_PRESETS_FILE.open() as f:
+        FLASH_PRESETS = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
     FLASH_PRESETS = {
         "nvidia": {
             "rtx 3080": {"power_limit": 220, "core_clock": 1350, "mem_clock": 4500},
@@ -229,18 +261,20 @@ def get_flash_settings(model: str) -> dict:
             data = dict(val)
             data["vendor"] = vendor
             return data
+    logging.warning("unknown GPU model: %s", model)
     data = dict(presets["default"])
     data["vendor"] = vendor
     return data
 
 
 @app.post("/login")
-async def login(req: LoginRequest):
+async def login(req: LoginRequest) -> dict[str, str]:
     initial_token = CONFIG.get("initial_admin_token")
     if initial_token and req.passkey == initial_token:
         username = getattr(req, "username", None)
         password = getattr(req, "password", None)
         if not username or not password:
+            log_error("server", "system", "S760", "missing credentials")
             raise HTTPException("setup required")
         CONFIG["admin_username"] = username
         CONFIG["admin_password_hash"] = password_hasher.hash(password)
@@ -256,16 +290,29 @@ async def login(req: LoginRequest):
 
 
 @app.post("/logout")
-async def logout(req: LogoutRequest):
+async def logout(req: LogoutRequest) -> dict[str, str]:
     """Invalidate a session token."""
     try:
         session_id = req.token.split("|")[0]
         r.delete(f"session:{session_id}")
-    except Exception:
-        pass
+    except redis.exceptions.RedisError as e:
+        log_error("server", "system", "S762", "Failed to logout", e)
+        raise HTTPException(status_code=500, detail="redis unavailable")
+    except Exception as e:
+        log_error("server", "system", "S762", "Failed to logout", e)
     return {"status": "ok", "cookie": ""}
 
 
+
+
+@app.on_event("startup")
+async def _load_environment() -> None:
+    """Load environment variable overrides."""
+    global JOB_STREAM, HTTP_GROUP, LOW_BW_JOB_STREAM, LOW_BW_GROUP
+    JOB_STREAM = os.getenv("JOB_STREAM", JOB_STREAM)
+    HTTP_GROUP = os.getenv("HTTP_GROUP", HTTP_GROUP)
+    LOW_BW_JOB_STREAM = os.getenv("LOW_BW_JOB_STREAM", LOW_BW_JOB_STREAM)
+    LOW_BW_GROUP = os.getenv("LOW_BW_GROUP", LOW_BW_GROUP)
 
 
 @app.on_event("startup")
@@ -282,7 +329,7 @@ async def shutdown_event():
 
 
 @app.post("/register_worker")
-async def register_worker(info: RegisterWorkerRequest):
+async def register_worker(info: RegisterWorkerRequest) -> dict[str, str]:
     try:
         worker_id = info.worker_id
         if not verify_signature_with_key(info.pubkey, worker_id, info.timestamp, info.signature):
@@ -333,13 +380,16 @@ async def register_worker(info: RegisterWorkerRequest):
         raise HTTPException(status_code=500, detail="redis unavailable")
     except HTTPException:
         raise
+    except (TypeError, ValueError, json.JSONDecodeError) as e:
+        log_error("server", "unassigned", "S700", "invalid worker data", e)
+        raise HTTPException(status_code=400, detail="invalid worker data")
     except Exception as e:
         log_error("server", "unassigned", "S700", "Worker registration failed", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/get_batch")
-async def get_batch(worker_id: str, timestamp: int, signature: str):
+async def get_batch(worker_id: str, timestamp: int, signature: str) -> dict:
     try:
         if not verify_signature(worker_id, worker_id, timestamp, signature):
             return {"status": "unauthorized"}
@@ -389,17 +439,20 @@ async def get_batch(worker_id: str, timestamp: int, signature: str):
                 "status": "processing",
             },
         )
+        mask = batch.get("mask", "")
+        if mask and mask.count("?") > MAX_MASK_LENGTH:
+            raise HTTPException(status_code=400, detail="mask too long")
         return batch
     except redis.exceptions.RedisError as e:
         log_error("server", worker_id, "SRED", "Redis unavailable", e)
-        return {"status": "error", "message": "redis unavailable"}
+        raise HTTPException(status_code=500, detail="redis unavailable")
     except Exception as e:
         log_error("server", worker_id, "S002", "Failed to assign batch", e)
-        return {"status": "error"}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/submit_founds")
-async def submit_founds(payload: SubmitFoundsRequest):
+async def submit_founds(payload: SubmitFoundsRequest) -> dict:
     try:
         if not verify_signature(
             payload.worker_id,
@@ -422,8 +475,8 @@ async def submit_founds(payload: SubmitFoundsRequest):
                 with FOUNDS_FILE.open("a", encoding="utf-8") as fh:
                     for line in payload.founds:
                         fh.write(line + "\n")
-        except Exception:
-            pass
+        except OSError as e:
+            log_error("server", payload.worker_id, "S763", "Failed to write founds", e)
 
         job_id = payload.job_id or payload.batch_id
         info = r.hgetall(f"job:{job_id}")
@@ -438,8 +491,8 @@ async def submit_founds(payload: SubmitFoundsRequest):
             end = int(info.get("end", 0))
             if start or end:
                 redis_manager.complete_range(payload.batch_id, start, end)
-        except Exception:
-            pass
+        except OSError as e:
+            log_error("server", payload.worker_id, "S764", "Range completion error", e)
 
         r.hset(f"worker:{payload.worker_id}", "status", "idle")
         return {"status": "ok", "received": len(payload.founds)}
@@ -454,7 +507,7 @@ async def submit_founds(payload: SubmitFoundsRequest):
 
 
 @app.post("/submit_no_founds")
-async def submit_no_founds(payload: SubmitNoFoundsRequest):
+async def submit_no_founds(payload: SubmitNoFoundsRequest) -> dict[str, str]:
     try:
         if not verify_signature(
             payload.worker_id,
@@ -500,18 +553,18 @@ async def submit_no_founds(payload: SubmitNoFoundsRequest):
 async def list_wordlists():
     try:
         return [f.name for f in WORDLISTS_DIR.iterdir() if f.is_file()]
-    except Exception as e:
+    except OSError as e:
         log_error("server", "system", "S705", "Failed to list wordlists", e)
-        return []
+        raise HTTPException(status_code=500, detail="filesystem error")
 
 
 @app.get("/masks")
 async def list_masks():
     try:
         return [f.name for f in MASKS_DIR.iterdir() if f.is_file()]
-    except Exception as e:
+    except OSError as e:
         log_error("server", "system", "S706", "Failed to list masks", e)
-        return []
+        raise HTTPException(status_code=500, detail="filesystem error")
 
 
 @app.get("/top_masks")
@@ -519,7 +572,7 @@ async def export_top_masks(limit: int = 10):
     """Return the top password masks derived from stored patterns."""
     try:
         return get_top_masks(limit)
-    except Exception as e:
+    except redis.exceptions.RedisError as e:
         log_error("server", "system", "S736", "Failed to export masks", e)
         return []
 
@@ -528,9 +581,9 @@ async def export_top_masks(limit: int = 10):
 async def list_rules():
     try:
         return [f.name for f in RULES_DIR.iterdir() if f.is_file()]
-    except Exception as e:
+    except OSError as e:
         log_error("server", "system", "S707", "Failed to list rules", e)
-        return []
+        raise HTTPException(status_code=500, detail="filesystem error")
 
 
 def get_gpu_temps():
@@ -672,17 +725,17 @@ async def get_worker_stats(worker_id: str, token: str | None = None):
         if info.get("temps"):
             try:
                 temps = json.loads(info["temps"])
-            except Exception:
+            except json.JSONDecodeError:
                 temps = []
         if info.get("power"):
             try:
                 power = json.loads(info["power"])
-            except Exception:
+            except json.JSONDecodeError:
                 power = []
         if info.get("utilization"):
             try:
                 util = json.loads(info["utilization"])
-            except Exception:
+            except json.JSONDecodeError:
                 util = []
         hashrate = 0.0
         try:
@@ -701,6 +754,9 @@ async def get_worker_stats(worker_id: str, token: str | None = None):
         raise HTTPException(status_code=500, detail="redis unavailable")
     except HTTPException:
         raise
+    except (ValueError, TypeError, json.JSONDecodeError) as e:
+        log_error("server", worker_id, "S750", "Failed to fetch stats", e)
+        raise HTTPException(status_code=400, detail="invalid stats data")
     except Exception as e:
         log_error("server", worker_id, "S750", "Failed to fetch stats", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -762,8 +818,10 @@ async def set_worker_status(data: WorkerStatusRequest):
     signature = data.signature
     timestamp = data.timestamp
     if not name or status is None:
+        log_error("server", name or "system", "S761", "invalid status data")
         raise HTTPException(status_code=400, detail="name and status required")
     if not verify_signature(name, name, timestamp, signature):
+        log_error("server", name, "S761", "invalid signature")
         raise HTTPException(status_code=401, detail="unauthorized")
     try:
         mapping = {"status": status, "last_seen": int(time.time())}
