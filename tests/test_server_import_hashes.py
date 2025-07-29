@@ -70,7 +70,11 @@ def test_import_hashes(monkeypatch):
         return ids.pop(0)
     monkeypatch.setattr(redis_manager.uuid, 'uuid4', fake_uuid)
     monkeypatch.setattr(main, 'log_error', lambda *a, **k: None)
-    data = b"hash,mask,wordlist,target\nh1,?a,wl.txt,t1\nh2,,,\n"
+    data = (
+        b"hash,mask,wordlist,target,hash_mode\n"
+        b"h1,?a,wl.txt,t1,1200\n"
+        b"h2,,,,1400\n"
+    )
     file = FakeUploadFile('hashes.csv', data)
     resp = asyncio.run(main.import_hashes(file, '1000'))
     assert resp['queued'] == 2
@@ -79,12 +83,12 @@ def test_import_hashes(monkeypatch):
     assert json.loads(batch['hashes']) == ['h1']
     assert batch['mask'] == '?a'
     assert batch['wordlist'] == 'wl.txt'
-    assert batch['hash_mode'] == '1000'
+    assert batch['hash_mode'] == '1200'
 
 
 def test_import_hashes_large_file(monkeypatch):
     monkeypatch.setattr(main, 'MAX_IMPORT_SIZE', 100)
-    data = b'hash,mask,wordlist,target\n' + b'h,,,' * 40
+    data = b'hash,mask,wordlist,target,hash_mode\n' + b'h,,,,' * 40
     file = FakeUploadFile('big.csv', data)
     with pytest.raises(main.HTTPException):
         asyncio.run(main.import_hashes(file, '0'))
@@ -98,8 +102,8 @@ def test_import_hashes_reads_chunks(monkeypatch):
     monkeypatch.setattr(redis_manager.orchestrator_agent, 'estimate_keyspace', lambda m, c: 10)
     monkeypatch.setattr(main, 'log_error', lambda *a, **k: None)
     monkeypatch.setattr(main, 'MAX_IMPORT_SIZE', 8192)
-    lines = [b'h%d,,,' % i for i in range(200)]
-    data = b'hash,mask,wordlist,target\n' + b'\n'.join(lines) + b'\n'
+    lines = [b'h%d,,,,' % i for i in range(200)]
+    data = b'hash,mask,wordlist,target,hash_mode\n' + b'\n'.join(lines) + b'\n'
     file = FakeUploadFile('hashes.csv', data)
     asyncio.run(main.import_hashes(file, '0'))
     assert len([c for c in file.calls if c != -1]) > 1

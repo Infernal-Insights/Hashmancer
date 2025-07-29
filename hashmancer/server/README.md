@@ -194,8 +194,11 @@ Validation failures return `400` with messages like `{\"detail\": \"mask too lon
 ### CSV format for `/import_hashes`
 
 Upload a CSV containing the following columns:
-`hash`, `mask`, `wordlist`, `target`, and `hash_mode`.
-`hash_mode` numbers follow [hashcat's list](https://hashcat.net/wiki/doku.php?id=example_hashes)
+`hash`, `mask`, `wordlist`, and `target`.
+You may also include a `hash_mode` column to override the mode for each row.
+If the column is omitted or a row is blank, the `hash_mode` query parameter
+is used for that row. `hash_mode` numbers follow
+[hashcat's list](https://hashcat.net/wiki/doku.php?id=example_hashes)
 (also available on the portal).
 
 Example:

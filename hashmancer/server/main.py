@@ -1152,6 +1152,7 @@ async def import_hashes(file: UploadFile = File(...), hash_mode: str = "0"):
             raise HTTPException(400, "invalid csv")
         header_line, buffer = buffer.split(b"\n", 1)
         fieldnames = next(csv.reader([header_line.decode()]))
+        has_hash_mode = "hash_mode" in fieldnames
         line_num = 0
 
         async def iter_lines():
@@ -1184,8 +1185,10 @@ async def import_hashes(file: UploadFile = File(...), hash_mode: str = "0"):
                 raise HTTPException(status_code=400, detail="mask too long")
             wordlist = (row.get("wordlist") or "").strip()
             target = row.get("target") or "any"
+            row_mode = (row.get("hash_mode") or "").strip() if has_hash_mode else ""
+            hm = row_mode or hash_mode
             batch_id = redis_manager.store_batch(
-                [h], mask=mask, wordlist=wordlist, rule="", target=target, hash_mode=hash_mode
+                [h], mask=mask, wordlist=wordlist, rule="", target=target, hash_mode=hm
             )
             if batch_id:
                 queued.append(batch_id)
