@@ -236,7 +236,8 @@ else:
 def get_flash_settings(model: str) -> dict:
     name = model.lower()
     vendor = "nvidia"
-    if "amd" in name or "radeon" in name or "rx" in name:
+    # ignore "rtx" when searching for AMD's "rx" prefix
+    if "amd" in name or "radeon" in name or "rx" in name.replace("rtx", ""):
         vendor = "amd"
     presets = FLASH_PRESETS[vendor]
     for key, val in presets.items():

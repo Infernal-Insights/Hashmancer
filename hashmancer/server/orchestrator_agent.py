@@ -124,7 +124,7 @@ def worker_counts():
 
 
 def gpu_metrics() -> list[tuple[int, float]]:
-    """Return a list of (pci_width, hashrate) tuples for each GPU."""
+    """Return a list of (pci_link_width, hashrate) tuples for each GPU."""
     metrics: list[tuple[int, float]] = []
     try:
         for key in r.scan_iter("gpu:*"):

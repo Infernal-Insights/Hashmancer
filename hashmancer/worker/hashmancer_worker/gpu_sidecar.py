@@ -204,7 +204,7 @@ class GPUSidecar(threading.Thread):
 
         _safe_redis_call(r.hset, f"job:{job_id}", mapping=batch)
 
-        if self.gpu.get("pci_width", 16) <= 4:
+        if self.gpu.get("pci_link_width", 16) <= 4:
             _safe_redis_call(
                 r.hset,
                 f"vram:{self.gpu['uuid']}:{job_id}",
@@ -227,7 +227,7 @@ class GPUSidecar(threading.Thread):
             f"GPU {self.gpu['uuid']} processing {batch_id}",
         )
         if (
-            self.gpu.get("pci_link_width", self.gpu.get("pci_width", 16)) <= 4
+            self.gpu.get("pci_link_width", 16) <= 4
             and self.low_bw_engine == "darkling"
         ):
             founds = self.run_darkling_engine(batch)
