@@ -94,3 +94,13 @@ def complete_range(batch_id: str, start: int, end: int) -> None:
         r.lrem(f"keyspace:queued:{batch_id}", 0, f"{start}:{end}")
     except redis.exceptions.RedisError:
         pass
+
+
+def update_status(batch_id: str, status: str) -> None:
+    """Set the status field for a batch and refresh TTL."""
+    try:
+        r.hset(f"batch:{batch_id}", "status", status)
+        if status == "processing":
+            r.persist(f"batch:{batch_id}")
+    except redis.exceptions.RedisError as e:
+        logging.warning("Redis unavailable: %s", e)

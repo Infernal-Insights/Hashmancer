@@ -63,6 +63,9 @@ class FakeRedis:
         while value in lst:
             lst.remove(value)
 
+    def persist(self, key):
+        pass
+
 
 def test_get_batch_returns_batch_id(monkeypatch):
     fake = FakeRedis()

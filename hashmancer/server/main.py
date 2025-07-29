@@ -442,6 +442,7 @@ async def get_batch(worker_id: str, timestamp: int, signature: str) -> dict:
                 "status": "processing",
             },
         )
+        redis_manager.update_status(batch_id, "processing")
         mask = batch.get("mask", "")
         if mask and mask.count("?") > MAX_MASK_LENGTH:
             raise HTTPException(status_code=400, detail="mask too long")
@@ -505,6 +506,7 @@ async def submit_founds(payload: SubmitFoundsRequest) -> dict:
             log_error("server", payload.worker_id, "S764", "Range completion error", e)
 
         r.hset(f"worker:{payload.worker_id}", "status", "idle")
+        redis_manager.update_status(payload.batch_id, "done")
         return {"status": "ok", "received": len(payload.founds)}
     except redis.exceptions.RedisError as e:
         log_error(
@@ -548,6 +550,7 @@ async def submit_no_founds(payload: SubmitNoFoundsRequest) -> dict[str, str]:
             pass
 
         r.hset(f"worker:{payload.worker_id}", "status", "idle")
+        redis_manager.update_status(payload.batch_id, "done")
         return {"status": "ok"}
     except redis.exceptions.RedisError as e:
         log_error(
