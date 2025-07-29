@@ -91,7 +91,7 @@ WantedBy=multi-user.target
     print("✅ Systemd service installed and started.")
 
 
-def configure():
+def configure(pin: str | None = None):
     print("🔧 Hashmancer Server Setup")
 
     api_key = prompt("Enter your hashes.com API key", secret=True)
@@ -163,6 +163,8 @@ def configure():
         "broadcast_enabled": broadcast,
         "broadcast_port": int(broadcast_port),
     }
+    if pin:
+        config["worker_pin"] = pin
 
     passkey = generate_passkey()
     config["portal_passkey"] = passkey
@@ -188,5 +190,11 @@ def configure():
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pin", help="worker registration PIN")
+    args = parser.parse_args()
+
     install_dependencies()
-    configure()
+    configure(args.pin)

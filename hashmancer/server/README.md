@@ -411,6 +411,14 @@ You can also login through the built-in HTML form by visiting `/login_page` in a
 browser. Enter the passkey and you will be redirected to the portal once the
 `session` cookie is set.
 
+### Worker PIN
+
+Set `"worker_pin"` in `~/.hashmancer/server_config.json` to require a PIN when
+workers register. Run `python3 ../setup.py --server --pin <PIN>` to store the
+value during setup.
+
+Workers must include this PIN in the `/register_worker` payload.
+
 ### Allowed origins
 
 Specify a list of origins permitted for CORS requests by adding
