@@ -15,11 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY . /app
 
 # Install Python dependencies for the server
-RUN pip install --no-cache-dir -r Server/requirements.txt
+RUN pip install --no-cache-dir -r hashmancer/server/requirements.txt
 
 # Expose the default uvicorn port
 EXPOSE 8000
 
 # Run the FastAPI server
-WORKDIR /app/Server
+WORKDIR /app/hashmancer/server
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
