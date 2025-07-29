@@ -18,12 +18,12 @@ from ..config import (
 async def fetch_and_store_jobs() -> None:
     """Fetch jobs from hashes.com and store filtered results in Redis."""
     try:
-        from hashescom_client import fetch_jobs
-        import main  # late import for patched r in tests
+        from hashmancer.server import hashescom_client
+        from hashmancer.server import main  # late import for patched r in tests
 
         r = main.r
         hashes_algorithms = getattr(main, "HASHES_ALGORITHMS", HASHES_ALGORITHMS)
-        jobs = await fetch_jobs()
+        jobs = await hashescom_client.fetch_jobs()
         for job in jobs:
             algo = str(job.get("algorithmName", "")).lower()
             if hashes_algorithms and algo not in hashes_algorithms:
@@ -47,7 +47,7 @@ async def poll_hashes_jobs() -> None:
     """Background loop to periodically poll hashes.com for jobs."""
     while True:
         await fetch_and_store_jobs()
-        import main
+        from hashmancer.server import main
         settings = getattr(main, "HASHES_SETTINGS", HASHES_SETTINGS)
         interval = int(settings.get("hashes_poll_interval", HASHES_POLL_INTERVAL))
         await asyncio.sleep(interval)
@@ -55,7 +55,7 @@ async def poll_hashes_jobs() -> None:
 
 async def process_hashes_jobs() -> None:
     """Queue batches for jobs fetched from hashes.com."""
-    import main  # late import for patched r and verify_hash in tests
+    from hashmancer.server import main  # late import for patched r and verify_hash in tests
 
     r = main.r
     verify_hash = main.verify_hash
@@ -101,12 +101,12 @@ async def process_hashes_jobs() -> None:
                 if known:
                     try:
                         import tempfile
-                        from hashescom_client import upload_founds
+                        from hashmancer.server import hashescom_client
 
                         with tempfile.NamedTemporaryFile("w", delete=False) as fh:
                             fh.write("\n".join(known))
                             temp_path = fh.name
-                        upload_founds(algo_id, temp_path)
+                        hashescom_client.upload_founds(algo_id, temp_path)
                         os.unlink(temp_path)
                     except Exception:
                         pass

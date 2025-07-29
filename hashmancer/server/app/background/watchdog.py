@@ -12,7 +12,7 @@ async def watchdog_loop() -> None:
     """Check worker heartbeats and mark stale workers offline."""
     while True:
         try:
-            import main  # late import so tests can patch 'r'
+            from hashmancer.server import main  # late import so tests can patch 'r'
             r = main.r
             now = int(time.time())
             threshold = 5 * STATUS_INTERVAL

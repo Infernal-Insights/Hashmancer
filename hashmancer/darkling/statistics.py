@@ -100,7 +100,6 @@ def probability_index_order(
     indices: List[int] = []
 
     def recurse(pos: int, prev: str):
-        nonlocal indices
         if limit is not None and len(indices) >= limit:
             return
         if pos == len(charsets_list):

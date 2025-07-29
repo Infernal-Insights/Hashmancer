@@ -2,7 +2,6 @@ import os
 import time
 import threading
 import redis
-import logging
 from hashmancer.utils.event_logger import log_error, log_info
 
 try:

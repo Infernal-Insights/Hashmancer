@@ -1,7 +1,5 @@
-import os
 import sqlite3
-from pathlib import Path
-from typing import Iterable, Generator
+from typing import Generator
 
 from .app.config import WORDLIST_DB_PATH
 
