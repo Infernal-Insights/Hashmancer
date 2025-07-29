@@ -18,7 +18,7 @@ Hashmancer is a high-performance, distributed hash cracking orchestration system
 - Orchestration tools for AWS, Vast.ai, and on-prem deployments
 - Self-healing logic with watchdog and error reporting
 - Systemd service setup and optional cloud-init support
-- Worker and GPU agent code is included in the [`Worker/`](../Worker) directory (setup instructions in [`Worker/README.md`](../Worker/README.md))
+- Worker and GPU agent code is included in the [`docker/worker/`](../docker/worker) directory (setup instructions in [`docker/worker/README.md`](../docker/worker/README.md))
 - Agents handle PCIe-aware mask, dictionary, and hybrid attacks
 - GPU specs are stored in Redis for tuning
 - Each GPU spec includes a `pci_link_width` field used to route work
@@ -273,7 +273,7 @@ containing `dataset`, `base_model`, `epochs`, `learning_rate` and
 
 ## 🚀 Hashmancer Agent
 
-The worker and GPU agent code is included in this repository under [`Worker/`](../Worker). Refer to [`Worker/README.md`](../Worker/README.md) for worker setup instructions and environment variables.
+The worker and GPU agent code is included in this repository under [`docker/worker/`](../docker/worker). Refer to [`docker/worker/README.md`](../docker/worker/README.md) for worker setup instructions and environment variables.
 
 ### Auto-discovery snippet
 

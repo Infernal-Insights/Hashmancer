@@ -16,7 +16,7 @@ services:
   worker:
     build:
       context: .
-      dockerfile: Worker/Dockerfile
+      dockerfile: docker/worker/Dockerfile
     volumes:
       - ~/.hashmancer:/root/.hashmancer
     depends_on:
