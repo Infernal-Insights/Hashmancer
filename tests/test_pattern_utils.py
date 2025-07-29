@@ -2,8 +2,6 @@ import os
 import sys
 import pytest
 
-# Allow importing the Server package from the repository root
-
 from hashmancer.server.pattern_utils import word_to_pattern, is_valid_pattern, is_valid_word
 
 
