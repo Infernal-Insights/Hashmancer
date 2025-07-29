@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # copy worker package and install requirements
 COPY hashmancer /app/hashmancer
-COPY docker/worker/requirements.txt /tmp/requirements.txt
+COPY hashmancer/worker/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 CMD ["python", "-m", "hashmancer.worker.hashmancer_worker.worker_agent"]
