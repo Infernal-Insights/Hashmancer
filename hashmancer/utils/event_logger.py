@@ -46,8 +46,12 @@ def log_event(
         "level": level,
         "message": message,
     }
-    if details:
-        event["traceback"] = traceback.format_exc(limit=2)
+    if details is not None:
+        event["traceback"] = details
+    else:
+        tb = traceback.format_exc(limit=2)
+        if tb and tb != "NoneType: None\n":
+            event["traceback"] = tb
 
     try:
         if hasattr(r, "rpush"):
