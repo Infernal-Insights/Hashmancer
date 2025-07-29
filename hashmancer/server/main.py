@@ -149,6 +149,7 @@ HTTP_GROUP = "http-workers"
 LOW_BW_JOB_STREAM = "darkling-jobs"
 LOW_BW_GROUP = "darkling-workers"
 MAX_MASK_LENGTH = MAX_MASK_LEN
+UPLOAD_MAX_SIZE = MAX_IMPORT_SIZE
 
 
 def create_background_task(coro: Coroutine[Any, Any, Any]) -> asyncio.Task:
@@ -299,8 +300,9 @@ async def logout(req: LogoutRequest) -> dict[str, str]:
     except redis.exceptions.RedisError as e:
         log_error("server", "system", "S762", "Failed to logout", e)
         raise HTTPException(status_code=500, detail="redis unavailable")
-    except Exception as e:
+    except (AttributeError, IndexError) as e:
         log_error("server", "system", "S762", "Failed to logout", e)
+        raise HTTPException(status_code=400, detail="bad token")
     return {"status": "ok", "cookie": ""}
 
 
@@ -447,7 +449,7 @@ async def get_batch(worker_id: str, timestamp: int, signature: str) -> dict:
     except redis.exceptions.RedisError as e:
         log_error("server", worker_id, "SRED", "Redis unavailable", e)
         raise HTTPException(status_code=500, detail="redis unavailable")
-    except Exception as e:
+    except (KeyError, ValueError, RuntimeError) as e:
         log_error("server", worker_id, "S002", "Failed to assign batch", e)
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -455,6 +457,10 @@ async def get_batch(worker_id: str, timestamp: int, signature: str) -> dict:
 @app.post("/submit_founds")
 async def submit_founds(payload: SubmitFoundsRequest) -> dict:
     try:
+        if not payload.worker_id:
+            raise HTTPException(status_code=400, detail="worker_id required")
+        if not payload.founds:
+            raise HTTPException(status_code=400, detail="founds required")
         if not verify_signature(
             payload.worker_id,
             json.dumps(payload.founds),
@@ -473,9 +479,12 @@ async def submit_founds(payload: SubmitFoundsRequest) -> dict:
         try:
             lock = FileLock(str(FOUNDS_FILE) + ".lock")
             with lock:
-                with FOUNDS_FILE.open("a", encoding="utf-8") as fh:
+                with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8") as tmp:
+                    if FOUNDS_FILE.exists():
+                        tmp.write(FOUNDS_FILE.read_text())
                     for line in payload.founds:
-                        fh.write(line + "\n")
+                        tmp.write(line + "\n")
+                os.replace(tmp.name, FOUNDS_FILE)
         except OSError as e:
             log_error("server", payload.worker_id, "S763", "Failed to write founds", e)
 
@@ -501,15 +510,17 @@ async def submit_founds(payload: SubmitFoundsRequest) -> dict:
         log_error(
             "server", payload.worker_id if hasattr(payload, "worker_id") else "system", "SRED", "Redis unavailable", e
         )
-        return {"status": "error", "message": "redis unavailable"}
-    except Exception as e:
+        raise HTTPException(status_code=500, detail="redis unavailable")
+    except OSError as e:
         log_error("server", payload.worker_id, "S003", "Failed to accept founds", e)
-        return {"status": "error"}
+        raise HTTPException(status_code=500, detail="filesystem error")
 
 
 @app.post("/submit_no_founds")
 async def submit_no_founds(payload: SubmitNoFoundsRequest) -> dict[str, str]:
     try:
+        if not payload.worker_id:
+            raise HTTPException(status_code=400, detail="worker_id required")
         if not verify_signature(
             payload.worker_id,
             payload.batch_id,
@@ -533,7 +544,7 @@ async def submit_no_founds(payload: SubmitNoFoundsRequest) -> dict[str, str]:
             end = int(info.get("end", 0))
             if start or end:
                 redis_manager.complete_range(payload.batch_id, start, end)
-        except Exception:
+        except OSError:
             pass
 
         r.hset(f"worker:{payload.worker_id}", "status", "idle")
@@ -542,17 +553,18 @@ async def submit_no_founds(payload: SubmitNoFoundsRequest) -> dict[str, str]:
         log_error(
             "server", payload.worker_id if hasattr(payload, "worker_id") else "system", "SRED", "Redis unavailable", e
         )
-        return {"status": "error", "message": "redis unavailable"}
-    except Exception as e:
+        raise HTTPException(status_code=500, detail="redis unavailable")
+    except OSError as e:
         log_error(
             "server", payload.worker_id, "S004", "Failed to record empty result", e
         )
-        return {"status": "error"}
+        raise HTTPException(status_code=500, detail="filesystem error")
 
 
 @app.get("/wordlists")
 async def list_wordlists():
     try:
+        WORDLISTS_DIR.mkdir(parents=True, exist_ok=True)
         return [f.name for f in WORDLISTS_DIR.iterdir() if f.is_file()]
     except OSError as e:
         log_error("server", "system", "S705", "Failed to list wordlists", e)
@@ -562,6 +574,7 @@ async def list_wordlists():
 @app.get("/masks")
 async def list_masks():
     try:
+        MASKS_DIR.mkdir(parents=True, exist_ok=True)
         return [f.name for f in MASKS_DIR.iterdir() if f.is_file()]
     except OSError as e:
         log_error("server", "system", "S706", "Failed to list masks", e)
@@ -1078,7 +1091,7 @@ async def upload_wordlist(file: UploadFile = File(...)):
     conn = None
     try:
         filename = Path(file.filename).name
-        with tempfile.NamedTemporaryFile() as tmp:
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
             size = 0
             while True:
                 chunk = await file.read(4096)
@@ -1086,8 +1099,11 @@ async def upload_wordlist(file: UploadFile = File(...)):
                     break
                 tmp.write(chunk)
                 size += len(chunk)
+                if size > UPLOAD_MAX_SIZE:
+                    raise HTTPException(status_code=400, detail="file too large")
             tmp.flush()
             tmp.seek(0)
+            wordlist_db.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
             conn = wordlist_db.connect()
             cur = conn.execute(
                 "INSERT OR REPLACE INTO wordlists(name, data) VALUES(?, zeroblob(?))",
@@ -1103,6 +1119,7 @@ async def upload_wordlist(file: UploadFile = File(...)):
             blob.close()
             conn.commit()
             conn.close()
+        os.unlink(tmp.name)
         return {"status": "ok"}
     except Exception as e:
         if conn:
@@ -1163,6 +1180,8 @@ async def import_hashes(file: UploadFile = File(...), hash_mode: str = "0"):
                 errors.append(f"line {line_num}: missing hash")
                 continue
             mask = (row.get("mask") or "").strip()
+            if mask and mask.count("?") > MAX_MASK_LENGTH:
+                raise HTTPException(status_code=400, detail="mask too long")
             wordlist = (row.get("wordlist") or "").strip()
             target = row.get("target") or "any"
             batch_id = redis_manager.store_batch(
@@ -1211,7 +1230,10 @@ async def train_markov(req: TrainMarkovRequest):
             asyncio.to_thread(learn_trends.process_wordlists, directory, lang=req.lang)
         )
         return {"status": "scheduled"}
-    except Exception as e:
+    except OSError as e:
+        log_error("server", "system", "S735", "Failed to train Markov", e)
+        raise HTTPException(status_code=500, detail="filesystem error")
+    except RuntimeError as e:
         log_error("server", "system", "S735", "Failed to train Markov", e)
         raise HTTPException(status_code=500, detail="training failed")
 
@@ -1249,14 +1271,21 @@ async def upload_restore(file: UploadFile = File(...)):
         dest = (RESTORE_DIR / filename).resolve()
         if dest.parent != RESTORE_DIR.resolve():
             raise HTTPException(status_code=400, detail="invalid filename")
+        size = 0
         with dest.open("wb") as f:
             while True:
                 chunk = await file.read(4096)
                 if not chunk:
                     break
+                size += len(chunk)
+                if size > UPLOAD_MAX_SIZE:
+                    raise HTTPException(status_code=400, detail="file too large")
                 f.write(chunk)
         log_info("server", "system", f"restore uploaded: {file.filename}")
         return {"status": "ok"}
+    except OSError as e:
+        log_error("server", "system", "S725", "Failed to upload restore file", e)
+        raise HTTPException(status_code=500, detail="filesystem error")
     except Exception as e:
         log_error("server", "system", "S725", "Failed to upload restore file", e)
         raise HTTPException(status_code=500, detail="upload failed")
@@ -1282,13 +1311,18 @@ async def create_mask(name: str, content: str):
     try:
         filename = Path(name).name
         dest = (MASKS_DIR / filename).resolve()
+        MASKS_DIR.mkdir(parents=True, exist_ok=True)
         if dest.parent != MASKS_DIR.resolve():
             raise HTTPException(status_code=400, detail="invalid filename")
+        for line in content.splitlines():
+            if line.count("?") > MAX_MASK_LENGTH:
+                log_error("server", "system", "S722", "Mask too long", None)
+                raise HTTPException(status_code=400, detail="mask too long")
         dest.write_text(content)
         return {"status": "ok"}
-    except Exception as e:
+    except OSError as e:
         log_error("server", "system", "S722", "Failed to create mask", e)
-        raise HTTPException(status_code=500, detail="mask creation failed")
+        raise HTTPException(status_code=500, detail="filesystem error")
 
 
 @app.delete("/mask/{name}")
@@ -1408,7 +1442,7 @@ async def list_hashes_jobs():
         return jobs
     except redis.exceptions.RedisError as e:
         log_error("server", "system", "SRED", "Redis unavailable", e)
-        return []
+        raise HTTPException(status_code=500, detail="redis unavailable")
 
 
 @app.post("/hashes_api_key")

@@ -2,6 +2,7 @@ import sys, os
 import asyncio
 import sys
 import os
+import pytest
 from pathlib import Path
 import sqlite3
 
@@ -71,3 +72,36 @@ def test_create_mask_sanitizes_and_delete(monkeypatch, tmp_path):
     (dest / "mask.hcmask").write_text("abc")
     asyncio.run(main.delete_mask("../mask.hcmask"))
     assert not (dest / "mask.hcmask").exists()
+
+
+def test_create_mask_too_long(monkeypatch, tmp_path):
+    dest = tmp_path / "m2"
+    dest.mkdir()
+    monkeypatch.setattr(main, 'MASKS_DIR', dest)
+    called = {}
+
+    def fake_log(*a, **k):
+        called['logged'] = True
+
+    monkeypatch.setattr(main, 'log_error', fake_log)
+    long_mask = '?1' * (main.MAX_MASK_LENGTH + 1)
+    with pytest.raises(main.HTTPException):
+        asyncio.run(main.create_mask('bad.hcmask', long_mask))
+    assert called.get('logged')
+
+
+def test_upload_wordlist_too_big(monkeypatch, tmp_path):
+    db_path = tmp_path / 'wl.db'
+    monkeypatch.setattr(main.wordlist_db, 'DB_PATH', db_path)
+    monkeypatch.setattr(main, 'UPLOAD_MAX_SIZE', 10)
+    called = {}
+
+    def fake_log(*a, **k):
+        called['logged'] = True
+
+    monkeypatch.setattr(main, 'log_error', fake_log)
+    data = b'a' * 20
+    file = FakeUploadFile('big.txt', data)
+    with pytest.raises(main.HTTPException):
+        asyncio.run(main.upload_wordlist(file))
+    assert called.get('logged')

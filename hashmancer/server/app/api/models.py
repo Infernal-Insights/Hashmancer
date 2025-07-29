@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, field_validator
 
 class LoginRequest(BaseModel):
     passkey: str
@@ -60,6 +60,18 @@ class SubmitFoundsRequest(BaseModel):
     job_id: str | None = None
     msg_id: str | None = None
 
+    @field_validator("worker_id")
+    def _wid_not_empty(cls, v: str) -> str:
+        if not v:
+            raise ValueError("worker_id required")
+        return v
+
+    @field_validator("founds")
+    def _founds_not_empty(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("founds required")
+        return v
+
 class SubmitNoFoundsRequest(BaseModel):
     worker_id: str
     batch_id: str
@@ -67,6 +79,12 @@ class SubmitNoFoundsRequest(BaseModel):
     signature: str
     job_id: str | None = None
     msg_id: str | None = None
+
+    @field_validator("worker_id")
+    def _wid_not_empty(cls, v: str) -> str:
+        if not v:
+            raise ValueError("worker_id required")
+        return v
 
 class TrainMarkovRequest(BaseModel):
     lang: str = "english"
