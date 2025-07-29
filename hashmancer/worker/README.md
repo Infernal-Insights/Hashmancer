@@ -147,7 +147,7 @@ for AMD GPUs to dump the existing ROM.  Should flashing fail the backup ROM is
 flashed back automatically.  PCI addresses are detected with `lspci` or vendor
 utilities so the correct adapter is selected.
 The server reads baseline clock/power presets from
-`Server/flash_presets.json`. Edit this file to add or modify GPU models as
+`hashmancer/server/flash_presets.json`. Edit this file to add or modify GPU models as
 needed. A helper script `flash_tuner.py` can be used to test flashing locally
 and reduce the power limit in small steps while verifying stability. Run it with
 `python -m hashmancer.worker.hashmancer_worker.flash_tuner --index 0 --vendor nvidia --model "RTX
