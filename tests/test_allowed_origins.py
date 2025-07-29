@@ -16,7 +16,7 @@ from tests.test_helpers import (
     fastapi_stub,
     cors_stub,
     resp_stub,
-    pydantic_stub,
+
     install_stubs,
     FakeApp,
 )
@@ -30,7 +30,6 @@ def test_allowed_origins_applied(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, 'fastapi', fastapi_stub)
     monkeypatch.setitem(sys.modules, 'fastapi.middleware.cors', cors_stub)
     monkeypatch.setitem(sys.modules, 'fastapi.responses', resp_stub)
-    monkeypatch.setitem(sys.modules, 'pydantic', pydantic_stub)
 
     cfg_dir = tmp_path / '.hashmancer'
     cfg_dir.mkdir()

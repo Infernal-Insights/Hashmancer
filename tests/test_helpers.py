@@ -63,14 +63,10 @@ resp_stub = types.ModuleType("fastapi.responses")
 resp_stub.HTMLResponse = DummyHTMLResponse
 resp_stub.FileResponse = object
 
-# Pydantic stub
-pydantic_stub = types.ModuleType("pydantic")
-pydantic_stub.BaseModel = BaseModel
-
 
 def install_stubs():
     sys.modules.setdefault("fastapi", fastapi_stub)
     sys.modules.setdefault("fastapi.middleware.cors", cors_stub)
     sys.modules.setdefault("fastapi.responses", resp_stub)
-    sys.modules.setdefault("pydantic", pydantic_stub)
+
 

@@ -49,6 +49,17 @@ interactive install:
 The script prints commands for starting the services once installation
 finishes.
 
+## Requirements
+
+Hashmancer requires the real `redis` and `pydantic` packages along with
+FastAPI and related dependencies. The simplest way to install everything is:
+
+```bash
+pip install -r hashmancer/server/requirements.txt \
+    -r hashmancer/worker/requirements.txt \
+    -r hashmancer/server/requirements-dev.txt
+```
+
 Workers can enable probabilistic candidate ordering using `--probabilistic-order`.
 Use `--inverse-prob-order` to iterate from least likely candidates first. The
 server portal exposes matching checkboxes under the Markov Training section.

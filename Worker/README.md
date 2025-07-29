@@ -2,6 +2,15 @@
 
 This directory contains Docker resources for running the worker component.
 
+## Requirements
+
+The worker relies on the official `redis` client and `pydantic` for data
+validation. Install dependencies with:
+
+```bash
+pip install -r hashmancer/worker/requirements.txt
+```
+
 ## Environment variables
 
 The worker is configured entirely through environment variables:
