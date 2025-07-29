@@ -5,6 +5,7 @@ import hashlib
 import subprocess
 import requests
 import logging
+from hashmancer.utils import event_logger
 
 from .crypto_utils import sign_message
 
@@ -232,7 +233,11 @@ class GPUFlashManager(threading.Thread):
         if not gpu:
             return
         baseline = md5_speed()
-        success = apply_flash_settings(gpu, settings)
+        try:
+            success = apply_flash_settings(gpu, settings)
+        except FileNotFoundError as e:
+            event_logger.log_error("flasher", self.worker_id, "W006", "Flashing utility missing", e)
+            success = False
         post = md5_speed() if success else 0
         success = success and post >= baseline * 0.8
         payload = {
