@@ -1,10 +1,6 @@
 import os
 from pathlib import Path
-import importlib.util
-
-spec = importlib.util.spec_from_file_location("setup", Path(__file__).resolve().parents[1] / "setup.py")
-setup = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(setup)
+import manage
 
 
 def test_download_prebuilt_engine(monkeypatch, tmp_path):
@@ -25,14 +21,14 @@ def test_download_prebuilt_engine(monkeypatch, tmp_path):
         urls.append(url)
         return Resp()
 
-    monkeypatch.setattr(setup.requests, 'get', fake_get)
-    monkeypatch.setattr(setup, 'CONFIG_DIR', tmp_path)
+    monkeypatch.setattr(manage.requests, 'get', fake_get)
+    monkeypatch.setattr(manage, 'CONFIG_DIR', tmp_path)
 
     dest = tmp_path / 'bin' / 'darkling-engine'
     if dest.exists():
         dest.unlink()
 
-    setup.download_prebuilt_engine()
+    manage.download_prebuilt_engine()
     assert dest.exists()
     assert dest.read_bytes() == data
     assert urls == ['http://example.com/engine-cuda']

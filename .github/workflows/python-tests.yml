@@ -16,7 +16,10 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pip install -r Server/requirements.txt -r Worker/requirements.txt -r Server/requirements-dev.txt
+        run: |
+          pip install -r hashmancer/server/requirements.txt \
+                       -r hashmancer/worker/requirements.txt \
+                       -r hashmancer/server/requirements-dev.txt
       - name: Run flake8
         run: flake8 --config .flake8 .
       - name: Run tests
