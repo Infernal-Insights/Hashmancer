@@ -1,4 +1,5 @@
 import asyncio
+import pytest
 
 from tests.test_helpers import (
     fastapi_stub,
@@ -53,3 +54,21 @@ def test_high_temp_triggers_alert(monkeypatch):
     resp = asyncio.run(main.set_worker_status(Req()))
     assert resp["status"] == "ok"
     assert "H001" in events
+
+
+def test_worker_status_invalid_logs(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(main, "r", fake)
+    monkeypatch.setattr(main, "verify_signature", lambda *a: False)
+    events = {}
+    monkeypatch.setattr(main, "log_error", lambda *a, **k: events.setdefault("err", True))
+
+    class Req:
+        name = "alpha"
+        status = "idle"
+        timestamp = 0
+        signature = "s"
+
+    with pytest.raises(main.HTTPException):
+        asyncio.run(main.set_worker_status(Req()))
+    assert events.get("err")

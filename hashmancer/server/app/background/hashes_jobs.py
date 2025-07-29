@@ -18,7 +18,7 @@ from ..config import (
 async def fetch_and_store_jobs() -> None:
     """Fetch jobs from hashes.com and store filtered results in Redis."""
     try:
-        from hashmancer.server import hashescom_client
+        import hashescom_client
         from hashmancer.server import main  # late import for patched r in tests
 
         r = main.r
@@ -101,7 +101,7 @@ async def process_hashes_jobs() -> None:
                 if known:
                     try:
                         import tempfile
-                        from hashmancer.server import hashescom_client
+                        import hashescom_client
 
                         with tempfile.NamedTemporaryFile("w", delete=False) as fh:
                             fh.write("\n".join(known))

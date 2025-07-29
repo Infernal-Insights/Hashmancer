@@ -61,6 +61,9 @@ class FakeRedis:
         if ex:
             self.store[f"ttl:{key}"] = ex
 
+    def ttl(self, key):
+        return self.store.get(f"ttl:{key}", -1)
+
     def exists(self, key):
         return key in self.store
 
@@ -235,12 +238,15 @@ def test_initial_login_requires_credentials(monkeypatch):
     monkeypatch.setattr(main, "r", fake_r)
     monkeypatch.setitem(main.CONFIG, "initial_admin_token", "token")
     monkeypatch.setattr(main, "PORTAL_PASSKEY", "pass")
+    logged = {}
+    monkeypatch.setattr(main, "log_error", lambda *a, **k: logged.setdefault("err", True))
 
     class Req:
         passkey = "token"
 
     with pytest.raises(main.HTTPException):
         asyncio.run(main.login(Req()))
+    assert logged.get("err")
 
 
 def test_initial_login_sets_credentials(monkeypatch):

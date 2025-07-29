@@ -183,6 +183,13 @@ performance over time.
 
 ---
 
+### Failure responses
+
+Redis errors return `500` with `{\"detail\": \"redis unavailable\"}`.
+Filesystem failures return `{\"detail\": \"filesystem error\"}`.
+
+---
+
 ### CSV format for `/import_hashes`
 
 Upload a CSV containing the following columns:
