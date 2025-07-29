@@ -4,7 +4,12 @@ from pathlib import Path
 
 from .bios_flasher import apply_flash_settings, md5_speed
 
-PRESETS_FILE = Path(__file__).resolve().parents[2] / "Server" / "flash_presets.json"
+PRESETS_FILE = (
+    Path(__file__).resolve().parents[2]
+    / "hashmancer"
+    / "server"
+    / "flash_presets.json"
+)
 
 
 def load_presets() -> dict:
