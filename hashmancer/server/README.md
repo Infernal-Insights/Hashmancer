@@ -178,6 +178,7 @@ performance over time.
 | GET    | `/rules`            | List available hashcat rules        |
 | GET    | `/workers`          | List registered workers             |
 | GET    | `/hashrate`         | Aggregate hashrate of all workers   |
+| GET    | `/hash_batches/{hash}` | List batch IDs for a hash           |
 | POST   | `/worker_status`    | Update a worker's status (optional signature) |
 | POST   | `/submit_benchmark` | Submit benchmark results            |
 
