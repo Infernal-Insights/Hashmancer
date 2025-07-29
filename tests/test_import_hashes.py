@@ -50,7 +50,11 @@ def test_import_hashes(monkeypatch):
         return f"id{len(calls)}"
     monkeypatch.setattr(redis_manager, 'store_batch', fake_store_batch)
     monkeypatch.setattr(main, 'log_error', lambda *a, **k: None)
-    data = b"hash,mask,wordlist,target\nh1,?a,wl.txt,t1\nh2,,,\n"
+    data = (
+        b"hash,mask,wordlist,target,hash_mode\n"
+        b"h1,?a,wl.txt,t1,1200\n"
+        b"h2,,,,1400\n"
+    )
     file = FakeUploadFile('hashes.csv', data)
     resp = asyncio.run(main.import_hashes(file, '1000'))
     assert resp == {"queued": 2, "errors": []}
@@ -60,7 +64,7 @@ def test_import_hashes(monkeypatch):
             "mask": "?a",
             "wordlist": "wl.txt",
             "target": "t1",
-            "hash_mode": "1000",
+            "hash_mode": "1200",
             "rule": "",
             "priority": 0,
         },
@@ -69,7 +73,7 @@ def test_import_hashes(monkeypatch):
             "mask": "",
             "wordlist": "",
             "target": "any",
-            "hash_mode": "1000",
+            "hash_mode": "1400",
             "rule": "",
             "priority": 0,
         },
