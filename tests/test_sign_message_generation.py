@@ -31,7 +31,7 @@ def _run_server(tmp_path: Path, monkeypatch):
         return open_orig(path, *a, **kw)
 
     monkeypatch.setattr("builtins.open", fail_default)
-    module = importlib.import_module("Server.signing_utils")
+    module = importlib.import_module("hashmancer.server.signing_utils")
     module = importlib.reload(module)
     monkeypatch.setattr("builtins.open", open_orig)
     module.KEY_PATH = str(priv)

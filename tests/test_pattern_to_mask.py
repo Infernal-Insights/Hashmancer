@@ -3,7 +3,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 
-import pattern_to_mask
+from hashmancer.server import pattern_to_mask
 
 class FakeRedis:
     def __init__(self):

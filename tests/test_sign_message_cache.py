@@ -54,7 +54,7 @@ def test_worker_sign_message_load_once(monkeypatch, tmp_path):
 
 def test_server_sign_message_load_once(monkeypatch, tmp_path):
     _run_test(
-        "Server.signing_utils",
+        "hashmancer.server.signing_utils",
         tmp_path,
         monkeypatch,
         path_attr="KEY_PATH",
