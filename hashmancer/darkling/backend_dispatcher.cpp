@@ -27,6 +27,11 @@ static GpuBackend detect_backend(const char* override_backend = nullptr) {
     return GpuBackend::NVIDIA_CUDA;
 }
 
+extern "C" GpuBackend test_detect_backend(const char* override_backend) {
+    return detect_backend(override_backend);
+}
+
+#ifndef DARKLING_NO_MAIN
 int main(int argc, char** argv) {
     const char* override = nullptr;
     for (int i = 1; i < argc; ++i) {
@@ -59,3 +64,4 @@ int main(int argc, char** argv) {
     std::cout << status.hashes_processed << std::endl;
     return 0;
 }
+#endif

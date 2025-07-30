@@ -1,8 +1,8 @@
 # Darkling Engine
 
-This directory contains a minimal CUDA-based cracking kernel used for low-bandwidth workers.
+This directory contains a minimal GPU cracking kernel used for low-bandwidth workers.
 It performs mask-based password generation and hashing entirely on the GPU with very little
-PCIe traffic.
+PCIe traffic. Implementations are provided for NVIDIA CUDA, AMD HIP and Intel OpenCL devices.
 
 The `darkling_engine.cu` file exposes a `launch_darkling` function that accepts a
 start and end counter. Up to sixteen custom charsets can be defined and mapped
@@ -62,9 +62,9 @@ implementations for CUDA, HIP and OpenCL devices. The dispatcher
 `backend_dispatcher.cpp` selects the appropriate backend at runtime or via the
 `DARKLING_GPU_BACKEND` environment variable (`cuda`, `hip`, `opencl`).
 Each backend follows the same workflow of `initialize`, `load_data`,
-`launch_crack_batch` and result polling. Only the CUDA version contains a
-working kernel at the moment; the other backends provide build stubs for future
-expansion.
+`launch_crack_batch` and result polling. All three backends ship with fully
+working kernels so the engine can run on NVIDIA, AMD or Intel hardware without
+changes.
 
 ## Predefined Charsets
 
@@ -96,7 +96,7 @@ languages along with `COMMON_SYMBOLS`, `EMOJI`, and scripts such as
 ## Building the GPU Backends
 
 The CUDA implementation is built by default but HIP and OpenCL backends can
-also be compiled via CMake:
+also be compiled via CMake. Enable the desired backends and build:
 
 ```bash
 cd darkling
@@ -108,9 +108,10 @@ During configuration the script will automatically disable a backend if the
 required toolchain is missing and print a warning message.
 
 `ENABLE_CUDA`, `ENABLE_HIP`, and `ENABLE_OPENCL` may be toggled to target a
-specific platform.  The resulting static libraries `cuda_backend`,
+specific platform. The resulting static libraries `cuda_backend`,
 `hip_backend`, and `opencl_backend` expose a `launch_darkling` entry point for
-each vendor.
+each vendor. All three libraries contain the same cracking logic compiled for
+their respective runtimes.
 
 Precompiled binaries are published with each release. Set the environment
 variable `DARKLING_ENGINE_URL` before running `setup.py` on a worker to
@@ -119,6 +120,8 @@ automatically download a ready-to-use `darkling-engine`.
 ### Runtime Configuration
 
 The dispatcher inspects the `DARKLING_GPU_BACKEND` variable to force a
-specific backend (`cuda`, `hip` or `opencl`). Grid and block overrides can be
-supplied via `DARKLING_GRID` and `DARKLING_BLOCK`. The `launcher.py` helper
-exposes `--grid` and `--block` options that set these variables for you.
+specific backend (`cuda`, `hip` or `opencl`). When unset the dispatcher tests
+for vendor libraries in `LD_LIBRARY_PATH` and picks the first match.
+Grid and block overrides can be supplied via `DARKLING_GRID` and `DARKLING_BLOCK`.
+The `launcher.py` helper exposes `--grid` and `--block` options that set these
+variables for you.
