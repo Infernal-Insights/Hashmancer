@@ -1,5 +1,6 @@
 import sys
 import os
+import subprocess
 import pytest
 
 
@@ -50,6 +51,25 @@ def test_apply_flash_settings_invalid(monkeypatch, key, value):
     ok = bios_flasher.apply_flash_settings({"index": 0}, settings)
     assert not ok
     assert key in captured.get("msg", "")
+
+
+def test_apply_flash_settings_verify_fail(monkeypatch):
+    monkeypatch.setattr(bios_flasher, "flash_rom", lambda *a, **k: True)
+    monkeypatch.setattr(bios_flasher, "verify_flashed_rom", lambda *a, **k: False)
+    monkeypatch.setattr(bios_flasher.logging, "error", lambda *a, **k: None)
+    ok = bios_flasher.apply_flash_settings({"index": 0}, {"vendor": "nvidia", "bios_rom": "rom"})
+    assert not ok
+
+
+def test_detect_pci_address_fallback(monkeypatch):
+    def fake_check_output(cmd, text=True):
+        if cmd[0] == "nvidia-smi":
+            raise subprocess.CalledProcessError(1, cmd)
+        return "0000:01:00.0 NVIDIA"
+
+    monkeypatch.setattr(bios_flasher.subprocess, "check_output", fake_check_output)
+    addr = bios_flasher.detect_pci_address(0, "nvidia")
+    assert addr == "0000:01:00.0"
 
 
 def test_process_task_logs_missing(monkeypatch):

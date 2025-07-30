@@ -5,6 +5,7 @@ import hashlib
 import subprocess
 import requests
 import logging
+import shutil
 from hashmancer.utils import event_logger
 
 from .crypto_utils import sign_message
@@ -84,6 +85,26 @@ def flash_rom(index: int, vendor: str, rom_path: str, backup_dir: str = "/tmp") 
         return False
 
 
+def verify_flashed_rom(index: int, vendor: str, rom_path: str, tmp_dir: str = "/tmp") -> bool:
+    """Return True if the flashed ROM matches the provided file."""
+    verify_path = dump_current_rom(index, vendor, tmp_dir)
+    if not verify_path:
+        return False
+    try:
+        with open(verify_path, "rb") as f:
+            new_data = f.read()
+        with open(rom_path, "rb") as f:
+            orig_data = f.read()
+    except OSError:
+        return False
+    finally:
+        try:
+            os.remove(verify_path)
+        except OSError:
+            pass
+    return hashlib.sha256(new_data).digest() == hashlib.sha256(orig_data).digest()
+
+
 def md5_speed() -> float:
     """Return MB/s for computing md5 on random data."""
     data = os.urandom(1024 * 1024)  # 1 MB block
@@ -133,7 +154,11 @@ def apply_flash_settings(gpu: dict, settings: dict) -> bool:
             return False
     if bios:
         ok = flash_rom(int(index), vendor, bios)
-        if not ok:
+        if ok:
+            if not verify_flashed_rom(int(index), vendor, bios):
+                logging.error("ROM verification failed for GPU %s", index)
+                return False
+        else:
             return False
     try:
         if vendor == "nvidia":
@@ -204,10 +229,12 @@ def apply_flash_settings(gpu: dict, settings: dict) -> bool:
                         str(mem),
                     ]
                 )
-    except FileNotFoundError:
-        return False
-    except Exception:
-        return False
+    except FileNotFoundError as e:
+        logging.error("Utility missing while applying settings: %s", e)
+        raise
+    except Exception as e:
+        logging.error("Failed to apply settings: %s", e)
+        raise
     return True
 
 
@@ -236,6 +263,13 @@ class GPUFlashManager(threading.Thread):
         error_logged = False
         try:
             success = apply_flash_settings(gpu, settings)
+            if not success:
+                event_logger.log_error(
+                    "flasher",
+                    self.worker_id,
+                    "W007",
+                    "Settings application failed",
+                )
         except FileNotFoundError as e:
             event_logger.log_error(
                 "flasher",
@@ -251,13 +285,20 @@ class GPUFlashManager(threading.Thread):
                 "flasher",
                 self.worker_id,
                 "W007",
-                "Flashing failed",
+                str(e),
                 e,
             )
             success = False
             error_logged = True
         post = md5_speed() if success else 0
-        success = success and post >= baseline * 0.8
+        if success and post < baseline * 0.8:
+            event_logger.log_error(
+                "flasher",
+                self.worker_id,
+                "W007",
+                "Performance drop after flashing",
+            )
+            success = False
         if not success and not error_logged:
             event_logger.log_error(
                 "flasher",
