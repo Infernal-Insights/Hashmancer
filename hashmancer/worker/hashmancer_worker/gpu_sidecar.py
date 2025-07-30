@@ -60,31 +60,61 @@ def _safe_redis_call(func, *args, default=None, **kwargs):
 MAX_CHARSETS = 16
 
 
+from hashmancer.darkling import gpu_helpers as gpu
+
+
 class DarklingContext:
     """Per-GPU context for the darkling engine state.
 
-    This object only tracks information about charsets in Python so the worker
-    can avoid reloading them unnecessarily.  It does not allocate or manage GPU
-    memory.
+    The context caches mask charsets and preloads them into device memory so
+    subsequent batches can skip the upload step.  When GPU libraries are
+    unavailable the allocation helpers fall back to host memory which keeps the
+    logic testable without requiring hardware.
     """
 
     def __init__(self):
         self.charsets_json: str | None = None
+        self.gpu = gpu.GPUContext()
+        self.cs_buf = None
+        self.len_buf = None
 
     def load(self, charsets: dict):
-        """Store the charset mapping for later comparison.
+        """Upload charset tables when they differ from the cached version."""
+        serialized = json.dumps(charsets, sort_keys=True)
+        if serialized == self.charsets_json:
+            return
 
-        The mapping is serialized to JSON so subsequent calls can detect
-        whether the same charsets were previously loaded.  Actual GPU
-        preloading is not implemented here.
-        """
-        self.charsets_json = json.dumps(charsets, sort_keys=True)
+        self.cleanup()
+        self.charsets_json = serialized
+
+        flat = bytearray()
+        lengths: list[int] = []
+        for key in sorted(charsets):
+            data = charsets[key].encode()
+            flat.extend(data)
+            lengths.append(len(data))
+
+        if flat:
+            self.cs_buf = self.gpu.alloc(len(flat))
+            self.gpu.copy_from_host(self.cs_buf, bytes(flat))
+        if lengths:
+            import array
+
+            arr = array.array("I", lengths)
+            self.len_buf = self.gpu.alloc(arr.itemsize * len(arr))
+            self.gpu.copy_from_host(self.len_buf, arr.tobytes())
 
     def matches(self, charsets: dict) -> bool:
         return self.charsets_json == json.dumps(charsets, sort_keys=True)
 
     def cleanup(self):
         self.charsets_json = None
+        if self.cs_buf is not None:
+            self.gpu.free(self.cs_buf)
+            self.cs_buf = None
+        if self.len_buf is not None:
+            self.gpu.free(self.len_buf)
+            self.len_buf = None
 
 
 class GPUSidecar(threading.Thread):
