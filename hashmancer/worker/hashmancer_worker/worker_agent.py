@@ -14,6 +14,7 @@ try:
 except ImportError:  # fallback for bundled stub
     from redis import RedisError
 import requests
+from hashmancer.utils.http_utils import post_with_retry, get_with_retry
 from pathlib import Path
 import glob
 import socket
@@ -384,7 +385,11 @@ def register_worker(worker_id: str, gpus: list[GPUInfo | dict], pin: str | None 
 
     name = None
     try:
-        resp = requests.post(f"{SERVER_URL}/register_worker", json=payload, timeout=5)
+        resp = post_with_retry(
+            f"{SERVER_URL}/register_worker",
+            json=payload,
+            timeout=5,
+        )
         data = resp.json()
         if data.get("status") == "ok":
             name = data.get("waifu")
@@ -424,7 +429,7 @@ def check_worker_command(name: str) -> None:
     """Poll the server for upgrade/restart commands."""
     ts = int(time.time())
     try:
-        resp = requests.get(
+        resp = get_with_retry(
             f"{SERVER_URL}/get_worker_command",
             params={
                 "worker_id": name,
@@ -534,7 +539,7 @@ def main(argv: list[str] | None = None):
     # benchmark GPUs once before starting normal job processing
     low_bw_engine = "hashcat"
     try:
-        resp = requests.get(f"{SERVER_URL}/server_status", timeout=5)
+        resp = get_with_retry(f"{SERVER_URL}/server_status", timeout=5)
         data = resp.json()
         low_bw_engine = data.get("low_bw_engine", "hashcat")
         if not args.probabilistic_order:
@@ -571,7 +576,7 @@ def main(argv: list[str] | None = None):
         }
         payload["signature"] = sign_message(name, payload["timestamp"])
         try:
-            requests.post(
+            post_with_retry(
                 f"{SERVER_URL}/submit_benchmark", json=payload, timeout=10
             )
         except requests.RequestException as e:
@@ -611,7 +616,7 @@ def main(argv: list[str] | None = None):
                     progress[t.gpu["uuid"]] = t.progress
             try:
                 ts = int(time.time())
-                requests.post(
+                post_with_retry(
                     f"{SERVER_URL}/worker_status",
                     json={
                         "name": name,

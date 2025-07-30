@@ -34,7 +34,7 @@ def test_register_worker_success(monkeypatch):
     def mock_post(url, json=None, timeout=None):
         return DummyResp({"status": "ok", "waifu": "TestWaifu"})
 
-    monkeypatch.setattr(worker_agent.requests, "post", mock_post)
+    monkeypatch.setattr(worker_agent, "post_with_retry", mock_post)
     monkeypatch.setattr(worker_agent, "load_public_key_pem", lambda: "PUB")
     monkeypatch.setattr(worker_agent, "sign_message", lambda *a: "sig")
 
@@ -80,8 +80,8 @@ def test_register_worker_retry(monkeypatch):
     monkeypatch.setattr(worker_agent, "r", fake)
 
     monkeypatch.setattr(
-        worker_agent.requests,
-        "post",
+        worker_agent,
+        "post_with_retry",
         lambda url, json=None, timeout=None: DummyResp({"status": "ok", "waifu": "W"}),
     )
     monkeypatch.setattr(worker_agent, "load_public_key_pem", lambda: "PUB")
@@ -118,8 +118,8 @@ def test_benchmark_low_bw_gpu(monkeypatch):
     monkeypatch.setattr(worker_agent, "register_worker", lambda wid, g, p=None: "name")
 
     monkeypatch.setattr(
-        worker_agent.requests,
-        "get",
+        worker_agent,
+        "get_with_retry",
         lambda url, timeout=5, **kwargs: DummyResp(
             {
                 "low_bw_engine": "darkling",
@@ -142,7 +142,7 @@ def test_benchmark_low_bw_gpu(monkeypatch):
     monkeypatch.setattr(
         worker_agent, "run_hashcat_benchmark", lambda g, engine="hashcat": {}
     )
-    monkeypatch.setattr(worker_agent.requests, "post", fake_post)
+    monkeypatch.setattr(worker_agent, "post_with_retry", fake_post)
     monkeypatch.setattr(worker_agent, "sign_message", lambda *a: "sig")
 
     class DummySidecar:
@@ -207,8 +207,8 @@ def test_prob_order_from_server(monkeypatch):
     monkeypatch.setattr(worker_agent, "register_worker", lambda wid, g, p=None: "name")
 
     monkeypatch.setattr(
-        worker_agent.requests,
-        "get",
+        worker_agent,
+        "get_with_retry",
         lambda url, timeout=5, **kwargs: DummyResp(
             {
                 "low_bw_engine": "hashcat",
@@ -227,7 +227,7 @@ def test_prob_order_from_server(monkeypatch):
     monkeypatch.setattr(
         worker_agent, "run_hashcat_benchmark", lambda g, engine="hashcat": {}
     )
-    monkeypatch.setattr(worker_agent.requests, "post", fake_post)
+    monkeypatch.setattr(worker_agent, "post_with_retry", fake_post)
     monkeypatch.setattr(worker_agent, "sign_message", lambda *a: "sig")
 
     class DummySidecar:
@@ -290,8 +290,8 @@ def test_prob_order_from_server(monkeypatch):
 def test_check_worker_command(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        worker_agent.requests,
-        "get",
+        worker_agent,
+        "get_with_retry",
         lambda url, params=None, timeout=5: DummyResp({"status": "ok", "command": "upgrade"}),
     )
     monkeypatch.setattr(worker_agent, "sign_message", lambda *a: "sig")
