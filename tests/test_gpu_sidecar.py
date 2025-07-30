@@ -58,7 +58,7 @@ def test_run_hashcat(monkeypatch):
         return DummyProc(['{"speed": [50], "progress": 10}'], "/tmp/job1.out")
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
     monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
 
     batch = {
@@ -88,7 +88,7 @@ def test_darkling_engine_selected(monkeypatch):
 
         return Resp()
 
-    monkeypatch.setattr(gpu_sidecar.requests, "get", fake_get)
+    monkeypatch.setattr(gpu_sidecar, "get_with_retry", fake_get)
     sidecar = gpu_sidecar.GPUSidecar(
         "worker",
         {"uuid": "gpu", "index": 0, "pci_link_width": 4},
@@ -104,7 +104,7 @@ def test_darkling_engine_selected(monkeypatch):
         return DummyProc(["{}"], "/tmp/job2.out")
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
     monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
 
     batch = {
@@ -135,7 +135,7 @@ def test_custom_mask_charsets(monkeypatch):
         return DummyProc(["{}"], "/tmp/job7.out")
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
     monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
 
     batch = {
@@ -165,7 +165,7 @@ def test_reuse_preloaded_charsets(monkeypatch):
         return DummyProc(["{}"], f"/tmp/job8{len(cmds)}.out")
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
     monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
 
     batch = {
@@ -201,7 +201,7 @@ def test_power_limit_nvidia(monkeypatch):
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
     monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
 
     batch = {
@@ -238,7 +238,7 @@ def test_power_limit_rocm(monkeypatch):
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
     monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
 
     batch = {
@@ -275,7 +275,7 @@ def test_power_overdrive_rocm(monkeypatch):
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
     monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
 
     batch = {
@@ -311,7 +311,7 @@ def test_power_limit_intel(monkeypatch):
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
     monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
 
     batch = {
@@ -343,7 +343,7 @@ def test_sidecar_run_executes_job(monkeypatch):
             return DummyResp({"low_bw_engine": "hashcat"})
         return DummyResp({"batch_id": "job6", "hashes": "[]", "mask": "", "attack_mode": "mask"})
 
-    monkeypatch.setattr(gpu_sidecar.requests, "get", fake_get)
+    monkeypatch.setattr(gpu_sidecar, "get_with_retry", fake_get)
     monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
     monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
 
@@ -437,7 +437,7 @@ def test_darkling_mask_length_limit(monkeypatch):
         return DummyProc(["{}"], "/tmp/joblen.out")
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
     monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
 
     batch = {
@@ -466,7 +466,7 @@ def test_darkling_hash_batching(monkeypatch):
         return [f"{h}:pass" for h in json.loads(batch["hashes"])]
 
     monkeypatch.setattr(gpu_sidecar.GPUSidecar, "_run_engine", fake_run_engine)
-    monkeypatch.setattr(gpu_sidecar.requests, "post", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
     monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
 
     hashes = [f"h{i}" for i in range(gpu_sidecar.MAX_HASHES + 5)]

@@ -10,6 +10,7 @@ from hashmancer.utils.gpu_constants import (
     MAX_RESULT_BUFFER,
 )
 import requests
+from hashmancer.utils.http_utils import post_with_retry, get_with_retry
 import json
 import subprocess
 import base64
@@ -102,7 +103,7 @@ class GPUSidecar(threading.Thread):
         self.progress = 0.0
         self.low_bw_engine = "hashcat"
         try:
-            resp = requests.get(f"{self.server_url}/server_status", timeout=5)
+            resp = get_with_retry(f"{self.server_url}/server_status", timeout=5)
             data = resp.json()
             self.low_bw_engine = data.get("low_bw_engine", "hashcat")
         except (requests.RequestException, json.JSONDecodeError) as e:
@@ -185,7 +186,7 @@ class GPUSidecar(threading.Thread):
                         "timestamp": ts,
                         "signature": sign_message(self.worker_id, ts),
                     }
-                    resp = requests.get(
+                    resp = get_with_retry(
                         f"{self.server_url}/get_batch", params=params, timeout=10
                     )
                     data = resp.json()
@@ -271,7 +272,11 @@ class GPUSidecar(threading.Thread):
             endpoint = "submit_no_founds"
 
         try:
-            requests.post(f"{self.server_url}/{endpoint}", json=payload, timeout=10)
+            post_with_retry(
+                f"{self.server_url}/{endpoint}",
+                json=payload,
+                timeout=10,
+            )
         except requests.RequestException as e:
             log_error(
                 "sidecar",
@@ -390,7 +395,7 @@ class GPUSidecar(threading.Thread):
                             self.progress = status.get("progress", 0.0)
                             try:
                                 ts = int(time.time())
-                                requests.post(
+                                post_with_retry(
                                     f"{self.server_url}/submit_hashrate",
                                     json={
                                         "worker_id": self.worker_id,
@@ -423,7 +428,7 @@ class GPUSidecar(threading.Thread):
             if proc.returncode != 0 and restore.is_file():
                 try:
                     with open(restore, "rb") as f:
-                        requests.post(
+                        post_with_retry(
                             f"{self.server_url}/upload_restore",
                             files={"file": (restore.name, f)},
                             timeout=5,
