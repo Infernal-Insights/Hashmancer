@@ -233,13 +233,38 @@ class GPUFlashManager(threading.Thread):
         if not gpu:
             return
         baseline = md5_speed()
+        error_logged = False
         try:
             success = apply_flash_settings(gpu, settings)
         except FileNotFoundError as e:
-            event_logger.log_error("flasher", self.worker_id, "W006", "Flashing utility missing", e)
+            event_logger.log_error(
+                "flasher",
+                self.worker_id,
+                "W006",
+                "Flashing utility missing",
+                e,
+            )
             success = False
+            error_logged = True
+        except Exception as e:
+            event_logger.log_error(
+                "flasher",
+                self.worker_id,
+                "W007",
+                "Flashing failed",
+                e,
+            )
+            success = False
+            error_logged = True
         post = md5_speed() if success else 0
         success = success and post >= baseline * 0.8
+        if not success and not error_logged:
+            event_logger.log_error(
+                "flasher",
+                self.worker_id,
+                "W007",
+                "Flashing failed",
+            )
         payload = {
             "worker_id": self.worker_id,
             "gpu_uuid": gpu_uuid,
@@ -272,5 +297,12 @@ class GPUFlashManager(threading.Thread):
                 gpu_uuid = task.get("gpu_uuid")
                 settings = task.get("settings", {})
                 self.process_task(gpu_uuid, settings)
-            except Exception:
+            except Exception as e:
+                event_logger.log_error(
+                    "flasher",
+                    self.worker_id,
+                    "W007",
+                    "Flash manager error",
+                    e,
+                )
                 time.sleep(5)
