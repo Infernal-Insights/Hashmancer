@@ -106,3 +106,64 @@ int main(){
         pytest.skip('runtime failed')
     out = res.stdout.decode().strip()
     assert out.startswith('1 a')
+
+
+def build_backend_detector(tmp_path: Path) -> Path:
+    gpp = shutil.which('g++')
+    if gpp is None:
+        pytest.skip('g++ not available')
+
+    wrapper = tmp_path / 'wrapper.cpp'
+    wrapper.write_text(
+        '\n'.join([
+            '#include <iostream>',
+            '#include "darkling/gpu_backend.h"',
+            'extern "C" darkling::GpuBackend test_detect_backend(const char*);',
+            'int main(int argc, char** argv){',
+            '    const char* arg = argc>1 ? argv[1] : nullptr;',
+            '    auto b = test_detect_backend(arg);',
+            '    std::cout << static_cast<int>(b);',
+            '    return 0;',
+            '}',
+        ])
+    )
+    exe = tmp_path / 'detector'
+    subprocess.check_call([
+        gpp, '-std=c++17', '-DDARKLING_NO_MAIN', '-I.', '-Ihashmancer',
+        str(wrapper), 'hashmancer/darkling/backend_dispatcher.cpp',
+        '-ldl', '-o', str(exe)
+    ], cwd=ROOT)
+    return exe
+
+
+def make_dummy_lib(path: Path, name: str):
+    src = 'int x() { return 0; }'
+    dummy = path / (name + '.c')
+    dummy.write_text(src)
+    subprocess.check_call([
+        'gcc', '-shared', '-fPIC', str(dummy), '-o', str(path / name)
+    ])
+
+
+def test_dispatcher_env_selection(tmp_path):
+    exe = build_backend_detector(tmp_path)
+    env = os.environ.copy()
+    env['DARKLING_GPU_BACKEND'] = 'hip'
+    res = subprocess.run([str(exe)], env=env, capture_output=True, text=True)
+    assert res.stdout.strip() == '1'
+    env['DARKLING_GPU_BACKEND'] = 'opencl'
+    res = subprocess.run([str(exe)], env=env, capture_output=True, text=True)
+    assert res.stdout.strip() == '2'
+
+
+def test_dispatcher_library_detection(tmp_path):
+    exe = build_backend_detector(tmp_path)
+    make_dummy_lib(tmp_path, 'libamdhip64.so')
+    env = os.environ.copy()
+    env['LD_LIBRARY_PATH'] = str(tmp_path)
+    res = subprocess.run([str(exe)], env=env, capture_output=True, text=True)
+    assert res.stdout.strip() == '1'
+    os.remove(tmp_path / 'libamdhip64.so')
+    make_dummy_lib(tmp_path, 'libOpenCL.so')
+    res = subprocess.run([str(exe)], env=env, capture_output=True, text=True)
+    assert res.stdout.strip() == '2'
