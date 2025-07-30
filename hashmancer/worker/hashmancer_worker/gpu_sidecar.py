@@ -451,11 +451,14 @@ class GPUSidecar(threading.Thread):
         return self._run_engine("hashcat", batch)
 
     def run_darkling_engine(self, batch: dict) -> list[str]:
-        """Placeholder for the specialized darkling engine.
+        """Execute the ``darkling-engine`` with caching and batch splitting.
 
-        This requires an external executable named ``darkling-engine`` to be
-        installed separately. It accepts the same arguments as hashcat so the
-        batch formatting is identical.
+        The method expects the external ``darkling-engine`` executable and
+        behaves similarly to :meth:`run_hashcat`. It splits large hash lists
+        into chunks of ``MAX_HASHES`` and caches mask charsets on the GPU so
+        subsequent calls avoid reloading them. When ``probabilistic_order`` is
+        enabled, a Markov model is used to generate a probability ordered list
+        of mask indices, allowing optional inverse ordering.
         """
 
         def _count_mask(mask: str) -> int:
