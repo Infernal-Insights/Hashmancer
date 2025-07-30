@@ -3,6 +3,7 @@ import json
 import subprocess
 import time
 import uuid
+import sys
 import redis
 import logging
 import hashmancer.utils.event_logger as event_logger
@@ -271,9 +272,109 @@ def _detect_lspci() -> list[GPUInfo]:
     return gpus
 
 
+def _detect_windows_wmi() -> list[GPUInfo]:
+    if not shutil.which("wmic"):
+        event_logger.log_error("worker", "unassigned", "W099", "wmic not found")
+        return []
+    try:
+        output = subprocess.check_output(
+            [
+                "wmic",
+                "path",
+                "Win32_VideoController",
+                "get",
+                "Name,PNPDeviceID,AdapterRAM",
+                "/format:csv",
+            ],
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        event_logger.log_error("worker", "unassigned", "W099", "wmic failed", e)
+        return []
+
+    gpus: list[GPUInfo] = []
+    for line in output.splitlines():
+        if not line or line.startswith("Node"):
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 4:
+            continue
+        _, mem, name, pnp = parts[:4]
+        bus = pnp.split("\\")[1] if "\\" in pnp else pnp
+        try:
+            mem_mb = int(mem) // (1024 * 1024)
+        except ValueError:
+            mem_mb = 0
+        vendor = _parse_vendor_from_lspci(name)
+        gpus.append(
+            GPUInfo(
+                index=len(gpus),
+                uuid=pnp,
+                model=name,
+                pci_bus=bus,
+                memory_mb=mem_mb,
+                pci_link_width=16,
+                vendor=vendor,
+            )
+        )
+    return gpus
+
+
+def _detect_macos_iokit() -> list[GPUInfo]:
+    if not shutil.which("system_profiler"):
+        event_logger.log_error(
+            "worker", "unassigned", "W099", "system_profiler not found"
+        )
+        return []
+    try:
+        output = subprocess.check_output(
+            ["system_profiler", "-json", "SPDisplaysDataType"], text=True
+        )
+        data = json.loads(output)
+    except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
+        event_logger.log_error(
+            "worker", "unassigned", "W099", "system_profiler failed", e
+        )
+        return []
+
+    gpus: list[GPUInfo] = []
+    for item in data.get("SPDisplaysDataType", []):
+        name = item.get("_name", "GPU")
+        bus = item.get("spdisplays_pci_device", "")
+        mem_mb = 0
+        mem = item.get("spdisplays_vram")
+        if mem:
+            try:
+                mem_mb = int(mem.split()[0])
+            except ValueError:
+                pass
+        vendor = _parse_vendor_from_lspci(name)
+        gpus.append(
+            GPUInfo(
+                index=len(gpus),
+                uuid=bus or name,
+                model=name,
+                pci_bus=bus,
+                memory_mb=mem_mb,
+                pci_link_width=16,
+                vendor=vendor,
+            )
+        )
+    return gpus
+
+
 def detect_gpus() -> list[GPUInfo]:
-    """Return a list of detected GPUs."""
-    for detector in (_detect_nvidia, _detect_amd, _detect_sysfs, _detect_lspci):
+    """Return a list of detected GPUs using platform specific detectors."""
+    platform_map: dict[str, list] = {
+        "win32": [_detect_windows_wmi],
+        "cygwin": [_detect_windows_wmi],
+        "darwin": [_detect_macos_iokit],
+        "linux": [_detect_nvidia, _detect_amd, _detect_sysfs, _detect_lspci],
+    }
+
+    detectors = platform_map.get(sys.platform, platform_map.get("linux"))
+
+    for detector in detectors:
         gpus = detector()
         if gpus:
             return gpus

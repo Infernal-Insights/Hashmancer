@@ -27,6 +27,48 @@ class FakeRedis:
         self.store[key] = value
 
 
+def test_detect_gpus_windows(monkeypatch):
+    calls = []
+
+    def win():
+        calls.append("win")
+        return [worker_agent.GPUInfo(uuid="w")]
+
+    monkeypatch.setattr(worker_agent, "_detect_windows_wmi", win)
+    monkeypatch.setattr(worker_agent, "_detect_macos_iokit", lambda: calls.append("mac") or [])
+    monkeypatch.setattr(worker_agent, "_detect_nvidia", lambda: calls.append("nvidia") or [])
+    monkeypatch.setattr(worker_agent, "_detect_amd", lambda: calls.append("amd") or [])
+    monkeypatch.setattr(worker_agent, "_detect_sysfs", lambda: calls.append("sysfs") or [])
+    monkeypatch.setattr(worker_agent, "_detect_lspci", lambda: calls.append("lspci") or [])
+    monkeypatch.setattr(worker_agent.sys, "platform", "win32", raising=False)
+
+    gpus = worker_agent.detect_gpus()
+
+    assert gpus and gpus[0].uuid == "w"
+    assert calls == ["win"]
+
+
+def test_detect_gpus_macos(monkeypatch):
+    calls = []
+
+    def mac():
+        calls.append("mac")
+        return [worker_agent.GPUInfo(uuid="m")]
+
+    monkeypatch.setattr(worker_agent, "_detect_macos_iokit", mac)
+    monkeypatch.setattr(worker_agent, "_detect_windows_wmi", lambda: calls.append("win") or [])
+    monkeypatch.setattr(worker_agent, "_detect_nvidia", lambda: calls.append("nvidia") or [])
+    monkeypatch.setattr(worker_agent, "_detect_amd", lambda: calls.append("amd") or [])
+    monkeypatch.setattr(worker_agent, "_detect_sysfs", lambda: calls.append("sysfs") or [])
+    monkeypatch.setattr(worker_agent, "_detect_lspci", lambda: calls.append("lspci") or [])
+    monkeypatch.setattr(worker_agent.sys, "platform", "darwin", raising=False)
+
+    gpus = worker_agent.detect_gpus()
+
+    assert gpus and gpus[0].uuid == "m"
+    assert calls == ["mac"]
+
+
 def test_register_worker_success(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(worker_agent, "r", fake)

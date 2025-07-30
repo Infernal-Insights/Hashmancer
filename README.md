@@ -6,7 +6,8 @@ queue hash cracking jobs.  Workers register their GPUs with Redis and consume
 jobs from a Redis stream.  Sidecars now invoke `hashcat` directly and report
 per-GPU hashrates and progress back to the server. Wordlists can be served
 from a Redis cache for faster startup on remote nodes.
-GPU specs include a `pci_link_width` field for bandwidth-aware scheduling. The worker automatically detects NVIDIA, AMD, and Intel GPUs.
+GPU specs include a `pci_link_width` field for bandwidth-aware scheduling. The worker automatically detects NVIDIA, AMD, and Intel GPUs. Detection is
+handled through platform specific helpers selected via `sys.platform` so Windows and macOS support can be added without touching the core logic.
 Each worker record now stores the configured engine for low-bandwidth GPUs so the
 orchestrator knows whether to dispatch the special `darkling` engine. When
 batches are prefetched the orchestrator checks all workers and routes jobs into
@@ -59,6 +60,11 @@ pip install -r hashmancer/server/requirements.txt \
     -r hashmancer/worker/requirements.txt \
     -r hashmancer/server/requirements-dev.txt
 ```
+
+GPU detection works across platforms. Linux uses `nvidia-smi`, `rocm-smi` and
+sysfs while Windows relies on WMI queries. On macOS the worker parses
+`system_profiler` output. The appropriate detector is chosen automatically via
+`sys.platform`.
 
 Workers can enable probabilistic candidate ordering using `--probabilistic-order`.
 Use `--inverse-prob-order` to iterate from least likely candidates first. The
