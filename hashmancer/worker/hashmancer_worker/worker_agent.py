@@ -59,9 +59,21 @@ def _redis_write(func, *args, **kwargs):
     raise RedisError("Redis write failed after retries")
 
 
-def detect_gpus() -> list[GPUInfo]:
-    """Return a list of detected GPUs."""
-    # NVIDIA detection via nvidia-smi
+def _parse_vendor_from_lspci(line: str) -> str:
+    line_u = line.upper()
+    if "NVIDIA" in line_u:
+        return "nvidia"
+    if "AMD" in line_u or "ATI" in line_u or "ADVANCED MICRO DEVICES" in line_u:
+        return "amd"
+    if "INTEL" in line_u:
+        return "intel"
+    return "unknown"
+
+
+def _detect_nvidia() -> list[GPUInfo]:
+    if not shutil.which("nvidia-smi"):
+        event_logger.log_error("worker", "unassigned", "W099", "nvidia-smi not found")
+        return []
     try:
         output = subprocess.check_output(
             [
@@ -71,35 +83,36 @@ def detect_gpus() -> list[GPUInfo]:
             ],
             text=True,
         )
-        gpus: list[GPUInfo] = []
-        for line in output.strip().splitlines():
-            try:
-                idx, uuid_str, name, bus, mem, width = [x.strip() for x in line.split(",")]
-                gpus.append(
-                    GPUInfo(
-                        index=int(idx),
-                        uuid=uuid_str,
-                        model=name,
-                        pci_bus=bus,
-                        memory_mb=int(mem.split()[0]),
-                        pci_link_width=int(width),
-                        vendor="nvidia",
-                    )
-                )
-            except (ValueError, IndexError) as e:
-                event_logger.log_error(
-                    "worker",
-                    "unassigned",
-                    "W099",
-                    "Failed to parse nvidia-smi output",
-                    e,
-                )
-        if gpus:
-            return gpus
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+    except subprocess.CalledProcessError as e:
         event_logger.log_error("worker", "unassigned", "W099", "nvidia-smi failed", e)
+        return []
 
-    # AMD detection via rocm-smi
+    gpus: list[GPUInfo] = []
+    for line in output.strip().splitlines():
+        try:
+            idx, uuid_str, name, bus, mem, width = [x.strip() for x in line.split(",")]
+            gpus.append(
+                GPUInfo(
+                    index=int(idx),
+                    uuid=uuid_str,
+                    model=name,
+                    pci_bus=bus,
+                    memory_mb=int(mem.split()[0]),
+                    pci_link_width=int(width),
+                    vendor="nvidia",
+                )
+            )
+        except (ValueError, IndexError) as e:
+            event_logger.log_error(
+                "worker", "unassigned", "W099", "Failed to parse nvidia-smi output", e
+            )
+    return gpus
+
+
+def _detect_amd() -> list[GPUInfo]:
+    if not shutil.which("rocm-smi"):
+        event_logger.log_error("worker", "unassigned", "W099", "rocm-smi not found")
+        return []
     try:
         output = subprocess.check_output(
             [
@@ -112,138 +125,158 @@ def detect_gpus() -> list[GPUInfo]:
             ],
             text=True,
         )
-        gpus: list[GPUInfo] = []
-        current: dict | None = None
-        for line in output.splitlines():
-            if line.startswith("GPU") and "Unique ID" in line:
-                if current:
-                    gpus.append(
-                        GPUInfo(
-                            index=current.get("index", 0),
-                            uuid=current.get("uuid", ""),
-                            model="AMD GPU",
-                            pci_bus=current.get("pci_bus", ""),
-                            memory_mb=current.get("memory_mb", 0),
-                            pci_link_width=current.get("pci_link_width", 16),
-                            vendor="amd",
-                        )
-                    )
-                parts = line.split()
-                idx = int(parts[0].split("[")[1].split("]")[0])
-                uuid_str = parts[-1]
-                current = {
-                    "index": idx,
-                    "uuid": uuid_str,
-                    "pci_bus": "",
-                    "memory_mb": 0,
-                    "pci_link_width": 16,
-                }
-            elif current and line.startswith("GPU") and "PCI Bus" in line:
-                current["pci_bus"] = line.split()[-1]
-            elif current and line.startswith("GPU") and "VRAM Total" in line:
-                try:
-                    current["memory_mb"] = int(line.split()[-2])
-                except (ValueError, IndexError) as e:
-                    event_logger.log_error(
-                        "worker", "unassigned", "W099", "rocm-smi parse error", e
-                    )
-        if current:
-            gpus.append(
-                GPUInfo(
-                    index=current.get("index", 0),
-                    uuid=current.get("uuid", ""),
-                    model="AMD GPU",
-                    pci_bus=current.get("pci_bus", ""),
-                    memory_mb=current.get("memory_mb", 0),
-                    pci_link_width=current.get("pci_link_width", 16),
-                    vendor="amd",
-                )
-            )
-        if gpus:
-            return gpus
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+    except subprocess.CalledProcessError as e:
         event_logger.log_error("worker", "unassigned", "W099", "rocm-smi failed", e)
+        return []
 
-    # Generic detection via sysfs for AMD/Intel
-    try:
-        gpus: list[GPUInfo] = []
-        cards = sorted(glob.glob("/sys/class/drm/card[0-9]*"))
-        for idx, card in enumerate(cards):
-            device_path = os.path.join(card, "device")
-            bus = os.path.basename(os.path.realpath(device_path))
-            model = "GPU"
-            if shutil.which("lspci"):
-                try:
-                    out = subprocess.check_output(["lspci", "-s", bus], text=True)
-                    model = out.split(":", 2)[-1].strip()
-                except (subprocess.CalledProcessError, FileNotFoundError) as e:
-                    event_logger.log_error(
-                        "worker", "unassigned", "W099", "lspci parse error", e
+    gpus: list[GPUInfo] = []
+    current: dict | None = None
+    for line in output.splitlines():
+        if line.startswith("GPU") and "Unique ID" in line:
+            if current:
+                gpus.append(
+                    GPUInfo(
+                        index=current.get("index", 0),
+                        uuid=current.get("uuid", ""),
+                        model="AMD GPU",
+                        pci_bus=current.get("pci_bus", ""),
+                        memory_mb=current.get("memory_mb", 0),
+                        pci_link_width=current.get("pci_link_width", 16),
+                        vendor="amd",
                     )
-                    model = "GPU"
+                )
+            parts = line.split()
+            idx = int(parts[0].split("[")[1].split("]")[0])
+            uuid_str = parts[-1]
+            current = {
+                "index": idx,
+                "uuid": uuid_str,
+                "pci_bus": "",
+                "memory_mb": 0,
+                "pci_link_width": 16,
+            }
+        elif current and line.startswith("GPU") and "PCI Bus" in line:
+            current["pci_bus"] = line.split()[-1]
+        elif current and line.startswith("GPU") and "VRAM Total" in line:
+            try:
+                current["memory_mb"] = int(line.split()[-2])
+            except (ValueError, IndexError) as e:
+                event_logger.log_error(
+                    "worker", "unassigned", "W099", "rocm-smi parse error", e
+                )
+    if current:
+        gpus.append(
+            GPUInfo(
+                index=current.get("index", 0),
+                uuid=current.get("uuid", ""),
+                model="AMD GPU",
+                pci_bus=current.get("pci_bus", ""),
+                memory_mb=current.get("memory_mb", 0),
+                pci_link_width=current.get("pci_link_width", 16),
+                vendor="amd",
+            )
+        )
+    return gpus
 
-            mem_mb = 0
-            for name in ("mem_info_vram_total", "mem_info_total", "local_memory_bytes"):
-                path = os.path.join(device_path, name)
-                if os.path.isfile(path):
-                    try:
-                        with open(path) as f:
-                            val = int(f.read().strip())
-                        mem_mb = val // (1024 * 1024)
-                        break
-                    except (OSError, ValueError) as e:
-                        event_logger.log_error(
-                            "worker", "unassigned", "W099", "sysfs memory read error", e
-                        )
 
-            width = 0
-            width_path = os.path.join(device_path, "current_link_width")
-            if os.path.isfile(width_path):
+def _detect_sysfs() -> list[GPUInfo]:
+    gpus: list[GPUInfo] = []
+    try:
+        cards = sorted(glob.glob("/sys/class/drm/card[0-9]*"))
+    except OSError as e:
+        event_logger.log_error("worker", "unassigned", "W099", "sysfs scan failed", e)
+        return []
+
+    for idx, card in enumerate(cards):
+        device_path = os.path.join(card, "device")
+        bus = os.path.basename(os.path.realpath(device_path))
+        model = "GPU"
+        vendor = "unknown"
+        if shutil.which("lspci"):
+            try:
+                out = subprocess.check_output(["lspci", "-s", bus], text=True)
+                model = out.split(":", 2)[-1].strip()
+                vendor = _parse_vendor_from_lspci(out)
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                event_logger.log_error(
+                    "worker", "unassigned", "W099", "lspci parse error", e
+                )
+
+        mem_mb = 0
+        for name in ("mem_info_vram_total", "mem_info_total", "local_memory_bytes"):
+            path = os.path.join(device_path, name)
+            if os.path.isfile(path):
                 try:
-                    with open(width_path) as f:
-                        width = int(f.read().strip())
+                    with open(path) as f:
+                        val = int(f.read().strip())
+                    mem_mb = val // (1024 * 1024)
+                    break
                 except (OSError, ValueError) as e:
                     event_logger.log_error(
-                        "worker", "unassigned", "W099", "sysfs width read error", e
+                        "worker", "unassigned", "W099", "sysfs memory read error", e
                     )
 
+        width = 0
+        width_path = os.path.join(device_path, "current_link_width")
+        if os.path.isfile(width_path):
+            try:
+                with open(width_path) as f:
+                    width = int(f.read().strip())
+            except (OSError, ValueError) as e:
+                event_logger.log_error(
+                    "worker", "unassigned", "W099", "sysfs width read error", e
+                )
+
+        gpus.append(
+            GPUInfo(
+                index=idx,
+                uuid=bus,
+                model=model,
+                pci_bus=bus,
+                memory_mb=mem_mb,
+                pci_link_width=width or 16,
+                vendor=vendor,
+            )
+        )
+    return gpus
+
+
+def _detect_lspci() -> list[GPUInfo]:
+    if not shutil.which("lspci"):
+        event_logger.log_error("worker", "unassigned", "W099", "lspci not found")
+        return []
+    try:
+        output = subprocess.check_output(["lspci"], text=True)
+    except subprocess.CalledProcessError as e:
+        event_logger.log_error("worker", "unassigned", "W099", "lspci detection failed", e)
+        return []
+
+    gpus: list[GPUInfo] = []
+    for line in output.splitlines():
+        if "VGA compatible controller" in line or "3D controller" in line:
+            bus = line.split()[0]
+            model = line.split(":", 2)[-1].strip()
+            vendor = _parse_vendor_from_lspci(line)
             gpus.append(
                 GPUInfo(
-                    index=idx,
+                    index=len(gpus),
                     uuid=bus,
                     model=model,
                     pci_bus=bus,
-                    memory_mb=mem_mb,
-                    pci_link_width=width or 16,
+                    memory_mb=0,
+                    pci_link_width=0,
+                    vendor=vendor,
                 )
             )
-        if gpus:
-            return gpus
-    except OSError as e:
-        event_logger.log_error("worker", "unassigned", "W099", "sysfs scan failed", e)
+    return gpus
 
-    # Generic detection via lspci for Intel or unknown GPUs
-    try:
-        output = subprocess.check_output(["lspci"], text=True)
-        gpus: list[GPUInfo] = []
-        for line in output.splitlines():
-            if "VGA compatible controller" in line or "3D controller" in line:
-                bus = line.split()[0]
-                model = line.split(":", 2)[-1].strip()
-                gpus.append(
-                    GPUInfo(
-                        index=len(gpus),
-                        uuid=bus,
-                        model=model,
-                        pci_bus=bus,
-                        memory_mb=0,
-                        pci_link_width=0,
-                    )
-                )
+
+def detect_gpus() -> list[GPUInfo]:
+    """Return a list of detected GPUs."""
+    for detector in (_detect_nvidia, _detect_amd, _detect_sysfs, _detect_lspci):
+        gpus = detector()
         if gpus:
             return gpus
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        event_logger.log_error("worker", "unassigned", "W099", "lspci detection failed", e)
 
     event_logger.log_error(
         "worker",
