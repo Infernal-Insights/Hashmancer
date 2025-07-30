@@ -443,14 +443,14 @@ def test_darkling_mask_length_limit(monkeypatch):
     batch = {
         "batch_id": "joblen",
         "hashes": json.dumps(["h"]),
-        "mask": "a" * 55,
+        "mask": "a" * (gpu_sidecar.MAX_MASK_LEN - 1),
         "attack_mode": "mask",
         "hash_mode": "0",
     }
 
     sidecar.run_darkling_engine(batch)
 
-    batch["mask"] = "a" * 56
+    batch["mask"] = "a" * gpu_sidecar.MAX_MASK_LEN
     with pytest.raises(ValueError):
         sidecar.run_darkling_engine(batch)
 

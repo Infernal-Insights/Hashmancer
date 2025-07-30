@@ -4,7 +4,7 @@ import threading
 import redis
 from hashmancer.utils.event_logger import log_error, log_info
 from redis.exceptions import RedisError
-from ...utils.gpu_constants import (
+from hashmancer.utils.gpu_constants import (
     MAX_HASHES,
     MAX_MASK_LEN,
     MAX_RESULT_BUFFER,
@@ -469,8 +469,10 @@ class GPUSidecar(threading.Thread):
                 count += 1
             return count
 
-        if _count_mask(batch.get("mask", "")) >= 56:
-            raise ValueError("darkling-engine supports masks <56 characters")
+        if _count_mask(batch.get("mask", "")) >= MAX_MASK_LEN:
+            raise ValueError(
+                f"darkling-engine supports masks <{MAX_MASK_LEN} characters"
+            )
 
         mask_charsets = batch.get("mask_charsets")
         cs_map = {}
