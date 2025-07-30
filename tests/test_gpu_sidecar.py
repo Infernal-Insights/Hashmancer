@@ -201,6 +201,29 @@ def test_reuse_preloaded_charsets(monkeypatch):
     assert not any("-1" in c for c in cmds[1])
 
 
+def test_darkling_context_upload_once(monkeypatch):
+    ops = []
+
+    class DummyGPU:
+        def alloc(self, size):
+            ops.append(("alloc", size))
+            return bytearray(size)
+
+        def copy_from_host(self, dest, data):
+            ops.append(("copy", len(data)))
+
+        def free(self, buf):
+            ops.append(("free", len(buf)))
+
+    monkeypatch.setattr(gpu_sidecar.gpu, "GPUContext", lambda: DummyGPU())
+    ctx = gpu_sidecar.DarklingContext()
+    ctx.load({"?1": "abc"})
+    ctx.load({"?1": "abc"})
+    assert ops.count(("copy", 3)) == 1
+    ctx.cleanup()
+    assert any(op[0] == "free" for op in ops)
+
+
 def test_power_limit_nvidia(monkeypatch):
     sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 1}, "http://sv")
     monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
