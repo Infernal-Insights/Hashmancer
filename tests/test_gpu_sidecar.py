@@ -16,8 +16,22 @@ class FakeRedis:
     def get(self, key):
         return self.store.get(key)
 
+    def set(self, key, value):
+        self.store[key] = value
+
+    def delete(self, *keys):
+        for k in keys:
+            self.store.pop(k, None)
+
     def hset(self, key, mapping=None, **kwargs):
-        pass
+        self.store.setdefault(key, {}).update(mapping or {})
+        self.store[key].update(kwargs)
+
+    def hget(self, key, field):
+        data = self.store.get(key, {})
+        if isinstance(data, dict):
+            return data.get(field)
+        return None
 
 
 class DummyStdout:
@@ -550,3 +564,43 @@ def test_probability_index_order_inverse(monkeypatch):
     sidecar.run_darkling_engine(batch)
 
     assert captured.get("inverse") is True
+
+
+def test_cached_wordlist_loaded(monkeypatch):
+    sidecar = gpu_sidecar.GPUSidecar("w", {"uuid": "gpu", "index": 0}, "http://sv")
+    fake_r = FakeRedis()
+    monkeypatch.setattr(gpu_sidecar, "r", fake_r)
+
+    cached_batch = {
+        "batch_id": "jobcache",
+        "hashes": json.dumps(["h"]),
+        "attack_mode": "dict",
+        "hash_mode": "0",
+        "wordlist": "/tmp/missing.txt",
+    }
+    fake_r.hset(f"vram:gpu:jobcache", mapping={"payload": json.dumps(cached_batch)})
+    fake_r.set(f"vram:gpu:jobcache:wordlist", b"pass\n")
+
+    captured = {}
+
+    def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
+        captured["cmd"] = cmd
+        return DummyProc(["{}"], "/tmp/jobcache.out")
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
+
+    batch = {
+        "batch_id": "jobcache",
+        "job_id": "jobcache",
+        "hashes": json.dumps(["h"]),
+        "attack_mode": "dict",
+        "hash_mode": "0",
+    }
+
+    founds = sidecar.run_hashcat(batch)
+    assert founds == ["hash:pass"]
+    assert any("/tmp/jobcache.wl" in part for part in captured["cmd"])
+    assert f"vram:gpu:jobcache" not in fake_r.store
+    assert not Path("/tmp/jobcache.wl").exists()

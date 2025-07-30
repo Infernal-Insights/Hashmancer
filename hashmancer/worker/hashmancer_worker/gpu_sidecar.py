@@ -315,6 +315,32 @@ class GPUSidecar(threading.Thread):
         restore = Path(f"/tmp/{batch_id}.restore")
 
         wordlist_path = batch.get("wordlist")
+        job_id = batch.get("job_id", batch_id)
+
+        if not wordlist_path or not os.path.isfile(str(wordlist_path)):
+            cached = _safe_redis_call(
+                r.hget, f"vram:{self.gpu['uuid']}:{job_id}", "payload"
+            )
+            if cached:
+                try:
+                    cached_batch = json.loads(cached)
+                    for k, v in cached_batch.items():
+                        batch.setdefault(k, v)
+                except json.JSONDecodeError:
+                    pass
+                wordlist_path = batch.get("wordlist")
+
+            if not wordlist_path or not os.path.isfile(str(wordlist_path)):
+                data = _safe_redis_call(
+                    r.get, f"vram:{self.gpu['uuid']}:{job_id}:wordlist"
+                )
+                if data:
+                    tmp = Path(f"/tmp/{batch_id}.wl")
+                    if isinstance(data, str):
+                        data = data.encode()
+                    tmp.write_bytes(data)
+                    wordlist_path = str(tmp)
+                    batch["wordlist"] = wordlist_path
 
         founds: list[str] = []
         try:
@@ -455,6 +481,11 @@ class GPUSidecar(threading.Thread):
                     and wordlist_path.endswith(".wl")
                 ):
                     Path(wordlist_path).unlink(missing_ok=True)
+                _safe_redis_call(
+                    r.delete,
+                    f"vram:{self.gpu['uuid']}:{job_id}",
+                    f"vram:{self.gpu['uuid']}:{job_id}:wordlist",
+                )
             except OSError:
                 pass
 
