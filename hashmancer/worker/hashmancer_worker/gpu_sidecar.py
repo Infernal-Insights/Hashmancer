@@ -61,14 +61,23 @@ MAX_CHARSETS = 16
 
 
 class DarklingContext:
-    """Per-GPU context keeping the darkling engine state."""
+    """Per-GPU context for the darkling engine state.
+
+    This object only tracks information about charsets in Python so the worker
+    can avoid reloading them unnecessarily.  It does not allocate or manage GPU
+    memory.
+    """
 
     def __init__(self):
         self.charsets_json: str | None = None
 
     def load(self, charsets: dict):
-        """Record the loaded charsets. In a real setup this would preload them
-        on the GPU."""
+        """Store the charset mapping for later comparison.
+
+        The mapping is serialized to JSON so subsequent calls can detect
+        whether the same charsets were previously loaded.  Actual GPU
+        preloading is not implemented here.
+        """
         self.charsets_json = json.dumps(charsets, sort_keys=True)
 
     def matches(self, charsets: dict) -> bool:
