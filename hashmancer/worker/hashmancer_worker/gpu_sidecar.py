@@ -148,6 +148,12 @@ class GPUSidecar(threading.Thread):
         except (requests.RequestException, json.JSONDecodeError) as e:
             log_error("sidecar", self.worker_id, "W003", "Failed to get server status", e)
         self.darkling_ctx = DarklingContext()
+        self.autotune = os.getenv("DARKLING_AUTOTUNE")
+        target = os.getenv("DARKLING_TARGET_POWER_LIMIT")
+        try:
+            self.target_power = float(target) if target else None
+        except ValueError:
+            self.target_power = None
         log_info("sidecar", self.worker_id, f"Sidecar start {self.gpu.get('uuid')}")
 
     def stop(self):
@@ -160,6 +166,8 @@ class GPUSidecar(threading.Thread):
         # allow a dedicated value when running the darkling engine
         if engine == "darkling-engine":
             limit = os.getenv("DARKLING_GPU_POWER_LIMIT")
+            if not limit:
+                limit = os.getenv("DARKLING_TARGET_POWER_LIMIT")
         if not limit:
             limit = os.getenv("GPU_POWER_LIMIT")
         if not limit:
@@ -525,6 +533,49 @@ class GPUSidecar(threading.Thread):
         """Execute hashcat with the given batch."""
         return self._run_engine("hashcat", batch)
 
+    def _autotune_darkling(self, batch: dict) -> None:
+        """Tune grid and block sizes to meet the target power limit."""
+        sub = batch.copy()
+        sub["start"] = 0
+        sub["end"] = 1000
+
+        saved_grid = self.gpu.pop("darkling_grid", None)
+        saved_block = self.gpu.pop("darkling_block", None)
+
+        self._run_engine("darkling-engine", sub, range_start=0, range_end=1000)
+
+        from . import worker_agent  # imported here to avoid circular dependency
+
+        idx = int(self.gpu.get("index", 0))
+        power_vals = worker_agent.get_gpu_power()
+        current = power_vals[idx] if idx < len(power_vals) else 0.0
+
+        grid = saved_grid or 256
+        block = saved_block or 256
+
+        while current > self.target_power and (grid > 1 or block > 1):
+            if grid > 1:
+                grid = max(grid // 2, 1)
+            elif block > 1:
+                block = max(block // 2, 1)
+
+            self.gpu["darkling_grid"] = grid
+            self.gpu["darkling_block"] = block
+
+            self._run_engine(
+                "darkling-engine",
+                sub,
+                range_start=0,
+                range_end=1000,
+                skip_charsets=True,
+            )
+            power_vals = worker_agent.get_gpu_power()
+            current = power_vals[idx] if idx < len(power_vals) else 0.0
+
+        self.gpu["darkling_grid"] = grid
+        self.gpu["darkling_block"] = block
+        self.gpu["_darkling_tuned"] = True
+
     def run_darkling_engine(self, batch: dict) -> list[str]:
         """Execute the ``darkling-engine`` with caching and batch splitting.
 
@@ -551,6 +602,12 @@ class GPUSidecar(threading.Thread):
             raise ValueError(
                 f"darkling-engine supports masks <{MAX_MASK_LEN} characters"
             )
+
+        if self.autotune and not self.gpu.get("_darkling_tuned") and self.target_power:
+            try:
+                self._autotune_darkling(batch)
+            except Exception as e:  # pragma: no cover - tuning failures are non-fatal
+                log_error("sidecar", self.worker_id, "W002", "Darkling autotune failed", e)
 
         mask_charsets = batch.get("mask_charsets")
         cs_map = {}

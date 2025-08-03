@@ -89,6 +89,18 @@ Two optional environment variables allow you to tweak how `hashcat` runs:
 - `DARKLING_GPU_POWER_LIMIT` – similar to `GPU_POWER_LIMIT` but only applied
   when the darkling engine is used. This allows independent tuning of
   experimental kernels.
+- `DARKLING_AUTOTUNE` – when set, the worker runs a short tuning pass for
+  `darkling-engine` to adjust grid and block sizes.
+- `DARKLING_TARGET_POWER_LIMIT` – desired power draw in watts used during
+  autotuning and as a fallback power cap for darkling jobs.
+
+### Darkling autotuning
+
+When `DARKLING_AUTOTUNE` is enabled the worker launches `darkling-engine`
+on a small range without grid or block overrides and checks GPU power draw.
+If consumption exceeds `DARKLING_TARGET_POWER_LIMIT` the grid and block values
+are halved until the reading falls below the target.  Tuned values are stored
+per GPU and exported via `DARKLING_GRID`/`DARKLING_BLOCK` for subsequent runs.
 
 Grid and block sizes for the darkling engine can also be set per GPU model in
 `~/.hashmancer/worker_config.json`.  Add a `darkling_tuning` object mapping
