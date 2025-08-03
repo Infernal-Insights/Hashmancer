@@ -47,6 +47,11 @@ CONFIG_FILE = Path.home() / ".hashmancer" / "worker_config.json"
 GPU_TUNING: dict[str, dict] = {}
 r: redis.Redis | None = None
 
+# Track sensor paths that have previously failed to prevent log spam
+_FAILED_TEMP_SENSORS: set[str] = set()
+_FAILED_POWER_SENSORS: set[str] = set()
+_FAILED_UTIL_SENSORS: set[str] = set()
+
 
 def _redis_write(func, *args, **kwargs):
     """Perform a Redis write with retry and limited time."""
@@ -416,7 +421,13 @@ def get_gpu_temps() -> list[int]:
                 val = int(f.read().strip())
                 temps.append(val // 1000)
         except (OSError, ValueError) as e:
-            event_logger.log_error("worker", "unassigned", "W100", "Temperature file error", e)
+            if path not in _FAILED_TEMP_SENSORS:
+                event_logger.log_error(
+                    "worker", "unassigned", "W100", "Temperature file error", e
+                )
+                _FAILED_TEMP_SENSORS.add(path)
+            else:
+                logging.debug("Temperature file error for %s: %s", path, e)
             continue
     return temps
 
@@ -445,7 +456,13 @@ def get_gpu_power() -> list[float]:
                 val = int(f.read().strip())
                 power.append(val / 1_000_000)
         except (OSError, ValueError) as e:
-            event_logger.log_error("worker", "unassigned", "W101", "Power file error", e)
+            if path not in _FAILED_POWER_SENSORS:
+                event_logger.log_error(
+                    "worker", "unassigned", "W101", "Power file error", e
+                )
+                _FAILED_POWER_SENSORS.add(path)
+            else:
+                logging.debug("Power file error for %s: %s", path, e)
             continue
     if not power:
         for path in glob.glob(
@@ -456,7 +473,13 @@ def get_gpu_power() -> list[float]:
                     val = int(f.read().strip())
                     power.append(val / 1_000_000)
             except (OSError, ValueError) as e:
-                event_logger.log_error("worker", "unassigned", "W101", "Power file error", e)
+                if path not in _FAILED_POWER_SENSORS:
+                    event_logger.log_error(
+                        "worker", "unassigned", "W101", "Power file error", e
+                    )
+                    _FAILED_POWER_SENSORS.add(path)
+                else:
+                    logging.debug("Power file error for %s: %s", path, e)
                 continue
     return power
 
@@ -482,7 +505,13 @@ def get_gpu_utilization() -> list[int]:
             with open(path) as f:
                 util.append(int(f.read().strip()))
         except (OSError, ValueError) as e:
-            event_logger.log_error("worker", "unassigned", "W102", "Utilization file error", e)
+            if path not in _FAILED_UTIL_SENSORS:
+                event_logger.log_error(
+                    "worker", "unassigned", "W102", "Utilization file error", e
+                )
+                _FAILED_UTIL_SENSORS.add(path)
+            else:
+                logging.debug("Utilization file error for %s: %s", path, e)
             continue
     return util
 
