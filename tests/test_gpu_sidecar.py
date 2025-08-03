@@ -627,3 +627,77 @@ def test_cached_wordlist_loaded(monkeypatch):
     assert any("/tmp/jobcache.wl" in part for part in captured["cmd"])
     assert f"vram:gpu:jobcache" not in fake_r.store
     assert not Path("/tmp/jobcache.wl").exists()
+
+
+def test_apply_power_limit_darkling(monkeypatch):
+    sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 1}, "http://sv")
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    cmds = {}
+
+    def fake_check_call(cmd, stdout=None, stderr=None, **kwargs):
+        cmds["cmd"] = cmd
+
+    def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
+        return DummyProc(["{}"], "/tmp/jobdp.out")
+
+    monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
+    monkeypatch.setattr(gpu_sidecar, "sign_message", lambda *a: "sig")
+
+    batch = {
+        "batch_id": "jobdp",
+        "hashes": json.dumps(["h"]),
+        "mask": "?a",
+        "attack_mode": "mask",
+        "hash_mode": "0",
+    }
+
+    monkeypatch.setenv("DARKLING_TARGET_POWER_LIMIT", "150")
+    sidecar.run_darkling_engine(batch)
+
+    assert "150" in cmds["cmd"]
+
+
+def test_darkling_autotune(monkeypatch):
+    import hashmancer.worker.hashmancer_worker.worker_agent as wa
+
+    monkeypatch.setenv("DARKLING_AUTOTUNE", "1")
+    monkeypatch.setenv("DARKLING_TARGET_POWER_LIMIT", "200")
+
+    sidecar = gpu_sidecar.GPUSidecar(
+        "w",
+        {"uuid": "gpu", "index": 0, "darkling_grid": 256, "darkling_block": 256},
+        "http://sv",
+    )
+    monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
+
+    runs = []
+
+    def fake_run_engine(self, engine, batch, range_start=None, range_end=None, skip_charsets=False):
+        runs.append((range_start, range_end, self.gpu.get("darkling_grid"), self.gpu.get("darkling_block")))
+        return []
+
+    monkeypatch.setattr(gpu_sidecar.GPUSidecar, "_run_engine", fake_run_engine)
+
+    powers = [[250], [250], [180]]
+
+    def fake_power():
+        return powers.pop(0)
+
+    monkeypatch.setattr(wa, "get_gpu_power", fake_power)
+
+    batch = {
+        "batch_id": "jobauto",
+        "hashes": json.dumps(["h"]),
+        "mask": "?a",
+        "attack_mode": "mask",
+        "hash_mode": "0",
+    }
+
+    sidecar.run_darkling_engine(batch)
+
+    assert len(runs) > 1
+    assert sidecar.gpu["darkling_grid"] < 256 or sidecar.gpu["darkling_block"] < 256
+
