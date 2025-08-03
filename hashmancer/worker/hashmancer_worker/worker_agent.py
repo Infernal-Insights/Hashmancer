@@ -374,10 +374,14 @@ def detect_gpus() -> list[GPUInfo]:
 
     detectors = platform_map.get(sys.platform, platform_map.get("linux"))
 
+    gpus: list[GPUInfo] = []
     for detector in detectors:
-        gpus = detector()
-        if gpus:
-            return gpus
+        detected = detector()
+        if detected:
+            gpus.extend(detected)
+
+    if gpus:
+        return gpus
 
     event_logger.log_error(
         "worker",
