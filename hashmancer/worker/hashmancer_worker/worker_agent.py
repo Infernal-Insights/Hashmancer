@@ -30,6 +30,8 @@ from .crypto_utils import load_public_key_pem, sign_message
 from hashmancer.ascii_logo import print_logo
 import argparse
 
+from hashmancer.worker.redis_config import redis_from_env
+
 # defaults used before configuration is parsed in ``main``
 SERVER_URL = "http://localhost:8000"
 STATUS_INTERVAL = 30
@@ -623,23 +625,15 @@ def main(argv: list[str] | None = None):
         except (OSError, json.JSONDecodeError) as e:
             event_logger.log_error("worker", "unassigned", "W099", "Failed to load config", e)
 
-    redis_opts: dict[str, str | int | bool] = {
-        "host": REDIS_HOST,
-        "port": REDIS_PORT,
-        "decode_responses": True,
-    }
-    if REDIS_PASSWORD:
-        redis_opts["password"] = REDIS_PASSWORD
-    if str(REDIS_SSL).lower() in {"1", "true", "yes"}:
-        redis_opts["ssl"] = True
-        if REDIS_SSL_CA_CERT:
-            redis_opts["ssl_ca_certs"] = REDIS_SSL_CA_CERT
-        if REDIS_SSL_CERT:
-            redis_opts["ssl_certfile"] = REDIS_SSL_CERT
-        if REDIS_SSL_KEY:
-            redis_opts["ssl_keyfile"] = REDIS_SSL_KEY
-
-    r = redis.Redis(**redis_opts)
+    r = redis_from_env(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        password=REDIS_PASSWORD,
+        ssl=REDIS_SSL,
+        ssl_cert=REDIS_SSL_CERT,
+        ssl_key=REDIS_SSL_KEY,
+        ssl_ca_cert=REDIS_SSL_CA_CERT,
+    )
     event_logger.r = r
     parser = argparse.ArgumentParser(description="Hashmancer worker agent")
     parser.add_argument(
