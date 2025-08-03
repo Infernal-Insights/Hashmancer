@@ -548,20 +548,42 @@ def register_worker(worker_id: str, gpus: list[GPUInfo | dict], pin: str | None 
 def perform_command(cmd: str) -> None:
     """Execute a management command such as upgrade or restart."""
     root_dir = Path(__file__).resolve().parents[2]
+    def _run_and_log(args: list[str], *, cwd: Path | None = None) -> None:
+        try:
+            proc = subprocess.run(
+                args,
+                cwd=cwd,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode != 0:
+                msg = (
+                    f"Command '{' '.join(args)}' failed with code {proc.returncode}. "
+                )
+                if proc.stdout:
+                    msg += f"stdout: {proc.stdout.strip()} "
+                if proc.stderr:
+                    msg += f"stderr: {proc.stderr.strip()}"
+                event_logger.log_error(
+                    "worker", "unassigned", "W099", msg.rstrip()
+                )
+        except Exception as e:  # pragma: no cover - unexpected failures
+            event_logger.log_error(
+                "worker", "unassigned", "W099", f"Command '{' '.join(args)}' failed", e
+            )
+
     if cmd == "upgrade":
-        subprocess.run(
+        _run_and_log(
             ["python3", "setup.py", "--upgrade", "--worker"],
             cwd=root_dir,
-            check=False,
         )
-        subprocess.run(
+        _run_and_log(
             ["sudo", "systemctl", "restart", "hashmancer-worker.service"],
-            check=False,
         )
     elif cmd == "restart":
-        subprocess.run(
+        _run_and_log(
             ["sudo", "systemctl", "restart", "hashmancer-worker.service"],
-            check=False,
         )
 
 
