@@ -69,7 +69,8 @@ def test_run_hashcat(monkeypatch):
     captured = {}
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
         captured['cmd'] = cmd
-        return DummyProc(['{"speed": [50], "progress": 10}'], "/tmp/job1.out")
+        outfile = cmd[cmd.index("--outfile") + 1]
+        return DummyProc(['{"speed": [50], "progress": 10}'], outfile)
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
@@ -115,7 +116,8 @@ def test_darkling_engine_selected(monkeypatch):
 
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
         captured["cmd"] = cmd
-        return DummyProc(["{}"], "/tmp/job2.out")
+        outfile = cmd[cmd.index("--outfile") + 1]
+        return DummyProc(["{}"], outfile)
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
@@ -146,7 +148,8 @@ def test_custom_mask_charsets(monkeypatch):
 
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
         captured["cmd"] = cmd
-        return DummyProc(["{}"], "/tmp/job7.out")
+        outfile = cmd[cmd.index("--outfile") + 1]
+        return DummyProc(["{}"], outfile)
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
@@ -176,7 +179,8 @@ def test_reuse_preloaded_charsets(monkeypatch):
 
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
         cmds.append(cmd)
-        return DummyProc(["{}"], f"/tmp/job8{len(cmds)}.out")
+        outfile = cmd[cmd.index("--outfile") + 1]
+        return DummyProc(["{}"], outfile)
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
@@ -234,7 +238,8 @@ def test_power_limit_nvidia(monkeypatch):
         cmds["cmd"] = cmd
 
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
-        return DummyProc(["{}"], "/tmp/job3.out")
+        outfile = cmd[cmd.index("--outfile") + 1]
+        return DummyProc(["{}"], outfile)
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
@@ -271,7 +276,8 @@ def test_power_limit_rocm(monkeypatch):
         cmds["cmd"] = cmd
 
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
-        return DummyProc(["{}"], "/tmp/job4.out")
+        outfile = cmd[cmd.index("--outfile") + 1]
+        return DummyProc(["{}"], outfile)
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
@@ -308,7 +314,8 @@ def test_power_overdrive_rocm(monkeypatch):
         cmds["cmd"] = cmd
 
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
-        return DummyProc(["{}"], "/tmp/job4b.out")
+        outfile = cmd[cmd.index("--outfile") + 1]
+        return DummyProc(["{}"], outfile)
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
@@ -344,7 +351,8 @@ def test_power_limit_intel(monkeypatch):
         cmds["cmd"] = cmd
 
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
-        return DummyProc(["{}"], "/tmp/job5.out")
+        outfile = cmd[cmd.index("--outfile") + 1]
+        return DummyProc(["{}"], outfile)
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
@@ -471,7 +479,8 @@ def test_darkling_mask_length_limit(monkeypatch):
     monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
 
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
-        return DummyProc(["{}"], "/tmp/joblen.out")
+        outfile = cmd[cmd.index("--outfile") + 1]
+        return DummyProc(["{}"], outfile)
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
@@ -531,6 +540,16 @@ def test_temp_files_cleanup_on_exception(monkeypatch):
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
 
+    tempdirs = []
+    real_tempdir = gpu_sidecar.tempfile.TemporaryDirectory
+
+    def capture_tempdir(*args, **kwargs):
+        td = real_tempdir(*args, **kwargs)
+        tempdirs.append(Path(td.name))
+        return td
+
+    monkeypatch.setattr(gpu_sidecar.tempfile, "TemporaryDirectory", capture_tempdir)
+
     batch = {
         "batch_id": "jobexc",
         "hashes": json.dumps(["h"]),
@@ -542,9 +561,8 @@ def test_temp_files_cleanup_on_exception(monkeypatch):
     with pytest.raises(RuntimeError):
         sidecar.run_hashcat(batch)
 
-    assert not Path("/tmp/jobexc.hashes").exists()
-    assert not Path("/tmp/jobexc.out").exists()
-    assert not Path("/tmp/jobexc.restore").exists()
+    for d in tempdirs:
+        assert not d.exists()
 
 
 def test_probability_index_order_inverse(monkeypatch):
@@ -608,7 +626,8 @@ def test_cached_wordlist_loaded(monkeypatch):
 
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
         captured["cmd"] = cmd
-        return DummyProc(["{}"], "/tmp/jobcache.out")
+        outfile = cmd[cmd.index("--outfile") + 1]
+        return DummyProc(["{}"], outfile)
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(gpu_sidecar, "post_with_retry", lambda *a, **k: None)
@@ -624,9 +643,10 @@ def test_cached_wordlist_loaded(monkeypatch):
 
     founds = sidecar.run_hashcat(batch)
     assert founds == ["hash:pass"]
-    assert any("/tmp/jobcache.wl" in part for part in captured["cmd"])
+    wl_path = captured["cmd"][captured["cmd"].index("-a") + 2]
+    assert wl_path.endswith(".wl")
     assert f"vram:gpu:jobcache" not in fake_r.store
-    assert not Path("/tmp/jobcache.wl").exists()
+    assert not Path(wl_path).exists()
 
 
 def test_apply_power_limit_darkling(monkeypatch):
@@ -639,7 +659,8 @@ def test_apply_power_limit_darkling(monkeypatch):
         cmds["cmd"] = cmd
 
     def fake_popen(cmd, stdout=None, stderr=None, text=None, env=None):
-        return DummyProc(["{}"], "/tmp/jobdp.out")
+        outfile = cmd[cmd.index("--outfile") + 1]
+        return DummyProc(["{}"], outfile)
 
     monkeypatch.setattr(gpu_sidecar.subprocess, "check_call", fake_check_call)
     monkeypatch.setattr(gpu_sidecar.subprocess, "Popen", fake_popen)
