@@ -146,3 +146,15 @@ fully conform to the default style yet, so ``.flake8`` extends the ignore list
 (E203, E225, E301, E302, E303, E305, E306, E401, E402, E501, E741,
 F401, F541, F811, F824, W291, W292, W391). This allows the current codebase to
 pass the lint step while work continues on modernization.
+
+## GitHub Issue helper
+
+Hashmancer can open issues on GitHub using a personal access token stored in
+`GITHUB_TOKEN`. The helper function `hashmancer.utils.github_client.create_issue`
+wraps the API call:
+
+```python
+from hashmancer.utils.github_client import create_issue
+
+create_issue("Infernal-Insights/Hashmancer", "Bug title", "Details about the bug")
+```
