@@ -2,7 +2,6 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from hashmancer.ascii_logo import print_logo
 from .config import CONFIG, PORTAL_KEY
 
 app = FastAPI()
@@ -55,7 +54,3 @@ class PortalAuthMiddleware:
         await self.app(scope, receive, send)
 
 app.add_middleware(PortalAuthMiddleware, key=PORTAL_KEY)
-
-@app.on_event("startup")
-async def _show_logo() -> None:
-    print_logo()

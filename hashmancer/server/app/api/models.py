@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any
-from pydantic import BaseModel, validator, field_validator
+from pydantic import BaseModel, field_validator
 
 class LoginRequest(BaseModel):
     passkey: str
@@ -108,7 +108,7 @@ class AlgoParamsRequest(BaseModel):
     algo: str
     params: dict[str, Any]
 
-    @validator("algo")
+    @field_validator("algo")
     def _algo_not_empty(cls, v: str) -> str:
         if not v:
             raise ValueError("algorithm required")
@@ -118,7 +118,7 @@ class HashesSettingsRequest(BaseModel):
     hashes_poll_interval: int | None = None
     algo_params: dict[str, dict[str, Any]] | None = None
 
-    @validator("hashes_poll_interval")
+    @field_validator("hashes_poll_interval")
     def _positive_interval(cls, v: int | None) -> int | None:
         if v is not None and v <= 0:
             raise ValueError("poll interval must be positive")
