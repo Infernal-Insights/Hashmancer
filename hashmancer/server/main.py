@@ -4,6 +4,7 @@ from fastapi import (
     HTTPException,
     WebSocket,
     WebSocketDisconnect,
+    FastAPI,
 )
 try:  # JSONResponse may be missing in test stubs
     from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
@@ -35,6 +36,7 @@ import uuid
 import asyncio
 import glob
 import sys
+from contextlib import asynccontextmanager
 from hashmancer.server.server_utils import redis_manager
 from hashmancer.utils.event_logger import log_error, log_info, log_watchdog_event
 from .app.background import (
@@ -308,7 +310,6 @@ async def logout(req: LogoutRequest) -> dict[str, str]:
 
 
 
-@app.on_event("startup")
 async def _load_environment() -> None:
     """Load environment variable overrides."""
     global JOB_STREAM, HTTP_GROUP, LOW_BW_JOB_STREAM, LOW_BW_GROUP
@@ -318,17 +319,31 @@ async def _load_environment() -> None:
     LOW_BW_GROUP = os.getenv("LOW_BW_GROUP", LOW_BW_GROUP)
 
 
-@app.on_event("startup")
-async def start_broadcast():
+async def start_broadcast() -> None:
     tasks = start_loops()
     BACKGROUND_TASKS.extend(tasks)
 
 
-@app.on_event("shutdown")
-async def shutdown_event():
+async def shutdown_event() -> None:
     """Cancel all background tasks and wait for them to finish."""
     await stop_loops(BACKGROUND_TASKS)
     BACKGROUND_TASKS.clear()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan for startup and shutdown events."""
+    print_logo()
+    await _load_environment()
+    await start_broadcast()
+    try:
+        yield
+    finally:
+        await shutdown_event()
+
+
+if hasattr(app, "router"):
+    app.router.lifespan_context = lifespan
 
 
 @app.post("/register_worker")

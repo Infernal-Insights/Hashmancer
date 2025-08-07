@@ -32,3 +32,8 @@ where = ["hashmancer"]
     "*.html",
     "app/**/*",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "asyncio: mark test as requiring asyncio",
+]
