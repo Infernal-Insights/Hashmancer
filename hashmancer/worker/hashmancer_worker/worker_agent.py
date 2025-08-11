@@ -52,6 +52,10 @@ _FAILED_TEMP_SENSORS: set[str] = set()
 _FAILED_POWER_SENSORS: set[str] = set()
 _FAILED_UTIL_SENSORS: set[str] = set()
 
+# Sensor reading cache to avoid excessive subprocess calls
+_SENSOR_CACHE: dict[str, tuple[float, list]] = {}
+_CACHE_DURATION = 5.0  # Cache sensor readings for 5 seconds
+
 
 def _redis_write(func, *args, **kwargs):
     """Perform a Redis write with retry and limited time."""
@@ -65,6 +69,27 @@ def _redis_write(func, *args, **kwargs):
             total += delay
             delay = min(delay * 2, 30)
     raise RedisError("Redis write failed after retries")
+
+
+def _get_cached_or_fetch(cache_key: str, fetch_func) -> list:
+    """Get cached sensor data or fetch new data if cache is stale."""
+    now = time.time()
+    
+    if cache_key in _SENSOR_CACHE:
+        cached_time, cached_data = _SENSOR_CACHE[cache_key]
+        if now - cached_time < _CACHE_DURATION:
+            return cached_data
+    
+    # Cache miss or stale, fetch new data
+    try:
+        new_data = fetch_func()
+        _SENSOR_CACHE[cache_key] = (now, new_data)
+        return new_data
+    except Exception as e:
+        # If fetch fails, return cached data if available, otherwise empty list
+        if cache_key in _SENSOR_CACHE:
+            return _SENSOR_CACHE[cache_key][1]
+        return []
 
 
 def _parse_vendor_from_lspci(line: str) -> str:
@@ -382,91 +407,117 @@ def detect_gpus() -> list[GPUInfo]:
     detectors = platform_map.get(sys.platform, platform_map.get("linux"))
 
     gpus: list[GPUInfo] = []
+    detection_errors: list[str] = []
+    
     for detector in detectors:
-        detected = detector()
-        if detected:
-            gpus.extend(detected)
+        try:
+            detected = detector()
+            if detected:
+                event_logger.log_info(
+                    "worker", 
+                    "unassigned", 
+                    f"Detected {len(detected)} GPUs using {detector.__name__}"
+                )
+                gpus.extend(detected)
+        except Exception as e:
+            error_msg = f"{detector.__name__} failed: {str(e)}"
+            detection_errors.append(error_msg)
+            event_logger.log_error(
+                "worker", "unassigned", "W000", error_msg, e
+            )
 
     if gpus:
-        return gpus
+        # Deduplicate GPUs based on UUID/identifier
+        seen = set()
+        unique_gpus = []
+        for gpu in gpus:
+            key = gpu.uuid or f"{gpu.pci_bus}_{gpu.model}"
+            if key not in seen:
+                seen.add(key)
+                unique_gpus.append(gpu)
+        
+        if len(unique_gpus) < len(gpus):
+            event_logger.log_info(
+                "worker",
+                "unassigned",
+                f"Deduplicated {len(gpus)} GPUs to {len(unique_gpus)} unique devices"
+            )
+        
+        return unique_gpus
 
-    event_logger.log_error(
-        "worker",
-        "unassigned",
-        "W000",
-        "No GPUs detected. Ensure drivers are installed and accessible",
-    )
+    if detection_errors:
+        event_logger.log_error(
+            "worker",
+            "unassigned",
+            "W000",
+            f"No GPUs detected after trying all methods. Errors: {'; '.join(detection_errors)}",
+        )
+    else:
+        event_logger.log_error(
+            "worker",
+            "unassigned",
+            "W000",
+            "No GPUs detected. Ensure drivers are installed and accessible",
+        )
+    
     return []
 
 
 def get_gpu_temps() -> list[int]:
     """Return GPU temperatures if available."""
-    try:
-        output = subprocess.check_output(
-            [
-                "nvidia-smi",
-                "--query-gpu=temperature.gpu",
-                "--format=csv,noheader",
-            ],
-            text=True,
-        )
-        return [int(t.strip()) for t in output.strip().splitlines()]
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        event_logger.log_error("worker", "unassigned", "W100", "Temperature read failed", e)
-
-    temps = []
-    for path in glob.glob("/sys/class/drm/card*/device/hwmon/hwmon*/temp*_input"):
+    def _fetch_temps():
         try:
-            with open(path) as f:
-                val = int(f.read().strip())
-                temps.append(val // 1000)
-        except (OSError, ValueError) as e:
-            if path not in _FAILED_TEMP_SENSORS:
-                event_logger.log_error(
-                    "worker", "unassigned", "W100", "Temperature file error", e
-                )
-                _FAILED_TEMP_SENSORS.add(path)
-            else:
-                logging.debug("Temperature file error for %s: %s", path, e)
-            continue
-    return temps
+            output = subprocess.check_output(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=temperature.gpu",
+                    "--format=csv,noheader",
+                ],
+                text=True,
+            )
+            return [int(t.strip()) for t in output.strip().splitlines()]
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            event_logger.log_error("worker", "unassigned", "W100", "nvidia-smi temperature read failed", e)
+
+        temps = []
+        for path in glob.glob("/sys/class/drm/card*/device/hwmon/hwmon*/temp*_input"):
+            try:
+                with open(path) as f:
+                    val = int(f.read().strip())
+                    temps.append(val // 1000)
+            except (OSError, ValueError) as e:
+                if path not in _FAILED_TEMP_SENSORS:
+                    event_logger.log_error(
+                        "worker", "unassigned", "W100", "Temperature file error", e
+                    )
+                    _FAILED_TEMP_SENSORS.add(path)
+                else:
+                    logging.debug("Temperature file error for %s: %s", path, e)
+                continue
+        return temps
+    
+    return _get_cached_or_fetch("gpu_temps", _fetch_temps)
 
 
 def get_gpu_power() -> list[float]:
     """Return GPU power draw in watts if available."""
-    try:
-        output = subprocess.check_output(
-            [
-                "nvidia-smi",
-                "--query-gpu=power.draw",
-                "--format=csv,noheader",
-            ],
-            text=True,
-        )
-        return [float(p.split()[0]) for p in output.strip().splitlines()]
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        event_logger.log_error("worker", "unassigned", "W101", "Power read failed", e)
-
-    power = []
-    for path in glob.glob(
-        "/sys/class/drm/card*/device/hwmon/hwmon*/power*_average"
-    ):
+    def _fetch_power():
         try:
-            with open(path) as f:
-                val = int(f.read().strip())
-                power.append(val / 1_000_000)
-        except (OSError, ValueError) as e:
-            if path not in _FAILED_POWER_SENSORS:
-                event_logger.log_error(
-                    "worker", "unassigned", "W101", "Power file error", e
-                )
-                _FAILED_POWER_SENSORS.add(path)
-            else:
-                logging.debug("Power file error for %s: %s", path, e)
-            continue
-    if not power:
+            output = subprocess.check_output(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=power.draw",
+                    "--format=csv,noheader",
+                ],
+                text=True,
+            )
+            return [float(p.split()[0]) for p in output.strip().splitlines()]
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            event_logger.log_error("worker", "unassigned", "W101", "nvidia-smi power read failed", e)
+
+        power = []
         for path in glob.glob(
-            "/sys/class/drm/card*/device/hwmon/hwmon*/power*_input"
+            "/sys/class/drm/card*/device/hwmon/hwmon*/power*_average"
         ):
             try:
                 with open(path) as f:
@@ -481,39 +532,61 @@ def get_gpu_power() -> list[float]:
                 else:
                     logging.debug("Power file error for %s: %s", path, e)
                 continue
-    return power
+        if not power:
+            for path in glob.glob(
+                "/sys/class/drm/card*/device/hwmon/hwmon*/power*_input"
+            ):
+                try:
+                    with open(path) as f:
+                        val = int(f.read().strip())
+                        power.append(val / 1_000_000)
+                except (OSError, ValueError) as e:
+                    if path not in _FAILED_POWER_SENSORS:
+                        event_logger.log_error(
+                            "worker", "unassigned", "W101", "Power file error", e
+                        )
+                        _FAILED_POWER_SENSORS.add(path)
+                    else:
+                        logging.debug("Power file error for %s: %s", path, e)
+                    continue
+        return power
+    
+    return _get_cached_or_fetch("gpu_power", _fetch_power)
 
 
 def get_gpu_utilization() -> list[int]:
     """Return GPU utilization percentage if available."""
-    try:
-        output = subprocess.check_output(
-            [
-                "nvidia-smi",
-                "--query-gpu=utilization.gpu",
-                "--format=csv,noheader",
-            ],
-            text=True,
-        )
-        return [int(u.split()[0]) for u in output.strip().splitlines()]
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        event_logger.log_error("worker", "unassigned", "W102", "Utilization read failed", e)
-
-    util = []
-    for path in glob.glob("/sys/class/drm/card*/device/gpu_busy_percent"):
+    def _fetch_util():
         try:
-            with open(path) as f:
-                util.append(int(f.read().strip()))
-        except (OSError, ValueError) as e:
-            if path not in _FAILED_UTIL_SENSORS:
-                event_logger.log_error(
-                    "worker", "unassigned", "W102", "Utilization file error", e
-                )
-                _FAILED_UTIL_SENSORS.add(path)
-            else:
-                logging.debug("Utilization file error for %s: %s", path, e)
-            continue
-    return util
+            output = subprocess.check_output(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=utilization.gpu",
+                    "--format=csv,noheader",
+                ],
+                text=True,
+            )
+            return [int(u.split()[0]) for u in output.strip().splitlines()]
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            event_logger.log_error("worker", "unassigned", "W102", "nvidia-smi utilization read failed", e)
+
+        util = []
+        for path in glob.glob("/sys/class/drm/card*/device/gpu_busy_percent"):
+            try:
+                with open(path) as f:
+                    util.append(int(f.read().strip()))
+            except (OSError, ValueError) as e:
+                if path not in _FAILED_UTIL_SENSORS:
+                    event_logger.log_error(
+                        "worker", "unassigned", "W102", "Utilization file error", e
+                    )
+                    _FAILED_UTIL_SENSORS.add(path)
+                else:
+                    logging.debug("Utilization file error for %s: %s", path, e)
+                continue
+        return util
+    
+    return _get_cached_or_fetch("gpu_utilization", _fetch_util)
 
 
 def register_worker(worker_id: str, gpus: list[GPUInfo | dict], pin: str | None = None):
@@ -648,17 +721,52 @@ def main(argv: list[str] | None = None):
     global REDIS_PASSWORD, REDIS_SSL, REDIS_SSL_CERT, REDIS_SSL_KEY, REDIS_SSL_CA_CERT
     global GPU_TUNING
 
-    worker_pin = os.getenv("WORKER_PIN")
-
-    SERVER_URL = os.getenv("SERVER_URL", SERVER_URL)
-    STATUS_INTERVAL = int(os.getenv("STATUS_INTERVAL", str(STATUS_INTERVAL)))
-    REDIS_HOST = os.getenv("REDIS_HOST", REDIS_HOST)
-    REDIS_PORT = int(os.getenv("REDIS_PORT", str(REDIS_PORT)))
-    REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", REDIS_PASSWORD)
-    REDIS_SSL = os.getenv("REDIS_SSL", REDIS_SSL)
-    REDIS_SSL_CERT = os.getenv("REDIS_SSL_CERT", REDIS_SSL_CERT)
-    REDIS_SSL_KEY = os.getenv("REDIS_SSL_KEY", REDIS_SSL_KEY)
-    REDIS_SSL_CA_CERT = os.getenv("REDIS_SSL_CA_CERT", REDIS_SSL_CA_CERT)
+    # Validate environment variables
+    from hashmancer.utils.env_validation import create_worker_validator, create_redis_validator, EnvValidationError
+    
+    try:
+        # Validate worker-specific environment variables
+        worker_validator = create_worker_validator()
+        worker_config = worker_validator.validate_all(strict=False)
+        
+        if worker_validator.get_errors():
+            event_logger.log_error("worker", "unassigned", "W099", 
+                                 f"Environment validation warnings: {'; '.join(worker_validator.get_errors())}")
+        
+        # Validate Redis environment variables  
+        redis_validator = create_redis_validator()
+        redis_config = redis_validator.validate_all(strict=False)
+        
+        if redis_validator.get_errors():
+            event_logger.log_error("worker", "unassigned", "W099",
+                                 f"Redis configuration warnings: {'; '.join(redis_validator.get_errors())}")
+        
+        # Use validated values
+        SERVER_URL = worker_config.get("SERVER_URL", SERVER_URL)
+        STATUS_INTERVAL = worker_config.get("STATUS_INTERVAL", STATUS_INTERVAL)
+        worker_pin = worker_config.get("WORKER_PIN")
+        
+        REDIS_HOST = redis_config.get("REDIS_HOST", REDIS_HOST)
+        REDIS_PORT = redis_config.get("REDIS_PORT", REDIS_PORT)
+        REDIS_PASSWORD = redis_config.get("REDIS_PASSWORD", REDIS_PASSWORD)
+        REDIS_SSL = str(redis_config.get("REDIS_SSL", REDIS_SSL))
+        REDIS_SSL_CERT = redis_config.get("REDIS_SSL_CERT", REDIS_SSL_CERT)
+        REDIS_SSL_KEY = redis_config.get("REDIS_SSL_KEY", REDIS_SSL_KEY)
+        REDIS_SSL_CA_CERT = redis_config.get("REDIS_SSL_CA_CERT", REDIS_SSL_CA_CERT)
+        
+    except EnvValidationError as e:
+        event_logger.log_error("worker", "unassigned", "W099", f"Critical environment validation error: {e}")
+        # Continue with defaults for non-critical errors
+        worker_pin = os.getenv("WORKER_PIN")
+        SERVER_URL = os.getenv("SERVER_URL", SERVER_URL)
+        STATUS_INTERVAL = int(os.getenv("STATUS_INTERVAL", str(STATUS_INTERVAL)))
+        REDIS_HOST = os.getenv("REDIS_HOST", REDIS_HOST)
+        REDIS_PORT = int(os.getenv("REDIS_PORT", str(REDIS_PORT)))
+        REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", REDIS_PASSWORD)
+        REDIS_SSL = os.getenv("REDIS_SSL", REDIS_SSL)
+        REDIS_SSL_CERT = os.getenv("REDIS_SSL_CERT", REDIS_SSL_CERT)
+        REDIS_SSL_KEY = os.getenv("REDIS_SSL_KEY", REDIS_SSL_KEY)
+        REDIS_SSL_CA_CERT = os.getenv("REDIS_SSL_CA_CERT", REDIS_SSL_CA_CERT)
 
     if CONFIG_FILE.exists():
         try:
@@ -825,6 +933,10 @@ def main(argv: list[str] | None = None):
         for t in threads:
             t.join()
         flash_mgr.join()
+    finally:
+        # Clean up temporary SSL files
+        from hashmancer.worker.redis_config import cleanup_temp_ssl_files
+        cleanup_temp_ssl_files()
 
 
 if __name__ == "__main__":

@@ -39,6 +39,9 @@ def _read_secret(var: str) -> str | None:
             return None
     return os.getenv(var)
 
+# Global registry to track temporary SSL files for cleanup
+_TEMP_SSL_FILES: list[str] = []
+
 def _resolve_ssl_file(var: str) -> str | None:
     """Resolve a certificate/key environment variable to a file path.
 
@@ -62,10 +65,23 @@ def _resolve_ssl_file(var: str) -> str | None:
         return str(path)
 
     # assume the value is raw certificate/key data
-    fd, tmp_path = tempfile.mkstemp()
+    fd, tmp_path = tempfile.mkstemp(suffix='.pem', prefix=f'{var.lower()}_')
     with os.fdopen(fd, "w") as tmp:
         tmp.write(value)
+    
+    # Track temp file for cleanup
+    _TEMP_SSL_FILES.append(tmp_path)
     return tmp_path
+
+
+def cleanup_temp_ssl_files() -> None:
+    """Clean up temporary SSL certificate files."""
+    for filepath in _TEMP_SSL_FILES:
+        try:
+            os.unlink(filepath)
+        except OSError:
+            pass  # File may already be deleted
+    _TEMP_SSL_FILES.clear()
 
 # ---------------------------------------------------------------------------
 # public API

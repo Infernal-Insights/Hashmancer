@@ -62,6 +62,7 @@ from .auth_utils import (
     verify_signature_with_key,
     fingerprint_public_key,
 )
+from .auth_middleware import sign_session, verify_session_token
 from .app.api.models import (
     LoginRequest,
     LogoutRequest,
@@ -177,36 +178,6 @@ from . import orchestrator_agent
 
 
 
-def sign_session(session_id: str, expiry: int) -> str:
-    """Return a signed session token using the configured passkey."""
-    key = (PORTAL_PASSKEY or "").encode()
-    payload = f"{session_id}|{expiry}".encode()
-    sig = hmac.new(key, payload, hashlib.sha256).hexdigest()
-    return f"{session_id}|{expiry}|{sig}"
-
-
-def verify_session_token(token: str) -> bool:
-    """Validate a session token and confirm it's stored in Redis."""
-    try:
-        session_id, exp_s, sig = token.split("|")
-        expiry = int(exp_s)
-    except ValueError:
-        return False
-    if expiry < int(time.time()):
-        return False
-    expected = hmac.new(
-        (PORTAL_PASSKEY or "").encode(), f"{session_id}|{expiry}".encode(), hashlib.sha256
-    ).hexdigest()
-    if not hmac.compare_digest(expected, sig):
-        return False
-    if not r.exists(f"session:{session_id}"):
-        logging.warning("unknown session id %s", session_id)
-        return False
-    ttl = r.ttl(f"session:{session_id}") if hasattr(r, "ttl") else SESSION_TTL
-    if ttl <= 0:
-        log_error("server", "system", "S760", "session ttl expired")
-        return False
-    return True
 
 
 def verify_hash(password: str, hash_str: str, algorithm: str) -> bool:
@@ -288,7 +259,7 @@ async def login(req: LoginRequest) -> dict[str, str]:
         raise HTTPException(status_code=401, detail="unauthorized")
     session_id = uuid.uuid4().hex
     expiry = int(time.time()) + SESSION_TTL
-    token = sign_session(session_id, expiry)
+    token = sign_session(session_id, expiry, PORTAL_PASSKEY or "")
     r.set(f"session:{session_id}", 1, ex=SESSION_TTL)
     return {"status": "ok", "cookie": token}
 
@@ -313,10 +284,31 @@ async def logout(req: LogoutRequest) -> dict[str, str]:
 async def _load_environment() -> None:
     """Load environment variable overrides."""
     global JOB_STREAM, HTTP_GROUP, LOW_BW_JOB_STREAM, LOW_BW_GROUP
-    JOB_STREAM = os.getenv("JOB_STREAM", JOB_STREAM)
-    HTTP_GROUP = os.getenv("HTTP_GROUP", HTTP_GROUP)
-    LOW_BW_JOB_STREAM = os.getenv("LOW_BW_JOB_STREAM", LOW_BW_JOB_STREAM)
-    LOW_BW_GROUP = os.getenv("LOW_BW_GROUP", LOW_BW_GROUP)
+    
+    # Validate environment variables
+    try:
+        from hashmancer.utils.env_validation import create_server_validator, EnvValidationError
+        
+        server_validator = create_server_validator()
+        server_config = server_validator.validate_all(strict=False)
+        
+        if server_validator.get_errors():
+            log_error("server", "system", "S001", 
+                     f"Environment validation warnings: {'; '.join(server_validator.get_errors())}")
+        
+        # Use validated values
+        JOB_STREAM = server_config.get("JOB_STREAM", JOB_STREAM)
+        HTTP_GROUP = server_config.get("HTTP_GROUP", HTTP_GROUP) 
+        LOW_BW_JOB_STREAM = server_config.get("LOW_BW_JOB_STREAM", LOW_BW_JOB_STREAM)
+        LOW_BW_GROUP = server_config.get("LOW_BW_GROUP", LOW_BW_GROUP)
+        
+    except EnvValidationError as e:
+        log_error("server", "system", "S001", f"Critical environment validation error: {e}")
+        # Fallback to original logic
+        JOB_STREAM = os.getenv("JOB_STREAM", JOB_STREAM)
+        HTTP_GROUP = os.getenv("HTTP_GROUP", HTTP_GROUP)
+        LOW_BW_JOB_STREAM = os.getenv("LOW_BW_JOB_STREAM", LOW_BW_JOB_STREAM)
+        LOW_BW_GROUP = os.getenv("LOW_BW_GROUP", LOW_BW_GROUP)
 
 
 async def start_broadcast() -> None:
@@ -328,6 +320,9 @@ async def shutdown_event() -> None:
     """Cancel all background tasks and wait for them to finish."""
     await stop_loops(BACKGROUND_TASKS)
     BACKGROUND_TASKS.clear()
+    # Clean up temporary SSL files
+    from .redis_utils import cleanup_temp_ssl_files
+    cleanup_temp_ssl_files()
 
 
 @asynccontextmanager

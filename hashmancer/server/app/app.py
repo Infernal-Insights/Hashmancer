@@ -42,12 +42,10 @@ class PortalAuthMiddleware:
                         if part.strip().startswith("session="):
                             token = part.strip().split("=", 1)[1]
                             break
-                    try:
-                        from main import verify_session_token
-                    except Exception:  # pragma: no cover - package import
-                        from hashmancer.server.main import verify_session_token
+                    from hashmancer.server.auth_middleware import verify_session_token
+                    from hashmancer.server.app.config import PORTAL_PASSKEY, SESSION_TTL
 
-                    if not token or not verify_session_token(token):
+                    if not token or not verify_session_token(token, PORTAL_PASSKEY or "", SESSION_TTL):
                         response = HTMLResponse("Unauthorized", status_code=401)
                         await response(scope, receive, send)
                         return
