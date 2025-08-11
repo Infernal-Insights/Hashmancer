@@ -1,0 +1,1875 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hashmancer Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturCook&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary-color: #0f0;
+  --bg-color: #000;
+  --secondary-bg: #111;
+  --border-color: #0f0;
+  --error-color: #f44336;
+  --warning-color: #ff8800;
+  --success-color: #4caf50;
+  --text-color: #0f0;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 10px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  line-height: 1.4;
+}
+
+h1 {
+  color: var(--primary-color);
+  text-align: center;
+  font-family: 'UnifrakturCook', cursive;
+  margin-bottom: 2rem;
+}
+
+h2 {
+  color: var(--primary-color);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+  margin-top: 2rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.header-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.section {
+  margin-bottom: 2rem;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  background: var(--secondary-bg);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+th, td {
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  text-align: left;
+}
+
+th {
+  background: var(--bg-color);
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+}
+
+tr:nth-child(even) {
+  background: rgba(0, 255, 0, 0.05);
+}
+
+tr:hover {
+  background: rgba(0, 255, 0, 0.1);
+}
+
+/* Form Elements */
+input, textarea, select, button {
+  background: var(--secondary-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  padding: 10px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+button {
+  cursor: pointer;
+  transition: all 0.2s;
+  margin: 4px;
+  font-weight: 500;
+}
+
+button:hover:not(:disabled) {
+  background: var(--primary-color);
+  color: var(--bg-color);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 255, 0, 0.3);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+button.danger {
+  border-color: var(--error-color);
+  color: var(--error-color);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--error-color);
+  color: white;
+}
+
+button.success {
+  border-color: var(--success-color);
+  color: var(--success-color);
+}
+
+button.success:hover:not(:disabled) {
+  background: var(--success-color);
+  color: white;
+}
+
+/* File upload areas */
+.file-upload-area {
+  border: 2px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 2rem;
+  text-align: center;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.file-upload-area:hover {
+  border-color: var(--primary-color);
+  background: rgba(0, 255, 0, 0.05);
+}
+
+.file-upload-area.drag-over {
+  border-color: var(--primary-color);
+  background: rgba(0, 255, 0, 0.1);
+}
+
+/* Search and Filter */
+.search-container {
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.status-idle {
+  background: rgba(76, 175, 80, 0.2);
+  color: var(--success-color);
+  border: 1px solid var(--success-color);
+}
+
+.status-maintenance {
+  background: rgba(255, 136, 0, 0.2);
+  color: var(--warning-color);
+  border: 1px solid var(--warning-color);
+}
+
+.status-offline {
+  background: rgba(244, 67, 54, 0.2);
+  color: var(--error-color);
+  border: 1px solid var(--error-color);
+}
+
+/* Loading States */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-color);
+  border-top: 2px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 0.5rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 0, 0.2), transparent);
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Toast Notifications */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  max-width: 400px;
+}
+
+.toast {
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  position: relative;
+}
+
+.toast.show {
+  transform: translateX(0);
+}
+
+.toast.error {
+  border-color: var(--error-color);
+  background: rgba(244, 67, 54, 0.1);
+}
+
+.toast.success {
+  border-color: var(--success-color);
+  background: rgba(76, 175, 80, 0.1);
+}
+
+.toast.warning {
+  border-color: var(--warning-color);
+  background: rgba(255, 136, 0, 0.1);
+}
+
+.toast-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+/* Lists */
+.item-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-color);
+}
+
+.item-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item-list li {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.item-list li:last-child {
+  border-bottom: none;
+}
+
+.item-list li:hover {
+  background: rgba(0, 255, 0, 0.05);
+}
+
+.item-name {
+  flex: 1;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.item-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Confirmation Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 2rem;
+  min-width: 400px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+}
+
+.modal h3 {
+  margin-top: 0;
+  color: var(--primary-color);
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+}
+
+/* Statistics Cards */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: bold;
+  color: var(--primary-color);
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  body {
+    padding: 5px;
+  }
+  
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .search-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  table {
+    font-size: 0.9rem;
+  }
+  
+  th, td {
+    padding: 8px;
+  }
+  
+  .modal {
+    margin: 1rem;
+    padding: 1rem;
+    min-width: auto;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .stat-value {
+    font-size: 1.5rem;
+  }
+}
+
+/* Bulk actions */
+.bulk-actions {
+  display: none;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: rgba(0, 255, 0, 0.1);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.bulk-actions.show {
+  display: flex;
+}
+
+.bulk-checkbox {
+  transform: scale(1.2);
+}
+
+/* Progress bars */
+.progress-bar {
+  width: 100%;
+  height: 20px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 0.5rem 0;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--primary-color);
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: var(--bg-color);
+  mix-blend-mode: difference;
+}
+
+/* Quick actions bar */
+.quick-actions {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 999;
+}
+
+.quick-action-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 768px) {
+  .quick-actions {
+    bottom: 10px;
+    right: 10px;
+  }
+  
+  .quick-action-btn {
+    width: 45px;
+    height: 45px;
+    font-size: 1rem;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- Confirmation Modal -->
+<div class="modal-overlay" id="confirmation-modal">
+  <div class="modal">
+    <h3 id="confirm-title">Confirm Action</h3>
+    <p id="confirm-message">Are you sure you want to proceed?</p>
+    <div class="modal-buttons">
+      <button onclick="closeModal('confirmation-modal')">Cancel</button>
+      <button class="danger" id="confirm-action-btn" onclick="confirmAction()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <h1>🛡️ Hashmancer Admin Panel</h1>
+  <div class="header-controls">
+    <button onclick="location.href='/portal'" class="success">📊 Portal</button>
+    <button onclick="location.href='/glyph'" class="success">📈 Glyph</button>
+    <button onclick="refreshAll()" id="refresh-btn">🔄 Refresh</button>
+    <button onclick="logout()" class="danger">🚪 Logout</button>
+  </div>
+</div>
+
+<!-- Statistics Overview -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <span class="stat-value" id="total-workers">0</span>
+    <div class="stat-label">Total Workers</div>
+  </div>
+  <div class="stat-card">
+    <span class="stat-value" id="total-jobs">0</span>
+    <div class="stat-label">Active Jobs</div>
+  </div>
+  <div class="stat-card">
+    <span class="stat-value" id="total-dicts">0</span>
+    <div class="stat-label">Dictionaries</div>
+  </div>
+  <div class="stat-card">
+    <span class="stat-value" id="total-masks">0</span>
+    <div class="stat-label">Masks</div>
+  </div>
+</div>
+
+<div class="admin-grid">
+  
+  <!-- Dictionary Management -->
+  <div class="section">
+    <h2>📚 Dictionary Management</h2>
+    
+    <div class="search-container">
+      <input type="text" class="search-input" id="dict-search" placeholder="🔍 Search dictionaries..." onkeyup="filterList('dict-search', 'dict-list')">
+      <button onclick="selectAllDicts()" id="select-all-dicts">☑️ Select All</button>
+      <button onclick="clearSelection('dict-list')" id="clear-dict-selection">❌ Clear</button>
+    </div>
+    
+    <div class="bulk-actions" id="dict-bulk-actions">
+      <span><strong>Bulk Actions:</strong></span>
+      <button onclick="bulkDeleteDicts()" class="danger">🗑️ Delete Selected</button>
+      <button onclick="bulkExportDicts()" class="success">📦 Export Selected</button>
+      <span id="dict-selected-count">0 selected</span>
+    </div>
+    
+    <div class="item-list">
+      <ul id="dict-list"></ul>
+    </div>
+    
+    <div class="file-upload-area" onclick="document.getElementById('dict-upload').click()">
+      <p>📤 Click to upload dictionaries or drag & drop files here</p>
+      <input type="file" id="dict-upload" accept=".txt,.dic,.wordlist" multiple style="display: none;">
+    </div>
+    
+    <div class="progress-bar" id="dict-upload-progress" style="display: none;">
+      <div class="progress-fill" id="dict-upload-fill" style="width: 0%;">
+        <div class="progress-text" id="dict-upload-text">0%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mask Management -->
+  <div class="section">
+    <h2>🎭 Mask Management</h2>
+    
+    <div class="search-container">
+      <input type="text" class="search-input" id="mask-search" placeholder="🔍 Search masks..." onkeyup="filterList('mask-search', 'mask-list')">
+      <button onclick="selectAllMasks()" id="select-all-masks">☑️ Select All</button>
+      <button onclick="clearSelection('mask-list')" id="clear-mask-selection">❌ Clear</button>
+    </div>
+    
+    <div class="bulk-actions" id="mask-bulk-actions">
+      <span><strong>Bulk Actions:</strong></span>
+      <button onclick="bulkDeleteMasks()" class="danger">🗑️ Delete Selected</button>
+      <span id="mask-selected-count">0 selected</span>
+    </div>
+    
+    <div class="item-list">
+      <ul id="mask-list"></ul>
+    </div>
+    
+    <div style="margin-top: 1rem;">
+      <h4>Create New Mask</h4>
+      <input type="text" id="mask-name" placeholder="Mask name" style="width: 100%; margin-bottom: 0.5rem;">
+      <textarea id="mask-content" rows="3" placeholder="Mask content (e.g., ?a?a?a?a?a?a?a?a)" style="width: 100%; margin-bottom: 0.5rem;"></textarea>
+      <button onclick="createMask()" class="success" style="width: 100%;">➕ Create Mask</button>
+    </div>
+  </div>
+
+  <!-- Worker Management -->
+  <div class="section">
+    <h2>👷 Worker Management</h2>
+    
+    <div class="search-container">
+      <input type="text" class="search-input" id="worker-search" placeholder="🔍 Search workers..." onkeyup="filterTable('worker-search', 'worker-body')">
+      <select id="worker-status-filter" onchange="filterWorkersByStatus()">
+        <option value="">All Statuses</option>
+        <option value="idle">Idle</option>
+        <option value="maintenance">Maintenance</option>
+        <option value="offline">Offline</option>
+      </select>
+      <button onclick="bulkWorkerAction()" class="success" id="bulk-worker-btn" disabled>⚡ Bulk Action</button>
+    </div>
+    
+    <div style="overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="select-all-workers" onchange="toggleAllWorkers()"></th>
+            <th onclick="sortTable('worker-table', 1)">Worker Name <span style="cursor: pointer;">⚡</span></th>
+            <th onclick="sortTable('worker-table', 2)">Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="worker-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Job Management -->
+  <div class="section">
+    <h2>⚙️ Job Management</h2>
+    
+    <div class="search-container">
+      <input type="text" class="search-input" id="job-search" placeholder="🔍 Search jobs..." onkeyup="filterTable('job-search', 'job-body')">
+      <select id="job-status-filter" onchange="filterJobsByStatus()">
+        <option value="">All Statuses</option>
+        <option value="queued">Queued</option>
+        <option value="running">Running</option>
+        <option value="completed">Completed</option>
+        <option value="failed">Failed</option>
+      </select>
+    </div>
+    
+    <div style="overflow-x: auto;">
+      <table id="job-table">
+        <thead>
+          <tr>
+            <th onclick="sortTable('job-table', 0)">Job ID</th>
+            <th onclick="sortTable('job-table', 1)">Status</th>
+            <th onclick="sortTable('job-table', 2)">Attack Mode</th>
+            <th>Progress</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="job-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- System Logs -->
+  <div class="section">
+    <h2>📋 System Logs</h2>
+    
+    <div class="search-container">
+      <select id="log-worker" onchange="loadLogs()">
+        <option value="">All Workers</option>
+      </select>
+      <input type="text" class="search-input" id="log-search" placeholder="🔍 Search logs..." onkeyup="filterLogs()">
+      <button onclick="loadLogs()" class="success">🔄 Refresh</button>
+      <button onclick="clearLogs()" class="danger">🗑️ Clear</button>
+      <button onclick="downloadLogs()" class="success">📥 Download</button>
+    </div>
+    
+    <div style="background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 1rem; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.9rem; line-height: 1.4;">
+      <div id="log-output">Loading logs...</div>
+    </div>
+  </div>
+
+  <!-- Advanced Configuration -->
+  <div class="section">
+    <h2>⚙️ Advanced Configuration</h2>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 1rem;">
+      
+      <!-- Algorithm Parameters -->
+      <div>
+        <h4>🧮 Algorithm Parameters</h4>
+        <div style="margin-bottom: 1rem;">
+          <input type="text" id="algo-name" placeholder="Algorithm name" style="width: 100%; margin-bottom: 0.5rem;">
+          <input type="number" id="algo-masklen" placeholder="Max mask length" style="width: 100%; margin-bottom: 0.5rem;">
+          <input type="text" id="algo-rule" placeholder="Rule file" style="width: 100%; margin-bottom: 0.5rem;">
+          <button onclick="saveAlgoParams()" class="success" style="width: 100%;">💾 Save Parameters</button>
+        </div>
+        <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem; max-height: 200px; overflow-y: auto;">
+          <pre id="algo-params-output" style="margin: 0; font-size: 0.8rem;">Loading...</pre>
+        </div>
+      </div>
+
+      <!-- System Settings -->
+      <div>
+        <h4>🔧 System Settings</h4>
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; margin-bottom: 0.5rem;">
+            Max Import Size (MB):
+            <input type="number" id="max-import-size" min="1" max="1000" style="width: 100%;">
+          </label>
+          <label style="display: block; margin-bottom: 0.5rem;">
+            Default Hash Priority:
+            <input type="number" id="default-priority" min="0" max="10" style="width: 100%;">
+          </label>
+          <label style="display: block; margin-bottom: 1rem;">
+            <input type="checkbox" id="broadcast-enabled"> Enable Worker Broadcasting
+          </label>
+          <button onclick="saveSystemSettings()" class="success" style="width: 100%;">💾 Save Settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Quick Actions -->
+<div class="quick-actions">
+  <button class="quick-action-btn success" onclick="refreshAll()" title="Refresh All Data">🔄</button>
+  <button class="quick-action-btn" onclick="scrollToTop()" title="Scroll to Top">⬆️</button>
+  <button class="quick-action-btn danger" onclick="showEmergencyStop()" title="Emergency Stop">🛑</button>
+</div>
+
+<script>
+// ============================================================================
+// ADMIN APPLICATION CLASS
+// ============================================================================
+
+class AdminApp {
+  constructor() {
+    this.csrfToken = this.getCSRFToken();
+    this.cache = new Map();
+    this.cacheTTL = 30000; // 30 seconds
+    this.pendingConfirmation = null;
+    this.selectedItems = new Set();
+    
+    this.initializeApp();
+  }
+
+  getCSRFToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : null;
+  }
+
+  async refreshCSRFToken() {
+    try {
+      const response = await fetch('/csrf_token');
+      const data = await response.json();
+      this.csrfToken = data.csrf_token;
+      
+      let meta = document.querySelector('meta[name="csrf-token"]');
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'csrf-token';
+        document.head.appendChild(meta);
+      }
+      meta.content = this.csrfToken;
+    } catch (error) {
+      console.error('Failed to refresh CSRF token:', error);
+    }
+  }
+
+  async apiCall(url, options = {}) {
+    try {
+      if (this.csrfToken && (options.method !== 'GET' && options.method !== 'HEAD')) {
+        options.headers = {
+          ...options.headers,
+          'X-CSRF-Token': this.csrfToken
+        };
+      }
+
+      if (!options.headers) options.headers = {};
+      if (options.body && typeof options.body === 'string') {
+        options.headers['Content-Type'] = 'application/json';
+      }
+
+      const response = await fetch(url, options);
+      
+      if (response.status === 403) {
+        await this.refreshCSRFToken();
+        options.headers['X-CSRF-Token'] = this.csrfToken;
+        return await fetch(url, options);
+      }
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = '/login';
+          throw new Error('Authentication required');
+        }
+        
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        } catch (e) {
+          errorMessage = await response.text() || errorMessage;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      return response;
+    } catch (error) {
+      console.error('API call failed:', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // UI UTILITIES
+  // ============================================================================
+
+  showToast(message, type = 'info', duration = 5000) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <div>${this.sanitizeHTML(message)}</div>
+      <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+    `;
+    
+    container.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 100);
+    
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
+  }
+
+  sanitizeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  showModal(modalId) {
+    document.getElementById(modalId).style.display = 'flex';
+  }
+
+  closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+  }
+
+  confirmAction(title, message, callback) {
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-message').textContent = message;
+    this.pendingConfirmation = callback;
+    this.showModal('confirmation-modal');
+  }
+
+  showLoading(element, text = 'Loading...') {
+    if (typeof element === 'string') {
+      element = document.getElementById(element);
+    }
+    
+    if (element && element.tagName === 'BUTTON') {
+      element.disabled = true;
+      element.dataset.originalText = element.textContent;
+      element.innerHTML = `<span class="spinner"></span>${text}`;
+    }
+  }
+
+  hideLoading(element) {
+    if (typeof element === 'string') {
+      element = document.getElementById(element);
+    }
+    
+    if (element && element.tagName === 'BUTTON') {
+      element.disabled = false;
+      if (element.dataset.originalText) {
+        element.textContent = element.dataset.originalText;
+        delete element.dataset.originalText;
+      }
+    }
+  }
+
+  updateProgress(progressId, percent, text = '') {
+    const progressBar = document.getElementById(progressId);
+    const progressFill = progressBar?.querySelector('.progress-fill');
+    const progressText = progressBar?.querySelector('.progress-text');
+    
+    if (progressFill) {
+      progressFill.style.width = `${percent}%`;
+    }
+    
+    if (progressText) {
+      progressText.textContent = text || `${Math.round(percent)}%`;
+    }
+  }
+
+  // ============================================================================
+  // APPLICATION INITIALIZATION
+  // ============================================================================
+
+  initializeApp() {
+    this.setupEventListeners();
+    this.setupKeyboardShortcuts();
+    this.setupDragAndDrop();
+    this.loadAllData();
+  }
+
+  setupEventListeners() {
+    // Modal click outside to close
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          this.closeModal(overlay.id);
+        }
+      });
+    });
+
+    // File upload handling
+    document.getElementById('dict-upload').addEventListener('change', (e) => {
+      this.uploadDictionaries(e.target.files);
+    });
+
+    // Bulk selection handling
+    document.addEventListener('change', (e) => {
+      if (e.target.type === 'checkbox' && e.target.classList.contains('item-checkbox')) {
+        this.updateBulkActions();
+      }
+    });
+  }
+
+  setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+        this.refreshAll();
+      }
+      
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay').forEach(modal => {
+          if (modal.style.display === 'flex') {
+            this.closeModal(modal.id);
+          }
+        });
+      }
+      
+      if (e.ctrlKey && e.key === 'a') {
+        const activeList = document.querySelector('.item-list:hover, .item-list:focus-within');
+        if (activeList) {
+          e.preventDefault();
+          this.selectAllInList(activeList);
+        }
+      }
+    });
+  }
+
+  setupDragAndDrop() {
+    const uploadArea = document.querySelector('.file-upload-area');
+    
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('drag-over');
+    });
+    
+    uploadArea.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('drag-over');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('drag-over');
+      
+      const files = Array.from(e.dataTransfer.files);
+      this.uploadDictionaries(files);
+    });
+  }
+
+  // ============================================================================
+  // DATA LOADING
+  // ============================================================================
+
+  async refreshAll() {
+    const refreshBtn = document.getElementById('refresh-btn');
+    this.showLoading(refreshBtn, 'Refreshing...');
+    
+    try {
+      await Promise.allSettled([
+        this.loadDictionaries(),
+        this.loadMasks(), 
+        this.loadWorkers(),
+        this.loadJobs(),
+        this.loadLogs(),
+        this.loadAlgoParams()
+      ]);
+      
+      this.showToast('All data refreshed successfully', 'success', 2000);
+    } catch (error) {
+      this.showToast('Some data failed to refresh: ' + error.message, 'warning');
+    } finally {
+      this.hideLoading(refreshBtn);
+    }
+  }
+
+  async loadAllData() {
+    this.refreshAll();
+  }
+
+  async loadDictionaries() {
+    try {
+      const response = await this.apiCall('/wordlists');
+      const dicts = await response.json();
+      
+      document.getElementById('total-dicts').textContent = dicts.length;
+      
+      const list = document.getElementById('dict-list');
+      list.innerHTML = '';
+      
+      dicts.forEach((name, index) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <input type="checkbox" class="item-checkbox bulk-checkbox" data-item="${name}" onchange="app.updateBulkActions()">
+          <span class="item-name">${this.sanitizeHTML(name)}</span>
+          <div class="item-actions">
+            <button onclick="app.downloadDict('${name}')" class="success" title="Download">📥</button>
+            <button onclick="app.deleteDict('${name}')" class="danger" title="Delete">🗑️</button>
+          </div>
+        `;
+        list.appendChild(li);
+      });
+      
+      this.updateBulkActions();
+      
+    } catch (error) {
+      console.error('Failed to load dictionaries:', error);
+      this.showToast('Failed to load dictionaries: ' + error.message, 'error');
+    }
+  }
+
+  async uploadDictionaries(files) {
+    if (!files || files.length === 0) return;
+    
+    const progressBar = document.getElementById('dict-upload-progress');
+    progressBar.style.display = 'block';
+    
+    let uploaded = 0;
+    const total = files.length;
+    
+    try {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        this.updateProgress('dict-upload-progress', 
+          (uploaded / total) * 100, 
+          `Uploading ${file.name}...`);
+        
+        await this.apiCall('/upload_wordlist', {
+          method: 'POST',
+          body: formData
+        });
+        
+        uploaded++;
+        this.updateProgress('dict-upload-progress', 
+          (uploaded / total) * 100, 
+          `${uploaded}/${total} uploaded`);
+      }
+      
+      this.showToast(`Successfully uploaded ${total} dictionary(s)`, 'success');
+      this.loadDictionaries();
+      
+    } catch (error) {
+      console.error('Failed to upload dictionaries:', error);
+      this.showToast('Failed to upload dictionaries: ' + error.message, 'error');
+    } finally {
+      setTimeout(() => {
+        progressBar.style.display = 'none';
+      }, 2000);
+    }
+  }
+
+  async deleteDict(name) {
+    this.confirmAction(
+      'Delete Dictionary',
+      `Are you sure you want to delete "${name}"?`,
+      async () => {
+        try {
+          await this.apiCall(`/wordlist/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+          });
+          
+          this.loadDictionaries();
+          this.showToast(`Dictionary "${name}" deleted`, 'success');
+        } catch (error) {
+          this.showToast('Failed to delete dictionary: ' + error.message, 'error');
+        }
+      }
+    );
+  }
+
+  downloadDict(name) {
+    window.open(`/wordlist/${encodeURIComponent(name)}`, '_blank');
+  }
+
+  async loadMasks() {
+    try {
+      const response = await this.apiCall('/masks');
+      const masks = await response.json();
+      
+      document.getElementById('total-masks').textContent = masks.length;
+      
+      const list = document.getElementById('mask-list');
+      list.innerHTML = '';
+      
+      masks.forEach(name => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <input type="checkbox" class="item-checkbox bulk-checkbox" data-item="${name}" onchange="app.updateBulkActions()">
+          <span class="item-name">${this.sanitizeHTML(name)}</span>
+          <div class="item-actions">
+            <button onclick="app.editMask('${name}')" class="success" title="Edit">✏️</button>
+            <button onclick="app.deleteMask('${name}')" class="danger" title="Delete">🗑️</button>
+          </div>
+        `;
+        list.appendChild(li);
+      });
+      
+      this.updateBulkActions();
+      
+    } catch (error) {
+      console.error('Failed to load masks:', error);
+      this.showToast('Failed to load masks: ' + error.message, 'error');
+    }
+  }
+
+  async createMask() {
+    const name = document.getElementById('mask-name').value.trim();
+    const content = document.getElementById('mask-content').value.trim();
+    
+    if (!name) {
+      this.showToast('Please enter a mask name', 'warning');
+      return;
+    }
+    
+    if (!content) {
+      this.showToast('Please enter mask content', 'warning');
+      return;
+    }
+
+    try {
+      await this.apiCall('/create_mask', {
+        method: 'POST',
+        body: JSON.stringify({ name, content })
+      });
+      
+      document.getElementById('mask-name').value = '';
+      document.getElementById('mask-content').value = '';
+      
+      this.loadMasks();
+      this.showToast(`Mask "${name}" created successfully`, 'success');
+      
+    } catch (error) {
+      this.showToast('Failed to create mask: ' + error.message, 'error');
+    }
+  }
+
+  async deleteMask(name) {
+    this.confirmAction(
+      'Delete Mask',
+      `Are you sure you want to delete mask "${name}"?`,
+      async () => {
+        try {
+          await this.apiCall(`/mask/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+          });
+          
+          this.loadMasks();
+          this.showToast(`Mask "${name}" deleted`, 'success');
+        } catch (error) {
+          this.showToast('Failed to delete mask: ' + error.message, 'error');
+        }
+      }
+    );
+  }
+
+  editMask(name) {
+    // TODO: Implement mask editing functionality
+    this.showToast('Mask editing not yet implemented', 'info');
+  }
+
+  async loadWorkers() {
+    try {
+      const response = await this.apiCall('/workers');
+      const workers = await response.json();
+      
+      document.getElementById('total-workers').textContent = workers.length;
+      
+      const tbody = document.getElementById('worker-body');
+      const logSelect = document.getElementById('log-worker');
+      
+      tbody.innerHTML = '';
+      logSelect.innerHTML = '<option value="">All Workers</option>';
+      
+      workers.forEach(worker => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><input type="checkbox" class="worker-checkbox" data-worker="${worker.name}"></td>
+          <td>${this.sanitizeHTML(worker.name)}</td>
+          <td><span class="status-badge status-${worker.status}">${this.sanitizeHTML(worker.status)}</span></td>
+          <td>
+            <select onchange="app.changeWorkerStatus('${worker.name}', this.value)" style="margin-right: 0.5rem;">
+              <option value="idle" ${worker.status === 'idle' ? 'selected' : ''}>Idle</option>
+              <option value="maintenance" ${worker.status === 'maintenance' ? 'selected' : ''}>Maintenance</option>
+              <option value="offline" ${worker.status === 'offline' ? 'selected' : ''}>Offline</option>
+            </select>
+            <button onclick="app.showWorkerDetails('${worker.name}')" class="success" title="Details">ℹ️</button>
+            <button onclick="app.restartWorker('${worker.name}')" class="danger" title="Restart">🔄</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+        
+        const option = document.createElement('option');
+        option.value = worker.name;
+        option.textContent = worker.name;
+        logSelect.appendChild(option);
+      });
+      
+      // Update bulk action button state
+      this.updateWorkerBulkActions();
+      
+    } catch (error) {
+      console.error('Failed to load workers:', error);
+      this.showToast('Failed to load workers: ' + error.message, 'error');
+    }
+  }
+
+  async changeWorkerStatus(workerName, newStatus) {
+    try {
+      await this.apiCall('/worker_status', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: workerName,
+          status: newStatus
+        })
+      });
+      
+      this.showToast(`Worker ${workerName} status changed to ${newStatus}`, 'success');
+      
+      // Update the status badge immediately
+      const rows = document.querySelectorAll('#worker-body tr');
+      rows.forEach(row => {
+        if (row.cells[1].textContent.trim() === workerName) {
+          const statusCell = row.cells[2];
+          statusCell.innerHTML = `<span class="status-badge status-${newStatus}">${newStatus}</span>`;
+        }
+      });
+      
+    } catch (error) {
+      this.showToast('Failed to change worker status: ' + error.message, 'error');
+    }
+  }
+
+  showWorkerDetails(workerName) {
+    // TODO: Implement worker details modal
+    this.showToast(`Worker details for ${workerName} not yet implemented`, 'info');
+  }
+
+  restartWorker(workerName) {
+    this.confirmAction(
+      'Restart Worker',
+      `Are you sure you want to restart worker "${workerName}"?`,
+      async () => {
+        try {
+          // TODO: Implement worker restart endpoint
+          this.showToast(`Worker ${workerName} restart command sent`, 'success');
+        } catch (error) {
+          this.showToast('Failed to restart worker: ' + error.message, 'error');
+        }
+      }
+    );
+  }
+
+  async loadJobs() {
+    try {
+      const response = await this.apiCall('/jobs');
+      const jobs = await response.json();
+      
+      document.getElementById('total-jobs').textContent = jobs.length;
+      
+      const tbody = document.getElementById('job-body');
+      tbody.innerHTML = '';
+      
+      jobs.forEach(job => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${this.sanitizeHTML(job.job_id || 'N/A')}</td>
+          <td><span class="status-badge status-${job.status || 'unknown'}">${this.sanitizeHTML(job.status || 'Unknown')}</span></td>
+          <td>${this.sanitizeHTML(job.attack_mode || 'N/A')}</td>
+          <td>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${(job.progress || 0) * 100}%">
+                <div class="progress-text">${Math.round((job.progress || 0) * 100)}%</div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <button onclick="app.pauseJob('${job.job_id}')" class="warning" title="Pause">⏸️</button>
+            <button onclick="app.cancelJob('${job.job_id}')" class="danger" title="Cancel">❌</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+      
+    } catch (error) {
+      console.error('Failed to load jobs:', error);
+      this.showToast('Failed to load jobs: ' + error.message, 'error');
+    }
+  }
+
+  pauseJob(jobId) {
+    // TODO: Implement job pause functionality
+    this.showToast(`Job ${jobId} pause not yet implemented`, 'info');
+  }
+
+  cancelJob(jobId) {
+    this.confirmAction(
+      'Cancel Job',
+      `Are you sure you want to cancel job "${jobId}"?`,
+      async () => {
+        try {
+          // TODO: Implement job cancellation endpoint
+          this.showToast(`Job ${jobId} cancelled`, 'success');
+        } catch (error) {
+          this.showToast('Failed to cancel job: ' + error.message, 'error');
+        }
+      }
+    );
+  }
+
+  async loadLogs() {
+    const workerSelect = document.getElementById('log-worker');
+    const worker = workerSelect.value;
+    
+    try {
+      const url = worker ? `/logs?worker=${encodeURIComponent(worker)}` : '/logs';
+      const response = await this.apiCall(url);
+      const logs = await response.json();
+      
+      const output = document.getElementById('log-output');
+      const logText = logs.map(entry => 
+        `${entry.datetime || ''} [${this.sanitizeHTML(entry.worker_id || '')}] ${this.sanitizeHTML(entry.message || '')}`
+      ).join('\n');
+      
+      output.textContent = logText;
+      output.scrollTop = output.scrollHeight;
+      
+    } catch (error) {
+      console.error('Failed to load logs:', error);
+      this.showToast('Failed to load logs: ' + error.message, 'error');
+    }
+  }
+
+  filterLogs() {
+    // TODO: Implement log filtering
+    this.showToast('Log filtering not yet implemented', 'info');
+  }
+
+  clearLogs() {
+    this.confirmAction(
+      'Clear Logs',
+      'Are you sure you want to clear all logs? This action cannot be undone.',
+      async () => {
+        try {
+          // TODO: Implement log clearing endpoint
+          document.getElementById('log-output').textContent = 'Logs cleared.';
+          this.showToast('Logs cleared successfully', 'success');
+        } catch (error) {
+          this.showToast('Failed to clear logs: ' + error.message, 'error');
+        }
+      }
+    );
+  }
+
+  downloadLogs() {
+    // TODO: Implement log download functionality
+    this.showToast('Log download not yet implemented', 'info');
+  }
+
+  async loadAlgoParams() {
+    try {
+      const response = await this.apiCall('/hashes_algo_params');
+      const data = await response.json();
+      
+      document.getElementById('algo-params-output').textContent = JSON.stringify(data, null, 2);
+      
+    } catch (error) {
+      console.error('Failed to load algorithm parameters:', error);
+      document.getElementById('algo-params-output').textContent = 'Failed to load parameters';
+    }
+  }
+
+  async saveAlgoParams() {
+    const algo = document.getElementById('algo-name').value.trim();
+    if (!algo) {
+      this.showToast('Please enter an algorithm name', 'warning');
+      return;
+    }
+    
+    const maskLength = parseInt(document.getElementById('algo-masklen').value, 10);
+    const rule = document.getElementById('algo-rule').value.trim();
+    
+    const params = {};
+    if (maskLength) params.mask_length = maskLength;
+    if (rule) params.rule = rule;
+
+    try {
+      await this.apiCall('/hashes_algo_params', {
+        method: 'POST',
+        body: JSON.stringify({ algo, params })
+      });
+      
+      this.loadAlgoParams();
+      this.showToast(`Parameters saved for algorithm "${algo}"`, 'success');
+      
+      // Clear form
+      document.getElementById('algo-name').value = '';
+      document.getElementById('algo-masklen').value = '';
+      document.getElementById('algo-rule').value = '';
+      
+    } catch (error) {
+      this.showToast('Failed to save algorithm parameters: ' + error.message, 'error');
+    }
+  }
+
+  // ============================================================================
+  // BULK ACTIONS
+  // ============================================================================
+
+  updateBulkActions() {
+    const dictCheckboxes = document.querySelectorAll('#dict-list .item-checkbox:checked');
+    const maskCheckboxes = document.querySelectorAll('#mask-list .item-checkbox:checked');
+    
+    const dictBulkActions = document.getElementById('dict-bulk-actions');
+    const maskBulkActions = document.getElementById('mask-bulk-actions');
+    
+    const dictSelectedCount = document.getElementById('dict-selected-count');
+    const maskSelectedCount = document.getElementById('mask-selected-count');
+    
+    if (dictCheckboxes.length > 0) {
+      dictBulkActions.classList.add('show');
+      dictSelectedCount.textContent = `${dictCheckboxes.length} selected`;
+    } else {
+      dictBulkActions.classList.remove('show');
+    }
+    
+    if (maskCheckboxes.length > 0) {
+      maskBulkActions.classList.add('show');
+      maskSelectedCount.textContent = `${maskCheckboxes.length} selected`;
+    } else {
+      maskBulkActions.classList.remove('show');
+    }
+  }
+
+  updateWorkerBulkActions() {
+    const checkedBoxes = document.querySelectorAll('.worker-checkbox:checked');
+    const bulkBtn = document.getElementById('bulk-worker-btn');
+    
+    bulkBtn.disabled = checkedBoxes.length === 0;
+    bulkBtn.textContent = `⚡ Bulk Action (${checkedBoxes.length})`;
+  }
+
+  selectAllDicts() {
+    const checkboxes = document.querySelectorAll('#dict-list .item-checkbox');
+    checkboxes.forEach(cb => cb.checked = true);
+    this.updateBulkActions();
+  }
+
+  selectAllMasks() {
+    const checkboxes = document.querySelectorAll('#mask-list .item-checkbox');
+    checkboxes.forEach(cb => cb.checked = true);
+    this.updateBulkActions();
+  }
+
+  clearSelection(listId) {
+    const checkboxes = document.querySelectorAll(`#${listId} .item-checkbox`);
+    checkboxes.forEach(cb => cb.checked = false);
+    this.updateBulkActions();
+  }
+
+  toggleAllWorkers() {
+    const masterCheckbox = document.getElementById('select-all-workers');
+    const workerCheckboxes = document.querySelectorAll('.worker-checkbox');
+    
+    workerCheckboxes.forEach(cb => {
+      cb.checked = masterCheckbox.checked;
+    });
+    
+    this.updateWorkerBulkActions();
+  }
+
+  async bulkDeleteDicts() {
+    const selectedDicts = Array.from(document.querySelectorAll('#dict-list .item-checkbox:checked'))
+      .map(cb => cb.dataset.item);
+    
+    if (selectedDicts.length === 0) return;
+    
+    this.confirmAction(
+      'Bulk Delete Dictionaries',
+      `Are you sure you want to delete ${selectedDicts.length} dictionaries?`,
+      async () => {
+        try {
+          for (const dict of selectedDicts) {
+            await this.apiCall(`/wordlist/${encodeURIComponent(dict)}`, {
+              method: 'DELETE'
+            });
+          }
+          
+          this.loadDictionaries();
+          this.showToast(`${selectedDicts.length} dictionaries deleted`, 'success');
+        } catch (error) {
+          this.showToast('Failed to delete dictionaries: ' + error.message, 'error');
+        }
+      }
+    );
+  }
+
+  async bulkDeleteMasks() {
+    const selectedMasks = Array.from(document.querySelectorAll('#mask-list .item-checkbox:checked'))
+      .map(cb => cb.dataset.item);
+    
+    if (selectedMasks.length === 0) return;
+    
+    this.confirmAction(
+      'Bulk Delete Masks',
+      `Are you sure you want to delete ${selectedMasks.length} masks?`,
+      async () => {
+        try {
+          for (const mask of selectedMasks) {
+            await this.apiCall(`/mask/${encodeURIComponent(mask)}`, {
+              method: 'DELETE'
+            });
+          }
+          
+          this.loadMasks();
+          this.showToast(`${selectedMasks.length} masks deleted`, 'success');
+        } catch (error) {
+          this.showToast('Failed to delete masks: ' + error.message, 'error');
+        }
+      }
+    );
+  }
+
+  bulkExportDicts() {
+    // TODO: Implement bulk dictionary export
+    this.showToast('Bulk export not yet implemented', 'info');
+  }
+
+  bulkWorkerAction() {
+    const selectedWorkers = Array.from(document.querySelectorAll('.worker-checkbox:checked'))
+      .map(cb => cb.dataset.worker);
+    
+    if (selectedWorkers.length === 0) return;
+    
+    // TODO: Show bulk action menu for workers
+    this.showToast(`Bulk actions for ${selectedWorkers.length} workers not yet implemented`, 'info');
+  }
+
+  // ============================================================================
+  // FILTERING AND SORTING
+  // ============================================================================
+
+  filterList(searchInputId, listId) {
+    const searchTerm = document.getElementById(searchInputId).value.toLowerCase();
+    const items = document.querySelectorAll(`#${listId} li`);
+    
+    items.forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
+  }
+
+  filterTable(searchInputId, tableBodyId) {
+    const searchTerm = document.getElementById(searchInputId).value.toLowerCase();
+    const rows = document.querySelectorAll(`#${tableBodyId} tr`);
+    
+    rows.forEach(row => {
+      const text = row.textContent.toLowerCase();
+      row.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
+  }
+
+  filterWorkersByStatus() {
+    const statusFilter = document.getElementById('worker-status-filter').value;
+    const searchTerm = document.getElementById('worker-search').value.toLowerCase();
+    const rows = document.querySelectorAll('#worker-body tr');
+    
+    rows.forEach(row => {
+      const workerName = row.cells[1].textContent.toLowerCase();
+      const workerStatus = row.cells[2].textContent.toLowerCase();
+      
+      const matchesSearch = !searchTerm || workerName.includes(searchTerm);
+      const matchesStatus = !statusFilter || workerStatus.includes(statusFilter.toLowerCase());
+      
+      row.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
+    });
+  }
+
+  filterJobsByStatus() {
+    const statusFilter = document.getElementById('job-status-filter').value;
+    const searchTerm = document.getElementById('job-search').value.toLowerCase();
+    const rows = document.querySelectorAll('#job-body tr');
+    
+    rows.forEach(row => {
+      const jobId = row.cells[0].textContent.toLowerCase();
+      const jobStatus = row.cells[1].textContent.toLowerCase();
+      
+      const matchesSearch = !searchTerm || jobId.includes(searchTerm);
+      const matchesStatus = !statusFilter || jobStatus.includes(statusFilter.toLowerCase());
+      
+      row.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
+    });
+  }
+
+  sortTable(tableId, columnIndex) {
+    const table = document.getElementById(tableId);
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    const isAscending = !table.dataset.sortAsc || table.dataset.sortAsc === 'false';
+    table.dataset.sortAsc = isAscending.toString();
+    
+    rows.sort((a, b) => {
+      const aText = a.cells[columnIndex].textContent.trim();
+      const bText = b.cells[columnIndex].textContent.trim();
+      
+      const aNum = parseFloat(aText);
+      const bNum = parseFloat(bText);
+      
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return isAscending ? aNum - bNum : bNum - aNum;
+      } else {
+        return isAscending ? 
+          aText.localeCompare(bText) : 
+          bText.localeCompare(aText);
+      }
+    });
+    
+    tbody.innerHTML = '';
+    rows.forEach(row => tbody.appendChild(row));
+  }
+
+  // ============================================================================
+  // UTILITY FUNCTIONS
+  // ============================================================================
+
+  logout() {
+    window.location.href = '/login';
+  }
+
+  scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  showEmergencyStop() {
+    this.confirmAction(
+      '🛑 EMERGENCY STOP',
+      'This will immediately stop all workers and jobs. Are you absolutely sure?',
+      async () => {
+        try {
+          // TODO: Implement emergency stop endpoint
+          this.showToast('Emergency stop initiated', 'error');
+        } catch (error) {
+          this.showToast('Failed to initiate emergency stop: ' + error.message, 'error');
+        }
+      }
+    );
+  }
+
+  async saveSystemSettings() {
+    // TODO: Implement system settings save
+    this.showToast('System settings save not yet implemented', 'info');
+  }
+}
+
+// ============================================================================
+// GLOBAL FUNCTIONS
+// ============================================================================
+
+let app;
+
+function closeModal(modalId) {
+  app.closeModal(modalId);
+}
+
+function confirmAction() {
+  if (app.pendingConfirmation) {
+    app.pendingConfirmation();
+    app.pendingConfirmation = null;
+  }
+  app.closeModal('confirmation-modal');
+}
+
+function refreshAll() {
+  app.refreshAll();
+}
+
+function logout() {
+  app.logout();
+}
+
+function createMask() {
+  return app.createMask();
+}
+
+function saveAlgoParams() {
+  return app.saveAlgoParams();
+}
+
+function filterList(searchInputId, listId) {
+  app.filterList(searchInputId, listId);
+}
+
+function filterTable(searchInputId, tableBodyId) {
+  app.filterTable(searchInputId, tableBodyId);
+}
+
+function filterWorkersByStatus() {
+  app.filterWorkersByStatus();
+}
+
+function filterJobsByStatus() {
+  app.filterJobsByStatus();
+}
+
+function sortTable(tableId, columnIndex) {
+  app.sortTable(tableId, columnIndex);
+}
+
+function selectAllDicts() {
+  app.selectAllDicts();
+}
+
+function selectAllMasks() {
+  app.selectAllMasks();
+}
+
+function clearSelection(listId) {
+  app.clearSelection(listId);
+}
+
+function bulkDeleteDicts() {
+  app.bulkDeleteDicts();
+}
+
+function bulkDeleteMasks() {
+  app.bulkDeleteMasks();
+}
+
+function bulkExportDicts() {
+  app.bulkExportDicts();
+}
+
+function bulkWorkerAction() {
+  app.bulkWorkerAction();
+}
+
+function toggleAllWorkers() {
+  app.toggleAllWorkers();
+}
+
+function loadLogs() {
+  app.loadLogs();
+}
+
+function clearLogs() {
+  app.clearLogs();
+}
+
+function downloadLogs() {
+  app.downloadLogs();
+}
+
+function scrollToTop() {
+  app.scrollToTop();
+}
+
+function showEmergencyStop() {
+  app.showEmergencyStop();
+}
+
+function saveSystemSettings() {
+  app.saveSystemSettings();
+}
+
+// Initialize application
+document.addEventListener('DOMContentLoaded', () => {
+  app = new AdminApp();
+});
+
+// Handle page visibility changes
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && app) {
+    // Refresh data when page becomes visible
+    app.refreshAll();
+  }
+});
+
+</script>
+
+</body>
+</html>

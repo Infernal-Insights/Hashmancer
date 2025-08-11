@@ -6,189 +6,914 @@
 <title>Glyph Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=UnifrakturCook&display=swap" rel="stylesheet">
 <style>
+:root {
+    --primary-color: #0f0;
+    --background-color: #000;
+    --secondary-color: #111;
+    --error-color: #f00;
+    --warning-color: #ff8800;
+    --border-color: #0f0;
+    --text-color: #0f0;
+    --border-radius: 8px;
+    --box-shadow: 0 2px 8px rgba(0, 255, 0, 0.1);
+    --transition: all 0.3s ease;
+}
+
+* {
+    box-sizing: border-box;
+}
+
 body {
     font-family: Arial, sans-serif;
-    margin: 10px;
-    background: #000;
-    color: #0f0;
+    margin: 0;
+    padding: 10px;
+    background: var(--background-color);
+    color: var(--text-color);
+    line-height: 1.6;
 }
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
 h1 {
-    color: #0f0;
+    color: var(--primary-color);
     text-align: center;
     font-family: 'UnifrakturCook', cursive;
+    margin-bottom: 20px;
+    text-shadow: 0 0 10px var(--primary-color);
 }
-.section {
-    margin-bottom: 0.5em;
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
 }
+
+.controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.btn {
+    padding: 8px 16px;
+    background: var(--secondary-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 14px;
+}
+
+.btn:hover:not(:disabled) {
+    background: var(--primary-color);
+    color: var(--background-color);
+    box-shadow: 0 0 10px var(--primary-color);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn.danger {
+    border-color: var(--error-color);
+}
+
+.btn.danger:hover:not(:disabled) {
+    background: var(--error-color);
+    box-shadow: 0 0 10px var(--error-color);
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.metric-card {
+    background: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 15px;
+    box-shadow: var(--box-shadow);
+    transition: var(--transition);
+    position: relative;
+}
+
+.metric-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 255, 0, 0.2);
+}
+
+.metric-label {
+    font-size: 12px;
+    opacity: 0.8;
+    margin-bottom: 5px;
+}
+
+.metric-value {
+    font-size: 20px;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.metric-card.error .metric-value {
+    color: var(--error-color);
+}
+
+.metric-card.warning .metric-value {
+    color: var(--warning-color);
+}
+
+.chart-section {
+    background: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--box-shadow);
+}
+
+.chart-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+select, input {
+    background: var(--secondary-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 8px;
+    transition: var(--transition);
+}
+
+select:focus, input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+}
+
+canvas {
+    width: 100% !important;
+    max-height: 300px;
+    border-radius: var(--border-radius);
+}
+
+.table-container {
+    background: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 20px;
+    box-shadow: var(--box-shadow);
+    overflow-x: auto;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 1em;
+    margin-top: 10px;
 }
-th, td {
-    border: 1px solid #0f0;
-    padding: 4px;
+
+th {
+    background: var(--background-color);
+    border: 1px solid var(--border-color);
+    padding: 12px 8px;
+    text-align: left;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+}
+
+td {
+    border: 1px solid var(--border-color);
+    padding: 8px;
     text-align: center;
+    transition: var(--transition);
 }
-td.status-idle { color: #0f0; }
-td.status-maintenance { color: #ff8800; }
-td.status-offline { color: #f00; }
-select {
-    background: #111;
-    color: #0f0;
-    border: 1px solid #0f0;
+
+tr:hover {
+    background: rgba(0, 255, 0, 0.05);
 }
-canvas {
-    width: 100% !important;
-    max-height: 200px;
-    margin-top: 1em;
+
+td.status-idle { color: var(--primary-color); }
+td.status-maintenance { color: var(--warning-color); }
+td.status-offline { color: var(--error-color); }
+
+.recent-cracks {
+    background: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--box-shadow);
+}
+
+.recent-cracks ul {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0 0 0;
+}
+
+.recent-cracks li {
+    padding: 8px;
+    margin: 5px 0;
+    background: var(--background-color);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid transparent;
+    border-top: 2px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-left: 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.error-message {
+    background: rgba(255, 0, 0, 0.1);
+    color: var(--error-color);
+    border: 1px solid var(--error-color);
+    border-radius: var(--border-radius);
+    padding: 10px;
+    margin: 10px 0;
+    display: none;
+}
+
+.success-message {
+    background: rgba(0, 255, 0, 0.1);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+    border-radius: var(--border-radius);
+    padding: 10px;
+    margin: 10px 0;
+    display: none;
+}
+
+.auto-refresh {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.auto-refresh input[type="checkbox"] {
+    width: auto;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    body {
+        padding: 5px;
+    }
+    
+    .header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .controls {
+        justify-content: center;
+    }
+    
+    .metrics-grid {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+    }
+    
+    .metric-card {
+        padding: 10px;
+    }
+    
+    .metric-value {
+        font-size: 16px;
+    }
+    
+    .chart-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .table-container {
+        padding: 10px;
+    }
+    
+    th, td {
+        padding: 6px 4px;
+        font-size: 14px;
+    }
+    
+    canvas {
+        max-height: 200px;
+    }
+}
+
+@media (max-width: 480px) {
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    th, td {
+        padding: 4px 2px;
+        font-size: 12px;
+    }
+}
+
+/* Dark mode toggle support */
+@media (prefers-color-scheme: light) {
+    :root {
+        --background-color: #f0f0f0;
+        --secondary-color: #fff;
+        --text-color: #333;
+        --border-color: #ddd;
+    }
 }
 </style>
 </head>
 <body>
-<h1>Glyph Dashboard</h1>
-<button onclick="logout()">Logout</button>
-<div class="section">Workers: <span id="workers">0</span></div>
-<div class="section">Queue Length: <span id="queue">0</span></div>
-<div class="section">Found Results: <span id="results">0</span></div>
-<div class="section">GPU Temps: <span id="gpu">N/A</span></div>
-<div class="section">CPU Usage: <span id="cpu">N/A</span></div>
-<div class="section">Memory Utilization: <span id="memory">N/A</span></div>
-<div class="section">Disk Usage: <span id="disk">N/A</span></div>
-<div class="section">CPU Load: <span id="cpu-load">N/A</span></div>
-<div class="section">Memory Usage: <span id="memory-usage">N/A</span></div>
-<div class="section">Backlog Target: <span id="backlog-target">N/A</span></div>
-<div class="section">Pending Jobs: <span id="pending-jobs">N/A</span></div>
-<div class="section">Queued Batches: <span id="queued-batches">N/A</span></div>
-<div class="section">Recent Cracks:
-  <ul id="found-list"></ul>
-</div>
-<div class="section" id="updated">Updated: never</div>
-<div class="section">
-  Hashrate Target:
-  <select id="hashrate-target" onchange="loadHashrate()">
-    <option value="">Total</option>
-  </select>
-</div>
-<canvas id="hashrateChart"></canvas>
+<div class="container">
+  <h1>Glyph Dashboard</h1>
+  
+  <div class="header">
+    <div class="controls">
+      <button class="btn" onclick="refreshAll()">
+        <span id="refresh-text">Refresh</span>
+        <span class="loading" id="refresh-loading" style="display: none;"></span>
+      </button>
+      <div class="auto-refresh">
+        <input type="checkbox" id="auto-refresh" checked>
+        <label for="auto-refresh">Auto-refresh</label>
+      </div>
+      <button class="btn danger" onclick="logout()">Logout</button>
+    </div>
+    <div id="last-updated">Updated: never</div>
+  </div>
 
-<table>
-  <thead>
-    <tr><th>Worker</th><th>Status</th><th>Change</th></tr>
-  </thead>
-  <tbody id="worker-body"></tbody>
-</table>
+  <div class="error-message" id="error-message"></div>
+  <div class="success-message" id="success-message"></div>
+
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-label">Active Workers</div>
+      <div class="metric-value" id="workers">0</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Queue Length</div>
+      <div class="metric-value" id="queue">0</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Found Results</div>
+      <div class="metric-value" id="results">0</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">CPU Usage</div>
+      <div class="metric-value" id="cpu">N/A</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Memory</div>
+      <div class="metric-value" id="memory">N/A</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">GPU Temps</div>
+      <div class="metric-value" id="gpu">N/A</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Disk Usage</div>
+      <div class="metric-value" id="disk">N/A</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">CPU Load</div>
+      <div class="metric-value" id="cpu-load">N/A</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Memory Usage</div>
+      <div class="metric-value" id="memory-usage">N/A</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Backlog Target</div>
+      <div class="metric-value" id="backlog-target">N/A</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Pending Jobs</div>
+      <div class="metric-value" id="pending-jobs">N/A</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Queued Batches</div>
+      <div class="metric-value" id="queued-batches">N/A</div>
+    </div>
+  </div>
+
+  <div class="recent-cracks">
+    <h3>Recent Cracks</h3>
+    <ul id="found-list"></ul>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-controls">
+      <label for="hashrate-target">Hashrate Target:</label>
+      <select id="hashrate-target" onchange="loadHashrate()">
+        <option value="">Total</option>
+      </select>
+      <button class="btn" onclick="exportChart()">Export Chart</button>
+    </div>
+    <canvas id="hashrateChart"></canvas>
+  </div>
+
+  <div class="table-container">
+    <h3>Worker Status</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Worker</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="worker-body"></tbody>
+    </table>
+  </div>
+</div>
 
 <script>
-async function updateMetrics() {
-    const res = await fetch('/server_status');
-    const data = await res.json();
-    document.getElementById('workers').textContent = data.worker_count;
-    document.getElementById('queue').textContent = data.queue_length;
-    document.getElementById('results').textContent = data.found_results;
-    document.getElementById('gpu').textContent = (data.gpu_temps || []).join(', ');
-    document.getElementById('cpu').textContent = data.cpu_usage + '%';
-    document.getElementById('memory').textContent = data.memory_utilization + '%';
-    document.getElementById('disk').textContent = data.disk_space + '%';
-    document.getElementById('cpu-load').textContent = data.cpu_load;
-    document.getElementById('memory-usage').textContent = data.memory_usage;
-    document.getElementById('backlog-target').textContent = data.backlog_target;
-    document.getElementById('pending-jobs').textContent = data.pending_jobs;
-    document.getElementById('queued-batches').textContent = data.queued_batches;
-    document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
-}
-
-async function loadFoundResults() {
-    const res = await fetch('/found_results?limit=5');
-    const list = await res.json();
-    const ul = document.getElementById('found-list');
-    ul.innerHTML = '';
-    for (const line of list) {
-        const li = document.createElement('li');
-        li.textContent = line;
-        ul.appendChild(li);
+class GlyphDashboard {
+    constructor() {
+        this.chart = null;
+        this.refreshInterval = null;
+        this.autoRefresh = true;
+        this.csrfToken = this.getCSRFToken();
+        this.errorCount = 0;
+        this.maxRetries = 3;
+        
+        this.initializeEventListeners();
+        this.startAutoRefresh();
+        this.loadInitialData();
     }
-}
 
-async function loadWorkers() {
-    const res = await fetch('/workers');
-    const workers = await res.json();
-    const tbody = document.getElementById('worker-body');
-    tbody.innerHTML = '';
-    for (const w of workers) {
-        const tr = document.createElement('tr');
-        const nameTd = document.createElement('td');
-        nameTd.textContent = w.name;
-        const statusTd = document.createElement('td');
-        statusTd.textContent = w.status;
-        statusTd.className = 'status-' + w.status;
-        const actionTd = document.createElement('td');
-        const select = document.createElement('select');
-        for (const opt of ['idle', 'maintenance', 'offline']) {
-            const o = document.createElement('option');
-            o.value = opt;
-            o.textContent = opt;
-            if (opt === w.status) o.selected = true;
-            select.appendChild(o);
-        }
-        select.onchange = async () => {
-            await fetch('/worker_status', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: w.name, status: select.value })
+    getCSRFToken() {
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        return metaTag ? metaTag.getAttribute('content') : '';
+    }
+
+    initializeEventListeners() {
+        const autoRefreshCheckbox = document.getElementById('auto-refresh');
+        if (autoRefreshCheckbox) {
+            autoRefreshCheckbox.addEventListener('change', (e) => {
+                this.autoRefresh = e.target.checked;
+                if (this.autoRefresh) {
+                    this.startAutoRefresh();
+                } else {
+                    this.stopAutoRefresh();
+                }
             });
-            statusTd.textContent = select.value;
-            statusTd.className = 'status-' + select.value;
-        };
-        actionTd.appendChild(select);
-        tr.appendChild(nameTd);
-        tr.appendChild(statusTd);
-        tr.appendChild(actionTd);
-        tbody.appendChild(tr);
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                switch (e.key) {
+                    case 'r':
+                        e.preventDefault();
+                        this.refreshAll();
+                        break;
+                }
+            }
+        });
+    }
+
+    showError(message) {
+        const errorDiv = document.getElementById('error-message');
+        if (errorDiv) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+    }
+
+    showSuccess(message) {
+        const successDiv = document.getElementById('success-message');
+        if (successDiv) {
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 3000);
+        }
+    }
+
+    showLoading(isLoading) {
+        const refreshText = document.getElementById('refresh-text');
+        const refreshLoading = document.getElementById('refresh-loading');
+        
+        if (refreshText && refreshLoading) {
+            if (isLoading) {
+                refreshText.style.display = 'none';
+                refreshLoading.style.display = 'inline-block';
+            } else {
+                refreshText.style.display = 'inline';
+                refreshLoading.style.display = 'none';
+            }
+        }
+    }
+
+    async apiCall(url, options = {}) {
+        try {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+
+            if (this.csrfToken && options.method === 'POST') {
+                headers['X-CSRF-Token'] = this.csrfToken;
+            }
+
+            const response = await fetch(url, {
+                ...options,
+                headers
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('API call failed:', error);
+            this.errorCount++;
+            throw error;
+        }
+    }
+
+    async updateMetrics() {
+        try {
+            const data = await this.apiCall('/server_status');
+            
+            // Update metric values with proper formatting
+            this.updateElement('workers', data.worker_count);
+            this.updateElement('queue', data.queue_length);
+            this.updateElement('results', data.found_results);
+            this.updateElement('cpu', data.cpu_usage ? `${data.cpu_usage}%` : 'N/A');
+            this.updateElement('memory', data.memory_utilization ? `${data.memory_utilization}%` : 'N/A');
+            this.updateElement('disk', data.disk_space ? `${data.disk_space}%` : 'N/A');
+            this.updateElement('cpu-load', data.cpu_load || 'N/A');
+            this.updateElement('memory-usage', data.memory_usage || 'N/A');
+            this.updateElement('backlog-target', data.backlog_target || 'N/A');
+            this.updateElement('pending-jobs', data.pending_jobs || 'N/A');
+            this.updateElement('queued-batches', data.queued_batches || 'N/A');
+            
+            // Format GPU temperatures
+            if (data.gpu_temps && Array.isArray(data.gpu_temps)) {
+                const tempStr = data.gpu_temps.length > 0 ? 
+                    data.gpu_temps.map(t => `${t}°C`).join(', ') : 'N/A';
+                this.updateElement('gpu', tempStr);
+            } else {
+                this.updateElement('gpu', 'N/A');
+            }
+
+            // Update metric card classes based on values
+            this.updateMetricCardClasses(data);
+            
+            this.errorCount = 0; // Reset error count on success
+        } catch (error) {
+            this.showError(`Failed to update metrics: ${error.message}`);
+        }
+    }
+
+    updateElement(id, value) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = value;
+        }
+    }
+
+    updateMetricCardClasses(data) {
+        // Add warning/error classes based on thresholds
+        const cpuElement = document.getElementById('cpu')?.parentElement;
+        if (cpuElement && data.cpu_usage) {
+            cpuElement.className = data.cpu_usage > 90 ? 'metric-card error' :
+                                  data.cpu_usage > 70 ? 'metric-card warning' : 'metric-card';
+        }
+
+        const memoryElement = document.getElementById('memory')?.parentElement;
+        if (memoryElement && data.memory_utilization) {
+            memoryElement.className = data.memory_utilization > 90 ? 'metric-card error' :
+                                     data.memory_utilization > 70 ? 'metric-card warning' : 'metric-card';
+        }
+
+        const diskElement = document.getElementById('disk')?.parentElement;
+        if (diskElement && data.disk_space) {
+            diskElement.className = data.disk_space > 90 ? 'metric-card error' :
+                                   data.disk_space > 70 ? 'metric-card warning' : 'metric-card';
+        }
+    }
+
+    async loadFoundResults() {
+        try {
+            const list = await this.apiCall('/found_results?limit=5');
+            const ul = document.getElementById('found-list');
+            if (ul) {
+                ul.innerHTML = '';
+                if (list.length === 0) {
+                    const li = document.createElement('li');
+                    li.textContent = 'No recent cracks found';
+                    li.style.fontStyle = 'italic';
+                    li.style.opacity = '0.7';
+                    ul.appendChild(li);
+                } else {
+                    for (const line of list) {
+                        const li = document.createElement('li');
+                        li.textContent = line;
+                        ul.appendChild(li);
+                    }
+                }
+            }
+        } catch (error) {
+            this.showError(`Failed to load found results: ${error.message}`);
+        }
+    }
+
+    async loadWorkers() {
+        try {
+            const workers = await this.apiCall('/workers');
+            const tbody = document.getElementById('worker-body');
+            if (!tbody) return;
+
+            tbody.innerHTML = '';
+            
+            if (workers.length === 0) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 3;
+                td.textContent = 'No workers found';
+                td.style.fontStyle = 'italic';
+                td.style.opacity = '0.7';
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+                return;
+            }
+
+            for (const w of workers) {
+                const tr = document.createElement('tr');
+                
+                const nameTd = document.createElement('td');
+                nameTd.textContent = w.name;
+                
+                const statusTd = document.createElement('td');
+                statusTd.textContent = w.status;
+                statusTd.className = 'status-' + w.status;
+                
+                const actionTd = document.createElement('td');
+                const select = document.createElement('select');
+                
+                for (const opt of ['idle', 'maintenance', 'offline']) {
+                    const o = document.createElement('option');
+                    o.value = opt;
+                    o.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
+                    if (opt === w.status) o.selected = true;
+                    select.appendChild(o);
+                }
+                
+                select.onchange = async () => {
+                    try {
+                        await this.apiCall('/worker_status', {
+                            method: 'POST',
+                            body: JSON.stringify({ name: w.name, status: select.value })
+                        });
+                        statusTd.textContent = select.value;
+                        statusTd.className = 'status-' + select.value;
+                        this.showSuccess(`Worker ${w.name} status updated to ${select.value}`);
+                    } catch (error) {
+                        this.showError(`Failed to update worker status: ${error.message}`);
+                        // Revert selection on error
+                        select.value = w.status;
+                    }
+                };
+                
+                actionTd.appendChild(select);
+                tr.appendChild(nameTd);
+                tr.appendChild(statusTd);
+                tr.appendChild(actionTd);
+                tbody.appendChild(tr);
+            }
+        } catch (error) {
+            this.showError(`Failed to load workers: ${error.message}`);
+        }
+    }
+
+    async loadHashrate() {
+        try {
+            const target = document.getElementById('hashrate-target')?.value || '';
+            const url = target ? `/hashrate?worker=${encodeURIComponent(target)}` : '/hashrate';
+            const data = await this.apiCall(url);
+            
+            if (!Array.isArray(data) || data.length === 0) {
+                console.warn('No hashrate data available');
+                return;
+            }
+
+            const labels = data.map(d => new Date(d.ts * 1000).toLocaleTimeString());
+            const rates = data.map(d => d.rate);
+            
+            if (!this.chart) {
+                const ctx = document.getElementById('hashrateChart');
+                if (!ctx) return;
+                
+                this.chart = new Chart(ctx.getContext('2d'), {
+                    type: 'line',
+                    data: { 
+                        labels, 
+                        datasets: [{ 
+                            label: 'Hashrate (H/s)', 
+                            data: rates, 
+                            borderColor: '#0f0', 
+                            backgroundColor: 'rgba(0,255,0,0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }] 
+                    },
+                    options: { 
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: { 
+                            y: { 
+                                beginAtZero: true,
+                                grid: {
+                                    color: 'rgba(0, 255, 0, 0.2)'
+                                },
+                                ticks: {
+                                    color: '#0f0'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    color: 'rgba(0, 255, 0, 0.2)'
+                                },
+                                ticks: {
+                                    color: '#0f0'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#0f0'
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                this.chart.data.labels = labels;
+                this.chart.data.datasets[0].data = rates;
+                this.chart.update('none'); // Disable animation for performance
+            }
+        } catch (error) {
+            this.showError(`Failed to load hashrate: ${error.message}`);
+        }
+    }
+
+    async refreshAll() {
+        if (this.errorCount >= this.maxRetries) {
+            this.showError('Too many errors. Please refresh the page.');
+            return;
+        }
+
+        this.showLoading(true);
+        
+        try {
+            await Promise.all([
+                this.updateMetrics(),
+                this.loadWorkers(),
+                this.loadFoundResults(),
+                this.loadHashrate()
+            ]);
+            
+            const lastUpdated = document.getElementById('last-updated');
+            if (lastUpdated) {
+                lastUpdated.textContent = 'Updated: ' + new Date().toLocaleTimeString();
+            }
+        } catch (error) {
+            this.showError(`Refresh failed: ${error.message}`);
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    exportChart() {
+        if (this.chart) {
+            const link = document.createElement('a');
+            link.download = `hashrate-chart-${new Date().toISOString().slice(0, 10)}.png`;
+            link.href = this.chart.toBase64Image();
+            link.click();
+            this.showSuccess('Chart exported successfully');
+        } else {
+            this.showError('No chart data to export');
+        }
+    }
+
+    startAutoRefresh() {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+        }
+        
+        if (this.autoRefresh) {
+            this.refreshInterval = setInterval(() => {
+                this.refreshAll();
+            }, 5000);
+        }
+    }
+
+    stopAutoRefresh() {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+        }
+    }
+
+    async loadInitialData() {
+        // Load workers for hashrate target dropdown
+        try {
+            const workers = await this.apiCall('/workers');
+            const select = document.getElementById('hashrate-target');
+            if (select && workers.length > 0) {
+                // Clear existing options except "Total"
+                select.innerHTML = '<option value="">Total</option>';
+                
+                for (const worker of workers) {
+                    const option = document.createElement('option');
+                    option.value = worker.name;
+                    option.textContent = worker.name;
+                    select.appendChild(option);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load worker list for dropdown:', error);
+        }
+
+        // Initial refresh
+        await this.refreshAll();
     }
 }
 
-function logout(){
+// Global functions for backward compatibility
+function logout() {
     const m = document.cookie.match(/(?:^|; )session=([^;]+)/);
-    if(m){
-        fetch('/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:m[1]})});
+    if (m) {
+        fetch('/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: m[1] })
+        });
     }
-    document.cookie='session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     location.reload();
 }
 
-function tick() {
-    updateMetrics();
-    loadWorkers();
-    loadFoundResults();
-    loadHashrate();
-}
-setInterval(tick, 5000);
-tick();
-</script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-let chart;
-async function loadHashrate() {
-    const target = document.getElementById('hashrate-target').value;
-    const url = target ? `/hashrate?worker=${encodeURIComponent(target)}` : '/hashrate';
-    const res = await fetch(url);
-    const data = await res.json();
-    const labels = data.map(d => new Date(d.ts * 1000).toLocaleTimeString());
-    const rates = data.map(d => d.rate);
-    if (!chart) {
-        const ctx = document.getElementById('hashrateChart').getContext('2d');
-        chart = new Chart(ctx, {
-            type: 'line',
-            data: { labels, datasets: [{ label: 'Hashrate', data: rates, borderColor: '#0f0', backgroundColor: 'rgba(0,255,0,0.2)' }] },
-            options: { scales: { y: { beginAtZero: true } } }
-        });
-    } else {
-        chart.data.labels = labels;
-        chart.data.datasets[0].data = rates;
-        chart.update();
+function refreshAll() {
+    if (window.dashboard) {
+        window.dashboard.refreshAll();
     }
 }
+
+function exportChart() {
+    if (window.dashboard) {
+        window.dashboard.exportChart();
+    }
+}
+
+function loadHashrate() {
+    if (window.dashboard) {
+        window.dashboard.loadHashrate();
+    }
+}
+
+// Initialize dashboard when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    window.dashboard = new GlyphDashboard();
+});
 </script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </body>
 </html>

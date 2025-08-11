@@ -63,6 +63,8 @@ from .auth_utils import (
     fingerprint_public_key,
 )
 from .auth_middleware import sign_session, verify_session_token
+import secrets
+from functools import wraps
 from .app.api.models import (
     LoginRequest,
     LogoutRequest,
@@ -142,6 +144,59 @@ if hasattr(app, "exception_handler"):
 
 r = get_redis()
 password_hasher = PasswordHasher()
+
+# CSRF token storage
+_csrf_tokens: dict[str, float] = {}
+CSRF_TOKEN_TTL = 3600  # 1 hour
+
+def generate_csrf_token() -> str:
+    """Generate a new CSRF token."""
+    token = secrets.token_urlsafe(32)
+    _csrf_tokens[token] = time.time() + CSRF_TOKEN_TTL
+    return token
+
+def validate_csrf_token(token: str) -> bool:
+    """Validate CSRF token and clean expired tokens."""
+    if not token:
+        return False
+    
+    current_time = time.time()
+    
+    # Clean expired tokens
+    expired_tokens = [t for t, exp_time in _csrf_tokens.items() if exp_time < current_time]
+    for expired_token in expired_tokens:
+        del _csrf_tokens[expired_token]
+    
+    # Check if token exists and is valid
+    return token in _csrf_tokens and _csrf_tokens[token] > current_time
+
+def require_csrf(func):
+    """Decorator to require CSRF token validation for portal endpoints."""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        # Get the request object from FastAPI dependency injection
+        from fastapi import Request
+        request = None
+        
+        # Find Request object in args/kwargs
+        for arg in args:
+            if isinstance(arg, Request):
+                request = arg
+                break
+        
+        if not request:
+            for value in kwargs.values():
+                if isinstance(value, Request):
+                    request = value
+                    break
+        
+        if request:
+            csrf_token = request.headers.get("X-CSRF-Token")
+            if not csrf_token or not validate_csrf_token(csrf_token):
+                raise HTTPException(status_code=403, detail="CSRF token validation failed")
+        
+        return await func(*args, **kwargs)
+    return wrapper
 
 # store references to background tasks so they can be cancelled
 BACKGROUND_TASKS: list[asyncio.Task] = []
@@ -1662,13 +1717,30 @@ async def login_page():
         return HTMLResponse("<h1>Login page not available</h1>", status_code=500)
 
 
+@app.get("/csrf_token")
+async def get_csrf_token():
+    """Generate and return a CSRF token."""
+    return {"csrf_token": generate_csrf_token()}
+
+
 @app.get("/", response_class=HTMLResponse)
 @app.get("/portal", response_class=HTMLResponse)
 async def portal_page():
-    """Serve the combined portal interface."""
+    """Serve the enhanced portal interface."""
     try:
-        html_path = Path(__file__).parent / "portal.html"
-        return html_path.read_text()
+        # Try enhanced portal first, fallback to original
+        html_path = Path(__file__).parent / "portal_enhanced.html"
+        if not html_path.exists():
+            html_path = Path(__file__).parent / "portal.html"
+            
+        content = html_path.read_text()
+        
+        # Inject CSRF token into the HTML
+        csrf_token = generate_csrf_token()
+        csrf_meta = f'<meta name="csrf-token" content="{csrf_token}">'
+        content = content.replace('<head>', f'<head>\n{csrf_meta}')
+        
+        return HTMLResponse(content)
     except Exception as e:
         log_error("server", "system", "S730", "Failed to load portal page", e)
         return HTMLResponse("<h1>Portal page not available</h1>", status_code=500)
