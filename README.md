@@ -91,6 +91,77 @@ add these fields along with default training parameters:
 }
 ```
 
+## LLM Model Training
+
+Hashmancer includes an optional language model orchestrator for optimizing hash cracking jobs. The LLM can learn from successful attack patterns to improve job scheduling and strategy selection.
+
+### Configuration
+
+Enable LLM training in your `~/.hashmancer/server_config.json`:
+
+```json
+{
+  "llm_enabled": true,
+  "llm_model_path": "/opt/models/distilgpt2",
+  "llm_train_epochs": 1,
+  "llm_train_learning_rate": 0.0001
+}
+```
+
+### Key Training Parameters
+
+- **llm_model_path**: Path to the pre-trained model (e.g., DistilGPT-2)
+- **llm_train_epochs**: Number of training epochs (default: 1)
+- **llm_train_learning_rate**: Learning rate for fine-tuning (default: 0.0001)
+- **per_device_train_batch_size**: Batch size per GPU/device (default: 1)
+- **block_size**: Token sequence length for training (default: 128)
+
+### Training Process
+
+The LLM training module (`hashmancer.server.train_llm`) fine-tunes models on successful cracking patterns:
+
+1. **Data Collection**: Gathers successful hash/password pairs and attack metadata
+2. **Model Fine-tuning**: Uses the transformers library to adapt pre-trained models
+3. **Job Optimization**: Trained models suggest optimal wordlists, rules, and attack modes
+4. **Performance Tracking**: Monitors improvement in crack rates and job efficiency
+
+### Supported Models
+
+- DistilGPT-2 (recommended for resource efficiency)
+- GPT-2 variants
+- Other causal language models compatible with Hugging Face transformers
+
+### Hardware Requirements
+
+The LLM training module supports various hardware configurations:
+
+#### GPU Options
+- **Intel Arc A380**: Good for small to medium models with Intel XPU acceleration
+- **NVIDIA T4**: Excellent for training with 16GB VRAM and tensor cores
+- **Dual CPU**: CPU-only training for basic models when GPU unavailable
+
+#### Memory Recommendations
+- **Minimum**: 8GB RAM + 4GB VRAM
+- **Recommended**: 16GB+ RAM + 8GB+ VRAM
+- **Optimal**: 32GB+ RAM + 16GB+ VRAM for larger models
+
+#### Performance Considerations
+- Intel Arc A380: Best for inference, moderate training performance
+- NVIDIA T4: Balanced training/inference, good tensor core utilization
+- Dual CPU: Slower training but works for small models and prototyping
+
+### Dependencies
+
+LLM training requires additional packages:
+```bash
+pip install transformers>=4.0.0 torch>=1.9.0
+```
+
+For Intel Arc GPU support:
+```bash
+pip install intel-extension-for-pytorch
+```
+
 ### Redis security
 
 Redis should only listen on the loopback interface. Add `bind 127.0.0.1` to
