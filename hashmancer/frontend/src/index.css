@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=UnifrakturCook&display=swap');
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    margin: 0;
+    background: #000;
+    color: #00ff00;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+  
+  #root {
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .hacker-border {
+    @apply border border-hacker-green;
+  }
+  
+  .hacker-glow {
+    @apply shadow-lg;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+  }
+  
+  .hacker-glow-strong {
+    @apply shadow-xl;
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.5), 0 0 40px rgba(0, 255, 0, 0.2);
+  }
+  
+  .btn-primary {
+    @apply bg-dark-surface hacker-border text-hacker-green px-4 py-2 rounded
+           hover:bg-hacker-green hover:text-black transition-all duration-300
+           hover:hacker-glow-strong active:scale-95;
+  }
+  
+  .btn-danger {
+    @apply bg-dark-surface border border-error-red text-error-red px-4 py-2 rounded
+           hover:bg-error-red hover:text-black transition-all duration-300
+           hover:shadow-lg active:scale-95;
+  }
+  
+  .metric-card {
+    @apply bg-dark-surface hacker-border p-4 rounded-lg hacker-glow
+           transition-all duration-300 hover:hacker-glow-strong;
+  }
+  
+  .metric-card.error {
+    @apply border-error-red;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+  }
+  
+  .metric-card.warning {
+    @apply border-warning-orange;
+    box-shadow: 0 0 10px rgba(255, 136, 0, 0.3);
+  }
+  
+  .input-field {
+    @apply bg-dark-surface hacker-border text-hacker-green px-3 py-2 rounded
+           focus:outline-none focus:hacker-glow-strong focus:border-hacker-green
+           placeholder-gray-500;
+  }
+  
+  .table-cell {
+    @apply border-b border-dark-border px-4 py-2 text-center;
+  }
+  
+  .status-idle {
+    @apply text-hacker-green;
+  }
+  
+  .status-maintenance {
+    @apply text-warning-orange;
+  }
+  
+  .status-offline {
+    @apply text-error-red;
+  }
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 10px currentColor;
+  }
+  
+  .text-glow-strong {
+    text-shadow: 0 0 15px currentColor, 0 0 30px currentColor;
+  }
+  
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Loading spinner */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
