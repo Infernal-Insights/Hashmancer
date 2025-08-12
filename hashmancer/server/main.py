@@ -1894,3 +1894,329 @@ async def portal_ws(ws: WebSocket):
         pass
     except Exception as e:
         log_error("server", "system", "S731", "Portal WS error", e)
+
+
+# Security endpoints
+try:
+    from .security.rate_limiter import get_rate_limiter_stats, block_ip_address, unblock_ip_address
+    from .security.audit_logger import get_audit_statistics, get_audit_logs, search_audit_logs
+    from .security.intrusion_detection import get_threat_statistics, get_threat_events
+    from .security.auth_enhancements import get_two_factor_auth, get_session_manager, get_password_policy
+    from .security.input_validator import get_input_validator
+    from .security.security_headers import validate_security_headers
+    SECURITY_ENABLED = True
+except ImportError as e:
+    log_error("server", "security", "SEC001", "Security modules not available", e)
+    SECURITY_ENABLED = False
+
+
+@app.get("/api/security/status")
+async def get_security_status():
+    """Get overall security system status."""
+    if not SECURITY_ENABLED:
+        return {"status": "disabled", "message": "Security modules not available"}
+    
+    try:
+        rate_limiter_stats = get_rate_limiter_stats()
+        audit_stats = get_audit_statistics()
+        threat_stats = get_threat_statistics()
+        
+        return {
+            "status": "enabled",
+            "components": {
+                "rate_limiter": "active",
+                "audit_logging": "active", 
+                "intrusion_detection": "active",
+                "2fa": "available",
+                "input_validation": "active",
+                "security_headers": "active"
+            },
+            "statistics": {
+                "rate_limiter": rate_limiter_stats,
+                "audit": audit_stats,
+                "threats": threat_stats
+            }
+        }
+    except Exception as e:
+        log_error("server", "security", "SEC002", "Error getting security status", e)
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/security/rate-limiter/stats")
+async def api_get_rate_limiter_stats():
+    """Get rate limiter statistics."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        return get_rate_limiter_stats()
+    except Exception as e:
+        log_error("server", "security", "SEC003", "Error getting rate limiter stats", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/security/rate-limiter/block")
+async def api_block_ip(request: dict):
+    """Block an IP address."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        ip = request.get("ip")
+        duration = request.get("duration", 3600)
+        reason = request.get("reason", "Manual block via API")
+        
+        if not ip:
+            raise HTTPException(status_code=400, detail="IP address required")
+        
+        success = block_ip_address(ip, duration, reason)
+        return {"success": success, "message": f"IP {ip} blocked" if success else "Failed to block IP"}
+    except Exception as e:
+        log_error("server", "security", "SEC004", "Error blocking IP", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/security/rate-limiter/unblock") 
+async def api_unblock_ip(request: dict):
+    """Unblock an IP address."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        ip = request.get("ip")
+        if not ip:
+            raise HTTPException(status_code=400, detail="IP address required")
+        
+        success = unblock_ip_address(ip)
+        return {"success": success, "message": f"IP {ip} unblocked" if success else "IP was not blocked"}
+    except Exception as e:
+        log_error("server", "security", "SEC005", "Error unblocking IP", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/security/audit/logs")
+async def api_get_audit_logs(
+    limit: int = 100,
+    hours: int = 24,
+    event_type: str = None,
+    severity: str = None,
+    user_id: str = None,
+    ip_address: str = None
+):
+    """Get audit logs with filtering."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        filters = {"limit": limit, "start_time": time.time() - (hours * 3600)}
+        if event_type:
+            from .security.audit_logger import AuditEventType
+            filters["event_type"] = AuditEventType(event_type)
+        if severity:
+            from .security.audit_logger import AuditSeverity  
+            filters["severity"] = AuditSeverity(severity)
+        if user_id:
+            filters["user_id"] = user_id
+        if ip_address:
+            filters["ip_address"] = ip_address
+            
+        return get_audit_logs(**filters)
+    except Exception as e:
+        log_error("server", "security", "SEC006", "Error getting audit logs", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/security/audit/search")
+async def api_search_audit_logs(query: str, limit: int = 50):
+    """Search audit logs by query."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        return search_audit_logs(query, limit)
+    except Exception as e:
+        log_error("server", "security", "SEC007", "Error searching audit logs", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/security/audit/statistics")
+async def api_get_audit_statistics(hours: int = 24):
+    """Get audit statistics."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        return get_audit_statistics(hours)
+    except Exception as e:
+        log_error("server", "security", "SEC008", "Error getting audit statistics", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/security/threats/events")
+async def api_get_threat_events(
+    limit: int = 100,
+    hours: int = 24,
+    threat_level: str = None,
+    attack_type: str = None,
+    source_ip: str = None
+):
+    """Get threat events with filtering."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        filters = {"limit": limit, "hours": hours}
+        if threat_level:
+            from .security.intrusion_detection import ThreatLevel
+            filters["threat_level"] = ThreatLevel(threat_level)
+        if attack_type:
+            from .security.intrusion_detection import AttackType
+            filters["attack_type"] = AttackType(attack_type)
+        if source_ip:
+            filters["source_ip"] = source_ip
+            
+        return get_threat_events(**filters)
+    except Exception as e:
+        log_error("server", "security", "SEC009", "Error getting threat events", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/security/threats/statistics")
+async def api_get_threat_statistics(hours: int = 24):
+    """Get threat detection statistics."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        return get_threat_statistics(hours)
+    except Exception as e:
+        log_error("server", "security", "SEC010", "Error getting threat statistics", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/security/2fa/status/{user_id}")
+async def api_get_2fa_status(user_id: str):
+    """Get 2FA status for a user."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        two_factor_auth = get_two_factor_auth()
+        config = two_factor_auth.get_config(user_id)
+        return {
+            "user_id": user_id,
+            "enabled": two_factor_auth.is_enabled(user_id),
+            "config": config
+        }
+    except Exception as e:
+        log_error("server", "security", "SEC011", "Error getting 2FA status", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/security/2fa/setup")
+async def api_setup_2fa(request: dict):
+    """Set up 2FA for a user."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        user_id = request.get("user_id")
+        user_email = request.get("user_email")
+        
+        if not user_id or not user_email:
+            raise HTTPException(status_code=400, detail="user_id and user_email required")
+        
+        two_factor_auth = get_two_factor_auth()
+        setup_data = two_factor_auth.setup_totp(user_id, user_email)
+        
+        return {
+            "success": True,
+            "setup_data": {
+                "qr_code_uri": setup_data["qr_code_uri"],
+                "backup_codes": setup_data["backup_codes"],
+                "verification_token": setup_data["verification_token"]
+            }
+        }
+    except Exception as e:
+        log_error("server", "security", "SEC012", "Error setting up 2FA", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/security/2fa/verify")
+async def api_verify_2fa(request: dict):
+    """Verify 2FA setup or login."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        verification_token = request.get("verification_token")
+        totp_code = request.get("totp_code")
+        user_id = request.get("user_id")
+        
+        two_factor_auth = get_two_factor_auth()
+        
+        if verification_token:
+            # Setup verification
+            success = two_factor_auth.verify_totp_setup(verification_token, totp_code)
+            return {"success": success, "message": "2FA enabled" if success else "Invalid code"}
+        elif user_id:
+            # Login verification
+            success = two_factor_auth.verify_code(user_id, totp_code)
+            return {"success": success, "message": "Code verified" if success else "Invalid code"}
+        else:
+            raise HTTPException(status_code=400, detail="verification_token or user_id required")
+            
+    except Exception as e:
+        log_error("server", "security", "SEC013", "Error verifying 2FA", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/security/sessions/{user_id}")
+async def api_get_user_sessions(user_id: str):
+    """Get active sessions for a user."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        session_manager = get_session_manager()
+        sessions = session_manager.get_user_sessions(user_id)
+        return {"user_id": user_id, "sessions": [session.__dict__ for session in sessions]}
+    except Exception as e:
+        log_error("server", "security", "SEC014", "Error getting user sessions", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/security/sessions/revoke")
+async def api_revoke_session(request: dict):
+    """Revoke a user session."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        session_id = request.get("session_id")
+        reason = request.get("reason", "Manual revocation via API")
+        
+        if not session_id:
+            raise HTTPException(status_code=400, detail="session_id required")
+        
+        session_manager = get_session_manager()
+        success = session_manager.revoke_session(session_id, reason)
+        
+        return {"success": success, "message": "Session revoked" if success else "Session not found"}
+    except Exception as e:
+        log_error("server", "security", "SEC015", "Error revoking session", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/security/validation/stats")
+async def api_get_validation_stats():
+    """Get input validation statistics."""
+    if not SECURITY_ENABLED:
+        raise HTTPException(status_code=503, detail="Security modules not available")
+    
+    try:
+        validator = get_input_validator()
+        return validator.get_validation_stats()
+    except Exception as e:
+        log_error("server", "security", "SEC016", "Error getting validation stats", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
