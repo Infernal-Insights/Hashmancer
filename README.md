@@ -76,21 +76,6 @@ Both the server and worker load their private signing keys once at module import
 time.  The `cryptography` library returns immutable key objects, so concurrent
 threads can safely call the signing helpers without additional locking.
 
-## Example configuration
-
-Settings for the server are loaded from `~/.hashmancer/server_config.json`.
-To enable the optional language model orchestrator and provide the model path
-add these fields along with default training parameters:
-
-```json
-{
-  "llm_enabled": true,
-  "llm_model_path": "/opt/models/distilgpt2",
-  "llm_train_epochs": 1,
-  "llm_train_learning_rate": 0.0001
-}
-```
-
 ## LLM Model Training
 
 Hashmancer includes an optional language model orchestrator for optimizing hash cracking jobs. The LLM can learn from successful attack patterns to improve job scheduling and strategy selection.
