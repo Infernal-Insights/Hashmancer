@@ -1,7 +1,7 @@
 """Security headers middleware for web application hardening."""
 
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response as StarletteResponse

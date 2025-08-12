@@ -8,7 +8,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globDirectory: 'dist'
       },
       manifest: {
         name: 'Hashmancer',
@@ -47,7 +48,7 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: '../server/static',
+    outDir: 'dist',
     emptyOutDir: true,
     sourcemap: true,
     rollupOptions: {

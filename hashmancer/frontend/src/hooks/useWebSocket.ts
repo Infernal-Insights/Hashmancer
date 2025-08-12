@@ -1,85 +1,106 @@
-import { useEffect, useRef, useCallback } from 'react'
-import { io, Socket } from 'socket.io-client'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useDashboardStore } from '../stores/dashboardStore'
 import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
 
 interface WebSocketHook {
-  socket: Socket | null
+  socket: WebSocket | null
   isConnected: boolean
   connect: () => void
   disconnect: () => void
 }
 
 export const useWebSocket = (): WebSocketHook => {
-  const socket = useRef<Socket | null>(null)
-  const isConnectedRef = useRef(false)
+  const socket = useRef<WebSocket | null>(null)
+  const [isConnected, setIsConnected] = useState(false)
   const { token } = useAuthStore()
   const { updateMetrics, updateWorkers, updateFoundResults, setError } = useDashboardStore()
+  const reconnectTimeoutRef = useRef<number | undefined>()
 
   const connect = useCallback(() => {
-    if (socket.current?.connected || !token) return
+    if (socket.current?.readyState === WebSocket.OPEN || !token) return
 
-    socket.current = io('/ws/portal', {
-      auth: {
-        token,
-      },
-      transports: ['websocket', 'polling'],
-    })
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const host = window.location.host
+      const wsUrl = `${protocol}//${host}/ws/portal`
+      
+      socket.current = new WebSocket(wsUrl)
 
-    socket.current.on('connect', () => {
-      isConnectedRef.current = true
-      console.log('WebSocket connected')
-      toast.success('Connected to live updates')
-    })
-
-    socket.current.on('disconnect', () => {
-      isConnectedRef.current = false
-      console.log('WebSocket disconnected')
-      toast.error('Lost connection to server')
-    })
-
-    socket.current.on('connect_error', (error) => {
-      console.error('WebSocket connection error:', error)
-      setError(`Connection error: ${error.message}`)
-      toast.error('Failed to connect to server')
-    })
-
-    // Listen for real-time updates
-    socket.current.on('metrics_update', (data) => {
-      updateMetrics(data)
-    })
-
-    socket.current.on('workers_update', (data) => {
-      updateWorkers(data)
-    })
-
-    socket.current.on('found_results', (data) => {
-      updateFoundResults(data)
-      if (data.length > 0) {
-        toast.success(`New crack found: ${data[0].plaintext}`)
+      socket.current.onopen = () => {
+        setIsConnected(true)
+        console.log('WebSocket connected')
+        toast.success('Connected to live updates')
+        
+        // Clear any reconnection timeout
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current)
+          reconnectTimeoutRef.current = undefined
+        }
       }
-    })
 
-    socket.current.on('worker_status_change', (data) => {
-      toast.info(`Worker ${data.name} is now ${data.status}`)
-    })
+      socket.current.onclose = () => {
+        setIsConnected(false)
+        console.log('WebSocket disconnected')
+        toast.error('Lost connection to server')
+        
+        // Try to reconnect after 5 seconds
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log('Attempting to reconnect WebSocket...')
+          connect()
+        }, 5000)
+      }
 
-    socket.current.on('job_completed', (data) => {
-      toast.success(`Job ${data.job_id} completed`)
-    })
+      socket.current.onerror = (error) => {
+        console.error('WebSocket error:', error)
+        setError('WebSocket connection error')
+        toast.error('Failed to connect to server')
+        setIsConnected(false)
+      }
 
-    socket.current.on('error', (error) => {
-      console.error('WebSocket error:', error)
-      setError(error.message)
-    })
+      socket.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          
+          if (data.metrics) {
+            updateMetrics(data.metrics)
+          }
+          
+          if (data.workers) {
+            updateWorkers(data.workers)
+          }
+          
+          if (data.founds && data.founds.length > 0) {
+            updateFoundResults(data.founds)
+            // Parse found results to show toast notifications
+            data.founds.forEach((found: string) => {
+              const [, plaintext] = found.split(':', 2)
+              if (plaintext) {
+                toast.success(`New crack found: ${plaintext}`)
+              }
+            })
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error)
+        }
+      }
+    } catch (error) {
+      console.error('Error creating WebSocket connection:', error)
+      setError('Failed to create WebSocket connection')
+      toast.error('Failed to connect to server')
+    }
   }, [token, updateMetrics, updateWorkers, updateFoundResults, setError])
 
   const disconnect = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = undefined
+    }
+    
     if (socket.current) {
-      socket.current.disconnect()
+      socket.current.close()
       socket.current = null
-      isConnectedRef.current = false
+      setIsConnected(false)
     }
   }, [])
 
@@ -97,7 +118,7 @@ export const useWebSocket = (): WebSocketHook => {
 
   return {
     socket: socket.current,
-    isConnected: isConnectedRef.current,
+    isConnected,
     connect,
     disconnect,
   }

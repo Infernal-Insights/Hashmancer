@@ -5,15 +5,13 @@ import {
   Users, 
   BarChart3, 
   Settings, 
-  LogOut,
-  Activity,
   Wifi,
   WifiOff
 } from 'lucide-react'
-import { useAuthStore } from '../stores/authStore'
 import { useWebSocket } from '../hooks/useWebSocket'
-import { useDashboardStore } from '../stores/dashboardStore'
-import { format } from 'date-fns'
+import { useUiStore } from '../stores/uiStore'
+import AsciiLogo from './AsciiLogo'
+import MatrixRain from './MatrixRain'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -21,9 +19,8 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation()
-  const { user, logout } = useAuthStore()
   const { isConnected } = useWebSocket()
-  const { lastUpdated } = useDashboardStore()
+  const { matrixRain } = useUiStore()
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Monitor },
@@ -34,109 +31,68 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-dark-bg">
-      {/* Header */}
+      {/* Matrix Rain Background */}
+      {matrixRain && <MatrixRain />}
+      
+      {/* ASCII Header */}
       <header className="bg-dark-surface border-b hacker-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo */}
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-display text-glow-strong">
-                ⛧ HASHMANCER ⛧
-              </h1>
-              <div className="hidden md:block text-xs text-gray-400">
-                ~ The arcane art of cryptographic conjuration ~
-              </div>
-            </div>
-
-            {/* Status indicators */}
-            <div className="flex items-center space-x-4">
-              {/* Connection status */}
-              <div className="flex items-center space-x-2">
-                {isConnected ? (
-                  <>
-                    <Wifi className="h-4 w-4 text-hacker-green" />
-                    <span className="text-xs text-hacker-green">Live</span>
-                  </>
-                ) : (
-                  <>
-                    <WifiOff className="h-4 w-4 text-error-red" />
-                    <span className="text-xs text-error-red">Offline</span>
-                  </>
-                )}
-              </div>
-
-              {/* Last updated */}
-              {lastUpdated && (
-                <div className="hidden sm:block text-xs text-gray-400">
-                  Last updated: {format(lastUpdated, 'HH:mm:ss')}
-                </div>
+        <div className="max-w-7xl mx-auto">
+          {/* ASCII Logo */}
+          <AsciiLogo />
+          
+          {/* Status Bar */}
+          <div className="flex justify-center items-center px-4 pb-4">
+            {/* Connection status - centered */}
+            <div className="flex items-center space-x-2">
+              {isConnected ? (
+                <Wifi className="h-4 w-4 text-hacker-green" />
+              ) : (
+                <WifiOff className="h-4 w-4 text-error-red" />
               )}
-
-              {/* User menu */}
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-hacker-green">
-                  {user?.username}
-                </span>
-                <button
-                  onClick={logout}
-                  className="btn-danger flex items-center space-x-1 text-xs px-2 py-1"
-                >
-                  <LogOut className="h-3 w-3" />
-                  <span>Logout</span>
-                </button>
-              </div>
+              <span className={`text-xs ${isConnected ? 'text-hacker-green' : 'text-error-red'}`}>
+                {isConnected ? 'Connected' : 'Offline'}
+              </span>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="flex">
-        {/* Sidebar */}
-        <nav className="w-64 bg-dark-surface border-r hacker-border min-h-screen">
-          <div className="p-4">
-            <div className="space-y-2">
-              {navigation.map((item) => {
-                const isActive = location.pathname === item.href
-                const Icon = item.icon
-                
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    className={`
-                      flex items-center space-x-3 px-3 py-2 rounded-md text-sm font-medium
-                      transition-all duration-200
-                      ${isActive 
-                        ? 'bg-hacker-green text-black hacker-glow-strong' 
-                        : 'text-hacker-green hover:bg-dark-border hover:hacker-glow'
-                      }
-                    `}
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span>{item.name}</span>
-                  </Link>
-                )
-              })}
-            </div>
-
-            {/* Quick stats */}
-            <div className="mt-8 pt-4 border-t border-dark-border">
-              <div className="text-xs text-gray-400 mb-2">System Status</div>
-              <div className="flex items-center space-x-2 text-xs">
-                <Activity className="h-3 w-3 text-hacker-green animate-pulse" />
-                <span>Monitoring Active</span>
-              </div>
-            </div>
+      {/* Navigation Bar */}
+      <nav className="nav-background border-b hacker-border">
+        <div className="w-full">
+          <div className="flex justify-center space-x-12">
+            {navigation.map((item) => {
+              const isActive = location.pathname === item.href
+              const Icon = item.icon
+              
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`
+                    flex items-center space-x-3 px-8 py-4 text-sm font-bold
+                    border-b-3 transition-all duration-300 rounded-t-lg
+                    ${isActive 
+                      ? 'border-green-400 text-green-400 hacker-glow bg-green-400/15 shadow-lg' 
+                      : 'border-transparent text-white hover:text-green-400 hover:border-green-400/70 hover:bg-green-400/8'
+                    }
+                  `}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span className="font-bold text-base">{item.name}</span>
+                </Link>
+              )
+            })}
           </div>
-        </nav>
+        </div>
+      </nav>
 
-        {/* Main content */}
-        <main className="flex-1 p-6">
-          <div className="max-w-7xl mx-auto">
-            {children}
-          </div>
-        </main>
-      </div>
+      {/* Main content */}
+      <main className="flex-1 p-6">
+        <div className="max-w-7xl mx-auto">
+          {children}
+        </div>
+      </main>
     </div>
   )
 }

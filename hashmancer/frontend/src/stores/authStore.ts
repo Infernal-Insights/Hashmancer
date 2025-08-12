@@ -8,7 +8,7 @@ interface AuthState {
     role: string
   } | null
   token: string | null
-  login: (username: string, password: string) => Promise<boolean>
+  login: (passkey: string) => Promise<boolean>
   logout: () => void
   checkAuth: () => Promise<boolean>
 }
@@ -20,29 +20,29 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
 
-      login: async (username: string, password: string) => {
+      login: async (passkey: string) => {
         try {
-          const response = await fetch('/api/login', {
+          const response = await fetch('/login', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ username, password }),
+            body: JSON.stringify({ passkey }),
           })
 
           if (response.ok) {
             const data = await response.json()
             set({
               isAuthenticated: true,
-              user: { username, role: data.role || 'user' },
-              token: data.token,
+              user: { username: 'admin', role: 'admin' },
+              token: data.cookie,
             })
             return true
           }
           return false
         } catch (error) {
           console.error('Login failed:', error)
-          return false
+          throw new Error('Invalid passkey')
         }
       },
 

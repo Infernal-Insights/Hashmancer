@@ -34,6 +34,7 @@ interface DashboardState {
   metrics: Metrics | null
   workers: Worker[]
   foundResults: FoundResult[]
+  recentFinds: string[]
   isLoading: boolean
   error: string | null
   lastUpdated: Date | null
@@ -42,6 +43,7 @@ interface DashboardState {
   updateMetrics: (metrics: Metrics) => void
   updateWorkers: (workers: Worker[]) => void
   updateFoundResults: (results: FoundResult[]) => void
+  updateWorkerStatus: (workerName: string, status: string) => Promise<void>
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   clearData: () => void
@@ -51,6 +53,7 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
   metrics: null,
   workers: [],
   foundResults: [],
+  recentFinds: [],
   isLoading: false,
   error: null,
   lastUpdated: null,
@@ -69,9 +72,32 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
 
   updateFoundResults: (foundResults) => set({ 
     foundResults, 
+    recentFinds: foundResults.map(r => r.plaintext).slice(0, 20),
     lastUpdated: new Date(),
     error: null 
   }),
+
+  updateWorkerStatus: async (workerName: string, status: string) => {
+    try {
+      const response = await fetch('/worker_status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: workerName, status })
+      })
+      
+      if (response.ok) {
+        set((state) => ({
+          workers: state.workers.map(worker => 
+            worker.name === workerName ? { ...worker, status: status as any } : worker
+          )
+        }))
+      } else {
+        throw new Error('Failed to update worker status')
+      }
+    } catch (error) {
+      throw new Error(`Failed to update worker status: ${error}`)
+    }
+  },
 
   setLoading: (isLoading) => set({ isLoading }),
 
@@ -81,6 +107,7 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
     metrics: null,
     workers: [],
     foundResults: [],
+    recentFinds: [],
     isLoading: false,
     error: null,
     lastUpdated: null,

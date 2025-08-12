@@ -1,9 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=UnifrakturCook&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=UnifrakturCook&display=swap');
 
 @layer base {
   * {
@@ -43,10 +43,21 @@
     box-shadow: 0 0 20px rgba(0, 255, 0, 0.5), 0 0 40px rgba(0, 255, 0, 0.2);
   }
   
+  .hacker-glow-subtle {
+    @apply shadow-md;
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.2);
+  }
+  
   .btn-primary {
     @apply bg-dark-surface hacker-border text-hacker-green px-4 py-2 rounded
            hover:bg-hacker-green hover:text-black transition-all duration-300
            hover:hacker-glow-strong active:scale-95;
+  }
+  
+  .btn-secondary {
+    @apply bg-dark-surface hacker-border text-gray-300 px-4 py-2 rounded
+           hover:bg-dark-border hover:text-hacker-green transition-all duration-300
+           hover:hacker-glow active:scale-95;
   }
   
   .btn-danger {
@@ -68,6 +79,12 @@
   .metric-card.warning {
     @apply border-warning-orange;
     box-shadow: 0 0 10px rgba(255, 136, 0, 0.3);
+  }
+  
+  .input-hacker {
+    @apply bg-dark-surface hacker-border text-hacker-green px-3 py-2 rounded
+           focus:outline-none focus:hacker-glow-strong focus:border-hacker-green
+           placeholder-gray-500;
   }
   
   .input-field {
@@ -138,4 +155,113 @@
 
 .loading-spinner {
   animation: spin 1s linear infinite;
+}
+
+/* Matrix Rain Effect - Hidden by default */
+@keyframes matrix-fall {
+  0% { transform: translateY(-100vh); opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+.matrix-rain {
+  position: fixed;
+  top: -100vh;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: -1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: #00ff00;
+  opacity: 0.3;
+  overflow: hidden;
+}
+
+.matrix-column {
+  position: absolute;
+  animation: matrix-fall linear infinite;
+  white-space: pre;
+}
+
+/* Navigation background enhancement */
+.nav-background {
+  background: linear-gradient(135deg, rgba(0, 255, 0, 0.05) 0%, rgba(0, 0, 0, 0.8) 100%);
+  backdrop-filter: blur(5px);
+  box-shadow: 0 2px 10px rgba(0, 255, 0, 0.1);
+}
+
+/* ASCII Art Styling */
+.ascii-logo {
+  font-family: 'JetBrains Mono', monospace;
+  color: #00ff00;
+  background: none;
+  border: none;
+  margin: 0;
+  padding: 20px 0;
+  text-align: center;
+  white-space: pre;
+  line-height: 1;
+  font-size: clamp(6px, 1.5vw, 12px);
+  overflow-x: auto;
+  text-shadow: 0 0 10px #00ff00;
+}
+
+.ascii-subtitle {
+  text-align: center;
+  color: #00ff00;
+  font-style: italic;
+  margin: 10px 0 30px 0;
+  font-size: 14px;
+  text-shadow: 0 0 5px #00ff00;
+}
+
+/* Collapsible Sections */
+.hashmancer-section {
+  margin-bottom: 1.5rem;
+  background: #111;
+  border: 1px solid #00ff00;
+  border-radius: 4px;
+  padding: 1rem;
+  position: relative;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
+}
+
+.hashmancer-section.collapsed .section-content {
+  display: none;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #00ff00;
+  cursor: pointer;
+}
+
+.section-title {
+  color: #00ff00;
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin: 0;
+  text-shadow: 0 0 5px #00ff00;
+}
+
+.section-toggle {
+  background: none;
+  border: none;
+  color: #00ff00;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 4px 8px;
+  border-radius: 2px;
+  transition: all 0.2s;
+  font-weight: bold;
+}
+
+.section-toggle:hover {
+  background: rgba(0, 255, 0, 0.1);
+  text-shadow: 0 0 10px #00ff00;
 }
