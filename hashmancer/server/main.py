@@ -65,6 +65,17 @@ from .auth_utils import (
 from .auth_middleware import sign_session, verify_session_token
 import secrets
 from functools import wraps
+
+# Performance monitoring
+try:
+    from .performance.monitor import get_performance_monitor, start_performance_monitoring
+    from .performance.connection_pool import get_connection_stats, get_redis_stats
+    from .performance.cache_manager import get_cache_stats
+    from .performance.query_optimizer import get_query_optimizer
+    from .performance.memory_manager import get_wordlist_cache
+    PERFORMANCE_MONITORING = True
+except ImportError:
+    PERFORMANCE_MONITORING = False
 from .app.api.models import (
     LoginRequest,
     LogoutRequest,
@@ -386,10 +397,27 @@ async def lifespan(app: FastAPI):
     print_logo()
     await _load_environment()
     await start_broadcast()
+    
+    # Start performance monitoring if available
+    if PERFORMANCE_MONITORING:
+        try:
+            await start_performance_monitoring()
+            log_info("server", "system", "S002", "Performance monitoring started")
+        except Exception as e:
+            log_error("server", "system", "S003", "Failed to start performance monitoring", e)
+    
     try:
         yield
     finally:
         await shutdown_event()
+        
+        # Stop performance monitoring
+        if PERFORMANCE_MONITORING:
+            try:
+                from .performance.monitor import stop_performance_monitoring
+                await stop_performance_monitoring()
+            except Exception as e:
+                log_error("server", "system", "S004", "Error stopping performance monitoring", e)
 
 
 if hasattr(app, "router"):
@@ -1482,6 +1510,98 @@ async def list_found_results(limit: int = 100):
     except redis.exceptions.RedisError as e:
         log_error("server", "system", "SRED", "Redis unavailable", e)
         return []
+
+
+@app.get("/performance/stats")
+async def performance_stats():
+    """Get comprehensive performance statistics."""
+    if not PERFORMANCE_MONITORING:
+        return {"error": "Performance monitoring not available"}
+    
+    try:
+        monitor = get_performance_monitor()
+        current_metrics = monitor.get_current_metrics()
+        performance_summary = monitor.get_performance_summary()
+        alerts = monitor.get_alerts()
+        
+        return {
+            "current_metrics": current_metrics,
+            "performance_summary": performance_summary,
+            "alerts": alerts,
+            "monitoring_enabled": True
+        }
+    except Exception as e:
+        log_error("server", "performance", "P001", "Failed to get performance stats", e)
+        return {"error": str(e)}
+
+
+@app.get("/performance/history")
+async def performance_history(limit: int = 100):
+    """Get performance metrics history."""
+    if not PERFORMANCE_MONITORING:
+        return {"error": "Performance monitoring not available"}
+    
+    try:
+        monitor = get_performance_monitor()
+        history = monitor.get_metrics_history(limit)
+        return {"history": history, "count": len(history)}
+    except Exception as e:
+        log_error("server", "performance", "P002", "Failed to get performance history", e)
+        return {"error": str(e)}
+
+
+@app.get("/performance/redis")
+async def redis_performance():
+    """Get Redis performance statistics."""
+    try:
+        stats = get_redis_stats() if 'get_redis_stats' in globals() else {}
+        connection_stats = get_connection_stats() if 'get_connection_stats' in globals() else {}
+        cache_stats = get_cache_stats() if 'get_cache_stats' in globals() else {}
+        
+        if PERFORMANCE_MONITORING:
+            query_optimizer = get_query_optimizer()
+            query_stats = query_optimizer.get_performance_stats()
+        else:
+            query_stats = {"error": "Query optimizer not available"}
+        
+        return {
+            "redis_stats": stats,
+            "connection_stats": connection_stats,
+            "cache_stats": cache_stats,
+            "query_stats": query_stats
+        }
+    except Exception as e:
+        log_error("server", "performance", "P003", "Failed to get Redis performance stats", e)
+        return {"error": str(e)}
+
+
+@app.post("/performance/clear_cache")
+async def clear_performance_cache():
+    """Clear performance caches."""
+    try:
+        cleared = {}
+        
+        if PERFORMANCE_MONITORING:
+            # Clear query optimizer metrics
+            query_optimizer = get_query_optimizer()
+            query_optimizer.clear_metrics()
+            cleared["query_optimizer"] = True
+            
+            # Clear cache manager
+            if 'get_cache_manager' in globals():
+                get_cache_manager().clear()
+                cleared["cache_manager"] = True
+            
+            # Clear wordlist cache
+            wordlist_cache = get_wordlist_cache()
+            wordlist_cache.clear()
+            cleared["wordlist_cache"] = True
+        
+        return {"cleared": cleared, "success": True}
+    
+    except Exception as e:
+        log_error("server", "performance", "P005", "Failed to clear performance cache", e)
+        return {"error": str(e), "success": False}
 
 
 @app.get("/restores")

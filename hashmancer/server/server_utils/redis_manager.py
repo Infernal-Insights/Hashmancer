@@ -4,8 +4,18 @@ import json
 import uuid
 import time
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Dict, List
 from .. import orchestrator_agent
+
+# Import performance optimizations
+try:
+    from ..performance.connection_pool import get_optimized_redis, get_redis_pipeline
+    from ..performance.query_optimizer import get_query_optimizer, batch_redis_operations
+    from ..performance.cache_manager import get_cache_manager, cache_with_ttl
+    PERFORMANCE_ENABLED = True
+except ImportError:
+    PERFORMANCE_ENABLED = False
+    logging.warning("Performance optimizations not available")
 
 # Connection pool for Redis operations
 _redis_pool: Optional[redis.ConnectionPool] = None
@@ -13,8 +23,17 @@ r = get_redis()
 
 
 def _get_redis_with_retry() -> redis.Redis:
-    """Get Redis connection with retry logic."""
+    """Get Redis connection with retry logic and performance optimizations."""
     global _redis_pool, r
+    
+    # Use optimized connection if available
+    if PERFORMANCE_ENABLED:
+        try:
+            return get_optimized_redis('write')
+        except Exception as e:
+            logging.warning(f"Failed to get optimized Redis connection: {e}")
+    
+    # Fallback to original logic
     if _redis_pool is None:
         from ..redis_utils import redis_options_from_env
         opts = redis_options_from_env()
@@ -23,7 +42,6 @@ def _get_redis_with_retry() -> redis.Redis:
     try:
         return redis.Redis(connection_pool=_redis_pool)
     except redis.exceptions.ConnectionError:
-        # Fallback to module-level Redis instance
         return r
 
 
@@ -57,6 +75,43 @@ def store_batch(
     batch_id = str(uuid.uuid4())
     
     def _store_batch_ops(redis_client, batch_id, hashes, mask, wordlist, rule, ttl, target, hash_mode, priority, keyspace):
+        # Use pipeline for batch operations if performance optimizations are enabled
+        if PERFORMANCE_ENABLED:
+            try:
+                with get_redis_pipeline('write') as pipeline:
+                    # Store batch data
+                    pipeline.hset(
+                        f"batch:{batch_id}",
+                        mapping={
+                            "hashes": json.dumps(hashes),
+                            "mask": mask,
+                            "wordlist": wordlist,
+                            "rule": rule,
+                            "created": int(time.time()),
+                            "target": json.dumps(target),
+                            "status": "queued",
+                            "hash_mode": str(hash_mode),
+                            "keyspace": keyspace,
+                            "priority": int(priority),
+                        },
+                    )
+                    pipeline.expire(f"batch:{batch_id}", ttl)
+                    pipeline.lpush("batch:queue", batch_id)
+                    
+                    if int(priority) > 0:
+                        pipeline.zadd("batch:prio", {batch_id: int(priority)})
+                    
+                    # Batch hash operations
+                    for h in hashes:
+                        pipeline.sadd(f"hash_batches:{h}", batch_id)
+                        pipeline.expire(f"hash_batches:{h}", ttl)
+                    
+                    pipeline.execute()
+                return
+            except Exception as e:
+                logging.warning(f"Optimized batch store failed, falling back: {e}")
+        
+        # Fallback to original implementation
         redis_client.hset(
             f"batch:{batch_id}",
             mapping={
