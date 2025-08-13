@@ -1,0 +1,16 @@
+.version 7.0
+.target sm_52
+.address_size 64
+
+.visible .const .u8 prefix_tbl[14] = {33,64,35,36,37,94,38,42,40,41,95,43,61,45};
+
+.visible .func rule_apply(
+    .param .u64 dst,
+    .param .u64 src,
+    .param .u32 len,
+    .param .u64 params,
+    .param .u32 variant_idx,
+    .param .u32 variant_count)
+{
+    ret;
+}
