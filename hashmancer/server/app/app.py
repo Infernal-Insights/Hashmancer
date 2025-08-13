@@ -1,10 +1,44 @@
 from __future__ import annotations
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from .config import CONFIG, PORTAL_KEY
 
-app = FastAPI()
+# AI Strategy Engine (optional dependency)
+_ai_engine = None
+try:
+    from ..ai_strategy_engine import get_ai_strategy_engine, initialize_ai_engine, shutdown_ai_engine
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - startup and shutdown."""
+    global _ai_engine
+    
+    # Startup
+    if AI_AVAILABLE:
+        try:
+            _ai_engine = await initialize_ai_engine()
+            print("✅ AI Strategy Engine initialized")
+        except Exception as e:
+            print(f"⚠️  AI Strategy Engine failed to initialize: {e}")
+    
+    yield
+    
+    # Shutdown
+    if _ai_engine:
+        try:
+            await shutdown_ai_engine()
+            print("🛑 AI Strategy Engine shut down")
+        except Exception as e:
+            print(f"⚠️  Error shutting down AI engine: {e}")
+
+
+app = FastAPI(lifespan=lifespan)
 
 origins = CONFIG.get("allowed_origins", ["*"])
 app.add_middleware(

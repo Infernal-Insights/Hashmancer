@@ -2215,3 +2215,327 @@ async def api_get_validation_stats():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+# =============================================================================
+# AI Strategy Engine API Routes
+# =============================================================================
+
+try:
+    from .ai_api import (
+        api_get_ai_insights,
+        api_get_strategy_recommendation, 
+        api_get_pattern_insights,
+        api_get_ai_status,
+        api_trigger_adaptation,
+        api_get_adaptation_history
+    )
+    AI_API_AVAILABLE = True
+except ImportError:
+    AI_API_AVAILABLE = False
+
+
+@app.get("/api/ai/insights")
+async def get_ai_insights():
+    """Get AI insights for current attack state."""
+    if not AI_API_AVAILABLE:
+        raise HTTPException(status_code=503, detail="AI features not available")
+    
+    result = await api_get_ai_insights()
+    if not result["success"]:
+        raise HTTPException(status_code=503, detail=result.get("error", "AI insights unavailable"))
+    
+    return result
+
+
+@app.get("/api/ai/strategy-recommendation")
+async def get_strategy_recommendation(hash_type: str, current_progress: float = 0.0):
+    """Get AI strategy recommendation for specific hash type and progress."""
+    if not AI_API_AVAILABLE:
+        raise HTTPException(status_code=503, detail="AI features not available")
+    
+    result = await api_get_strategy_recommendation(hash_type, current_progress)
+    if not result["success"]:
+        raise HTTPException(status_code=503, detail=result.get("error", "Strategy recommendation unavailable"))
+    
+    return result
+
+
+@app.get("/api/ai/pattern-insights")
+async def get_pattern_insights(limit: int = 10):
+    """Get AI pattern insights and predictions."""
+    if not AI_API_AVAILABLE:
+        raise HTTPException(status_code=503, detail="AI features not available")
+    
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
+    
+    result = await api_get_pattern_insights(limit)
+    if not result["success"]:
+        raise HTTPException(status_code=503, detail=result.get("error", "Pattern insights unavailable"))
+    
+    return result
+
+
+@app.get("/api/ai/status")
+async def get_ai_status():
+    """Get AI engine status and model information."""
+    if not AI_API_AVAILABLE:
+        return {
+            "success": False,
+            "ai_available": False,
+            "status": {"message": "AI features not installed"}
+        }
+    
+    return await api_get_ai_status()
+
+
+@app.post("/api/ai/trigger-adaptation")
+async def trigger_adaptation():
+    """Manually trigger AI adaptation cycle."""
+    if not AI_API_AVAILABLE:
+        raise HTTPException(status_code=503, detail="AI features not available")
+    
+    result = await api_trigger_adaptation()
+    if not result["success"]:
+        raise HTTPException(status_code=503, detail=result.get("error", "Adaptation trigger failed"))
+    
+    return result
+
+
+@app.get("/api/ai/adaptation-history")
+async def get_adaptation_history(limit: int = 50):
+    """Get AI adaptation history."""
+    if not AI_API_AVAILABLE:
+        raise HTTPException(status_code=503, detail="AI features not available")
+    
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 200")
+    
+    result = await api_get_adaptation_history(limit)
+    if not result["success"]:
+        raise HTTPException(status_code=503, detail=result.get("error", "Adaptation history unavailable"))
+    
+    return result
+
+
+# =============================================================================
+# WebSocket for Real-Time AI Insights
+# =============================================================================
+
+class AIWebSocketManager:
+    """Manages WebSocket connections for real-time AI insights."""
+    
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        self.broadcast_enabled = True
+    
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logging.info(f"AI WebSocket connected. Total connections: {len(self.active_connections)}")
+    
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            logging.info(f"AI WebSocket disconnected. Total connections: {len(self.active_connections)}")
+    
+    async def broadcast_ai_insights(self, insights: Dict[str, Any]):
+        """Broadcast AI insights to all connected clients."""
+        if not self.broadcast_enabled or not self.active_connections:
+            return
+        
+        message = {
+            "type": "ai_insights",
+            "data": insights,
+            "timestamp": time.time()
+        }
+        
+        # Send to all connected clients
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                logging.warning(f"Failed to send AI insights to WebSocket: {e}")
+                disconnected.append(connection)
+        
+        # Remove disconnected clients
+        for connection in disconnected:
+            self.disconnect(connection)
+    
+    async def broadcast_strategy_change(self, old_strategy: str, new_strategy: str, reason: str):
+        """Broadcast strategy changes to connected clients."""
+        if not self.broadcast_enabled or not self.active_connections:
+            return
+        
+        message = {
+            "type": "strategy_change",
+            "data": {
+                "old_strategy": old_strategy,
+                "new_strategy": new_strategy,
+                "reason": reason,
+                "timestamp": time.time()
+            }
+        }
+        
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                disconnected.append(connection)
+        
+        for connection in disconnected:
+            self.disconnect(connection)
+    
+    async def broadcast_pattern_prediction(self, prediction_data: Dict[str, Any]):
+        """Broadcast pattern predictions to connected clients."""
+        if not self.broadcast_enabled or not self.active_connections:
+            return
+        
+        message = {
+            "type": "pattern_prediction", 
+            "data": prediction_data,
+            "timestamp": time.time()
+        }
+        
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                disconnected.append(connection)
+        
+        for connection in disconnected:
+            self.disconnect(connection)
+
+
+# Global WebSocket manager
+ai_websocket_manager = AIWebSocketManager()
+
+
+@app.websocket("/ws/ai-insights")
+async def websocket_ai_insights(websocket: WebSocket):
+    """WebSocket endpoint for real-time AI insights."""
+    await ai_websocket_manager.connect(websocket)
+    
+    try:
+        # Send initial AI status
+        if AI_API_AVAILABLE:
+            try:
+                status = await api_get_ai_status()
+                await websocket.send_json({
+                    "type": "ai_status",
+                    "data": status,
+                    "timestamp": time.time()
+                })
+            except Exception as e:
+                logging.warning(f"Failed to send initial AI status: {e}")
+        
+        # Keep connection alive and handle incoming messages
+        while True:
+            try:
+                # Wait for client messages (ping/pong, requests, etc.)
+                data = await websocket.receive_json()
+                
+                # Handle different message types
+                if data.get("type") == "ping":
+                    await websocket.send_json({"type": "pong", "timestamp": time.time()})
+                
+                elif data.get("type") == "request_insights":
+                    if AI_API_AVAILABLE:
+                        try:
+                            insights = await api_get_ai_insights()
+                            await websocket.send_json({
+                                "type": "ai_insights", 
+                                "data": insights,
+                                "timestamp": time.time()
+                            })
+                        except Exception as e:
+                            await websocket.send_json({
+                                "type": "error",
+                                "message": f"Failed to get AI insights: {e}",
+                                "timestamp": time.time()
+                            })
+                
+                elif data.get("type") == "request_pattern_insights":
+                    if AI_API_AVAILABLE:
+                        try:
+                            limit = data.get("limit", 10)
+                            patterns = await api_get_pattern_insights(limit)
+                            await websocket.send_json({
+                                "type": "pattern_insights",
+                                "data": patterns,
+                                "timestamp": time.time()
+                            })
+                        except Exception as e:
+                            await websocket.send_json({
+                                "type": "error",
+                                "message": f"Failed to get pattern insights: {e}",
+                                "timestamp": time.time()
+                            })
+                
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                logging.error(f"WebSocket error: {e}")
+                break
+                
+    except WebSocketDisconnect:
+        pass
+    finally:
+        ai_websocket_manager.disconnect(websocket)
+
+
+# =============================================================================
+# AI Integration Hooks
+# =============================================================================
+
+async def broadcast_ai_insights_to_clients():
+    """Get current AI insights and broadcast to WebSocket clients."""
+    if AI_API_AVAILABLE and ai_websocket_manager.active_connections:
+        try:
+            insights = await api_get_ai_insights()
+            await ai_websocket_manager.broadcast_ai_insights(insights)
+        except Exception as e:
+            logging.error(f"Failed to broadcast AI insights: {e}")
+
+
+# Helper function to notify AI system of cracking events
+async def notify_ai_cracking_success(hash_value: str, password: str, hash_type: str, strategy: str, time_taken: float):
+    """Notify AI system of successful cracking event."""
+    try:
+        from .ai_data_collector import collect_cracking_success
+        await collect_cracking_success(
+            hash_value=hash_value,
+            password=password,
+            hash_type=hash_type,
+            strategy_used=strategy,
+            time_to_crack=time_taken
+        )
+        
+        # Broadcast to WebSocket clients
+        await ai_websocket_manager.broadcast_pattern_prediction({
+            "success": True,
+            "hash_type": hash_type,
+            "pattern": password,  # Will be converted to pattern by collector
+            "strategy_used": strategy,
+            "time_to_crack": time_taken
+        })
+        
+    except Exception as e:
+        logging.error(f"Failed to notify AI of cracking success: {e}")
+
+
+async def notify_ai_strategy_change(old_strategy: str, new_strategy: str, reason: str):
+    """Notify AI system and clients of strategy change."""
+    try:
+        from .ai_data_collector import get_ai_data_collector
+        collector = get_ai_data_collector()
+        await collector.collect_strategy_switch(old_strategy, new_strategy, reason, 0.0)
+        
+        # Broadcast to WebSocket clients
+        await ai_websocket_manager.broadcast_strategy_change(old_strategy, new_strategy, reason)
+        
+    except Exception as e:
+        logging.error(f"Failed to notify AI of strategy change: {e}")
+
