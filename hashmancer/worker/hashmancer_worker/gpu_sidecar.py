@@ -263,7 +263,9 @@ class GPUSidecar(threading.Thread):
             self.worker_id,
             f"GPU {self.gpu['uuid']} processing {batch_id}",
         )
-        if (
+        if batch.get("attack_mode") == "dict_rules":
+            founds = self.run_darkling_engine(batch)
+        elif (
             self.gpu.get("pci_link_width", 16) <= 4
             and self.low_bw_engine == "darkling"
         ):
@@ -403,12 +405,20 @@ class GPUSidecar(threading.Thread):
                     cmd += ["-a", "3", batch["mask"]]
                 elif attack == "dict" and wordlist_path:
                     cmd += ["-a", "0", wordlist_path]
-                elif attack == "dict_rules" and wordlist_path:
-                    cmd += ["-a", "0", wordlist_path]
-                    if rule_path:
-                        if engine == "darkling-engine":
+                elif attack == "dict_rules" and (wordlist_path or batch.get("shards")):
+                    if engine == "darkling-engine":
+                        shards = []
+                        try:
+                            shards = json.loads(batch.get("shards", "[]"))
+                        except json.JSONDecodeError:
+                            shards = []
+                        for shard in shards:
+                            cmd += ["--shard", shard]
+                        if rule_path:
                             cmd += ["--rules", rule_path]
-                        else:
+                    else:
+                        cmd += ["-a", "0", wordlist_path]
+                        if rule_path:
                             cmd += ["-r", rule_path]
                 elif attack == "ext_rules" and wordlist_path and rule_path:
                     cmd += ["-a", "0", wordlist_path, "-r", rule_path]

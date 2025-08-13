@@ -712,12 +712,15 @@ def test_run_darkling_dict_rules(monkeypatch, tmp_path):
         "hash_mode": "0",
         "wordlist": str(wl),
         "rules": str(rules),
+        "shards": json.dumps([str(wl)]),
     }
 
     sidecar._run_engine("darkling-engine", batch)
 
     assert "--rules" in captured["cmd"]
     assert str(rules) in captured["cmd"]
+    assert "--shard" in captured["cmd"]
+    assert str(wl) in captured["cmd"]
     assert captured["env"].get("DARKLING_RULES") == str(rules)
 
 

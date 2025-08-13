@@ -117,6 +117,14 @@ Precompiled binaries are published with each release. Set the environment
 variable `DARKLING_ENGINE_URL` before running `setup.py` on a worker to
 automatically download a ready-to-use `darkling-engine`.
 
+## Dictionary Mode
+
+`darkling-engine` also provides a dictionary attack mode which consumes
+pre‑generated shard files instead of plain wordlists. Each shard is supplied via
+`--shard /path/to/shard.bin` and a ruleset JSON is referenced with
+`--rules /path/to/rules.json`. The worker automatically adds these arguments
+when processing jobs with `attack_mode == "dict_rules"`.
+
 ### Runtime Configuration
 
 The dispatcher inspects the `DARKLING_GPU_BACKEND` variable to force a
