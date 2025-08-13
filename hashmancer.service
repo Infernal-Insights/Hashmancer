@@ -1,0 +1,41 @@
+[Unit]
+Description=Hashmancer Hash Cracking Server
+Documentation=https://github.com/Infernal-Insights/Hashmancer
+After=network.target network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=HASHMANCER_DIR_PLACEHOLDER
+Environment=PYTHONPATH=HASHMANCER_DIR_PLACEHOLDER
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/bin/bash -c 'cd HASHMANCER_DIR_PLACEHOLDER && HASHMANCER_DIR_PLACEHOLDER/scripts/pre-start-check.sh'
+ExecStart=HASHMANCER_DIR_PLACEHOLDER/scripts/start-hashmancer.sh
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/bin/kill -TERM $MAINPID
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStartSec=30
+TimeoutStopSec=30
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hashmancer
+
+# Security settings
+NoNewPrivileges=false
+PrivateTmp=false
+ProtectSystem=false
+ProtectHome=false
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target
