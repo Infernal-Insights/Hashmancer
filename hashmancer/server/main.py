@@ -147,13 +147,7 @@ importlib.reload(_app_module)
 app = _app_module.app
 PortalAuthMiddleware = _app_module.PortalAuthMiddleware
 
-# Mount static files for React frontend
-from fastapi.staticfiles import StaticFiles
-static_dir = Path(__file__).parent / "static"
-if static_dir.exists():
-    # Mount static files at root to serve React assets correctly
-    app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+# Static file serving removed - using original portal interface
 
 if hasattr(app, "exception_handler"):
     @app.exception_handler(redis.exceptions.RedisError)
@@ -797,15 +791,6 @@ async def server_status():
         return {"error": str(e)}
 
 
-@app.get("/glyph", response_class=HTMLResponse)
-async def glyph_page():
-    """Serve the Glyph dashboard page."""
-    try:
-        html_path = Path(__file__).parent / "glyph.html"
-        return html_path.read_text()
-    except Exception as e:
-        log_error("server", "system", "S711", "Failed to load Glyph dashboard", e)
-        return HTMLResponse("<h1>Dashboard not available</h1>", status_code=500)
 
 
 @app.get("/workers")
@@ -1854,24 +1839,12 @@ async def get_csrf_token():
 @app.get("/", response_class=HTMLResponse)
 @app.get("/portal", response_class=HTMLResponse)
 async def portal_page():
-    """Serve the React frontend."""
+    """Serve the original portal interface."""
     try:
-        # Serve React app index.html
-        html_path = Path(__file__).parent / "static" / "index.html"
-        if html_path.exists():
-            content = html_path.read_text()
-            
-            # Inject CSRF token into the HTML
-            csrf_token = generate_csrf_token()
-            csrf_meta = f'<meta name="csrf-token" content="{csrf_token}">'
-            content = content.replace('<head>', f'<head>\n{csrf_meta}')
-            
-            return HTMLResponse(content)
-        else:
-            # Fallback to old portal if React build doesn't exist
-            html_path = Path(__file__).parent / "portal_enhanced.html"
-            if not html_path.exists():
-                html_path = Path(__file__).parent / "portal.html"
+        # Serve the enhanced portal, fallback to basic portal
+        html_path = Path(__file__).parent / "portal_enhanced.html"
+        if not html_path.exists():
+            html_path = Path(__file__).parent / "portal.html"
                 
             content = html_path.read_text()
             
@@ -2242,28 +2215,3 @@ async def api_get_validation_stats():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-# Catch-all route for React Router (SPA routing)
-@app.get("/{full_path:path}", response_class=HTMLResponse)
-async def catch_all(full_path: str):
-    """Catch-all route to serve React app for client-side routing."""
-    # Don't serve React app for API routes
-    if full_path.startswith("api/") or full_path.startswith("ws/"):
-        raise HTTPException(status_code=404, detail="Not found")
-    
-    # Serve React app index.html for any unmatched routes
-    try:
-        html_path = Path(__file__).parent / "static" / "index.html"
-        if html_path.exists():
-            content = html_path.read_text()
-            
-            # Inject CSRF token into the HTML
-            csrf_token = generate_csrf_token()
-            csrf_meta = f'<meta name="csrf-token" content="{csrf_token}">'
-            content = content.replace('<head>', f'<head>\n{csrf_meta}')
-            
-            return HTMLResponse(content)
-        else:
-            raise HTTPException(status_code=404, detail="Not found")
-    except Exception as e:
-        log_error("server", "system", "S731", "Failed to serve SPA route", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
