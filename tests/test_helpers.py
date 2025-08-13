@@ -47,7 +47,7 @@ class BaseModel:
 
 # FastAPI stub
 fastapi_stub = types.ModuleType("fastapi")
-fastapi_stub.FastAPI = lambda: FakeApp()
+fastapi_stub.FastAPI = lambda *a, **kw: FakeApp()
 fastapi_stub.UploadFile = object
 fastapi_stub.File = lambda *a, **kw: None
 fastapi_stub.WebSocket = object
