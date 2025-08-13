@@ -1,4 +1,5 @@
 #include <cuda_runtime.h>
+#include <stdio.h>
 #include "darkling_rules.h"
 #include "darkling_device_queue.h"
 #include "darkling_telemetry.h"
@@ -12,6 +13,13 @@ extern "C" __device__ void rule_suffix_d4(uint8_t* dst, const uint8_t* src, uint
 __global__ void persistent_kernel(const uint8_t* words, const uint32_t* offsets, DlTelemetry* tel) {
   DlWorkItem item;
   while (dq_pop(&item)) {
+    if (item.word_count == 0) continue;
+    uint32_t end = offsets[item.word_start + item.word_count];
+    uint32_t last = offsets[item.word_start + item.word_count - 1];
+    if (end <= last) {
+      printf("missing sentinel for word range %u-%u\n", item.word_start, item.word_start + item.word_count);
+      continue;
+    }
     for (uint32_t i = 0; i < item.word_count; ++i) {
       uint32_t idx = item.word_start + i;
       const uint8_t* src = words + offsets[idx];
