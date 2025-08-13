@@ -16,8 +16,8 @@ add_library(darkling
 
 target_include_directories(darkling PUBLIC include)
 
-add_executable(main_demo src/main_demo.cu)
-target_link_libraries(main_demo PRIVATE darkling)
+add_executable(main src/main.cu)
+target_link_libraries(main PRIVATE darkling)
 
 enable_testing()
 add_executable(test_loader tests/test_loader.cpp)
