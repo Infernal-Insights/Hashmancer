@@ -14,10 +14,14 @@ bool dl_map_shard(const char* path, DlShardView* out) {
   if (fread(data,1,size,f)!=size) { fclose(f); free(data); return false; }
   fclose(f);
   uint32_t count = ((uint32_t*)data)[0];
+  size_t header = sizeof(uint32_t) + (count + 1) * sizeof(uint32_t);
+  if (size < header) { free(data); return false; }
   out->base = data;
   out->offsets = (uint32_t*)(data + sizeof(uint32_t));
   out->count = count;
-  out->words_offset = sizeof(uint32_t) + count*sizeof(uint32_t);
+  out->words_offset = header;
+  uint32_t sentinel = out->offsets[count];
+  if (out->words_offset + sentinel > size) { free(data); return false; }
   return true;
 }
 
