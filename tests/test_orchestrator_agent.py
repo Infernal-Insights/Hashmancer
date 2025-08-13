@@ -3,6 +3,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 import json
+import pytest
 from utils import redis_manager
 
 import orchestrator_agent
@@ -299,7 +300,11 @@ def test_dispatch_priority_first(monkeypatch):
     assert "2" in ids
 
 
-def test_attack_mode_dict_rules(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "rulefile, expected",
+    [("ruleset.json", "dict_rules"), ("common.rules", "ext_rules")],
+)
+def test_attack_mode_with_rules(monkeypatch, tmp_path, rulefile, expected):
     wl = tmp_path / "wl.txt"
     wl.write_text("pass\n")
     fake = DRBase()
@@ -307,7 +312,7 @@ def test_attack_mode_dict_rules(monkeypatch, tmp_path):
     fake.store["batch:1"] = {
         "hashes": json.dumps(["h"]),
         "wordlist": str(wl),
-        "rules": "ruleset.json",
+        "rules": rulefile,
     }
     setup_common(monkeypatch, fake)
     monkeypatch.setattr(orchestrator_agent, "compute_backlog_target", lambda: 1)
@@ -319,30 +324,6 @@ def test_attack_mode_dict_rules(monkeypatch, tmp_path):
 
     stream, mapping = fake.streams[0]
     job = fake.jobs[f"job:{mapping['job_id']}"]
-    assert job["attack_mode"] == "dict_rules"
-    assert job["rules"] == "ruleset.json"
-
-
-def test_attack_mode_ext_rules(monkeypatch, tmp_path):
-    wl = tmp_path / "wl.txt"
-    wl.write_text("pass\n")
-    fake = DRBase()
-    fake.queue.append("1")
-    fake.store["batch:1"] = {
-        "hashes": json.dumps(["h"]),
-        "wordlist": str(wl),
-        "rules": "common.rules",
-    }
-    setup_common(monkeypatch, fake)
-    monkeypatch.setattr(orchestrator_agent, "compute_backlog_target", lambda: 1)
-    monkeypatch.setattr(orchestrator_agent, "pending_count", lambda *a, **k: 0)
-    monkeypatch.setattr(orchestrator_agent, "any_darkling_workers", lambda: False)
-    monkeypatch.setattr(orchestrator_agent, "cache_wordlist", lambda p: "key")
-
-    orchestrator_agent.dispatch_batches()
-
-    stream, mapping = fake.streams[0]
-    job = fake.jobs[f"job:{mapping['job_id']}"]
-    assert job["attack_mode"] == "ext_rules"
-    assert job["rules"] == "common.rules"
+    assert job["attack_mode"] == expected
+    assert job["rules"] == rulefile
 

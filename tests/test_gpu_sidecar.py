@@ -649,7 +649,7 @@ def test_cached_wordlist_loaded(monkeypatch):
     assert not Path(wl_path).exists()
 
 
-def test_run_hashcat_ext_rules(monkeypatch, tmp_path):
+def test_execute_job_ext_rules_hashcat(monkeypatch, tmp_path):
     sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 0}, "http://sv")
     monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
 
@@ -678,13 +678,14 @@ def test_run_hashcat_ext_rules(monkeypatch, tmp_path):
         "rules": str(rules),
     }
 
-    sidecar.run_hashcat(batch)
+    sidecar.execute_job(batch)
 
+    assert captured["cmd"][0] == "hashcat"
     assert "-r" in captured["cmd"]
     assert str(rules) in captured["cmd"]
 
 
-def test_run_darkling_dict_rules(monkeypatch, tmp_path):
+def test_execute_job_dict_rules_darkling(monkeypatch, tmp_path):
     sidecar = gpu_sidecar.GPUSidecar("worker", {"uuid": "gpu", "index": 0}, "http://sv")
     monkeypatch.setattr(gpu_sidecar, "r", FakeRedis())
 
@@ -715,8 +716,9 @@ def test_run_darkling_dict_rules(monkeypatch, tmp_path):
         "shards": json.dumps([str(wl)]),
     }
 
-    sidecar._run_engine("darkling-engine", batch)
+    sidecar.execute_job(batch)
 
+    assert captured["cmd"][0] == "darkling-engine"
     assert "--rules" in captured["cmd"]
     assert str(rules) in captured["cmd"]
     assert "--shard" in captured["cmd"]
