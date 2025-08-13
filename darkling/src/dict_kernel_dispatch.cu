@@ -5,10 +5,10 @@
 #include "darkling_telemetry.h"
 #include "hash_primitives.cuh"
 
-extern "C" __device__ void rule_prefix_1(uint8_t* dst, const uint8_t* src, uint32_t len,
-                                         const RuleParams* params, uint32_t variant_idx, uint32_t variant_count);
-extern "C" __device__ void rule_suffix_d4(uint8_t* dst, const uint8_t* src, uint32_t len,
-                                           const RuleParams* params, uint32_t variant_idx, uint32_t variant_count);
+extern "C" __device__ uint32_t rule_prefix_1(uint8_t* dst, const uint8_t* src, uint32_t len,
+                                             const RuleParams* params, uint32_t variant_idx, uint32_t variant_count);
+extern "C" __device__ uint32_t rule_suffix_d4(uint8_t* dst, const uint8_t* src, uint32_t len,
+                                               const RuleParams* params, uint32_t variant_idx, uint32_t variant_count);
 
 __global__ void persistent_kernel(const uint8_t* words, const uint32_t* offsets, DlTelemetry* tel) {
   DlWorkItem item;
@@ -31,9 +31,9 @@ __global__ void persistent_kernel(const uint8_t* words, const uint32_t* offsets,
       DlRuleDispatch disp = g_dispatch[rule.shape];
       uint8_t tmp[64];
       for (uint32_t v = 0; v < 1; ++v) {
-        disp.fn(tmp, src, len, &params, v, disp.variants);
+        uint32_t candidate_len = disp.fn(tmp, src, len, &params, v, disp.variants);
         uint32_t dig[4];
-        md5_hash(tmp, len+1, dig);
+        md5_hash(tmp, candidate_len, dig);
         atomicAdd(&tel->candidates_generated, 1ULL);
       }
       atomicAdd(&tel->words_processed, 1ULL);
