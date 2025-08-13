@@ -1,0 +1,14 @@
+.version 7.0
+.target sm_52
+.address_size 64
+
+.visible .func rule_apply(
+    .param .u64 dst,
+    .param .u64 src,
+    .param .u32 len,
+    .param .u64 params,
+    .param .u32 variant_idx,
+    .param .u32 variant_count)
+{
+    ret;
+}
