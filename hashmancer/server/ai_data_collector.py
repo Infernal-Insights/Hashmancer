@@ -240,7 +240,9 @@ class AIDataCollector:
             recent_patterns = self.redis_client.lrange("ai:recent_patterns", 0, 10)
             
             if recent_patterns:
-                previous_pattern = recent_patterns[0].decode() if recent_patterns else ""
+                previous_pattern = recent_patterns[0]
+                if isinstance(previous_pattern, bytes):
+                    previous_pattern = previous_pattern.decode()
                 
                 if previous_pattern and previous_pattern != current_pattern:
                     transition = PatternTransition(
@@ -318,22 +320,19 @@ class AIDataCollector:
             # Write cracking events
             if self.cracking_events:
                 await self._write_jsonl_data(self.cracking_events_file, self.cracking_events)
-                log_info("ai_data", "collector", "Flushed cracking events", 
-                        {"count": len(self.cracking_events)})
+                logging.info(f"AI Data Collector: Flushed {len(self.cracking_events)} cracking events")
                 self.cracking_events.clear()
             
             # Write strategy metrics
             if self.strategy_metrics:
                 metrics_list = list(self.strategy_metrics.values())
                 await self._write_jsonl_data(self.strategy_metrics_file, metrics_list)
-                log_info("ai_data", "collector", "Flushed strategy metrics",
-                        {"count": len(metrics_list)})
+                logging.info(f"AI Data Collector: Flushed {len(metrics_list)} strategy metrics")
             
             # Write pattern transitions
             if self.pattern_transitions:
                 await self._write_jsonl_data(self.pattern_transitions_file, self.pattern_transitions)
-                log_info("ai_data", "collector", "Flushed pattern transitions",
-                        {"count": len(self.pattern_transitions)})
+                logging.info(f"AI Data Collector: Flushed {len(self.pattern_transitions)} pattern transitions")
                 self.pattern_transitions.clear()
                 
         except Exception as e:

@@ -103,7 +103,7 @@ from argon2 import PasswordHasher
 from .pattern_to_mask import get_top_masks
 import psutil
 from . import wordlist_db
-from typing import Any
+from typing import Any, Dict, List
 from collections.abc import Coroutine
 from hashmancer.hash_algos import HASHCAT_ALGOS
 from .app import config as _config
