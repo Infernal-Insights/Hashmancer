@@ -1,0 +1,96 @@
+.version 8.0
+.target sm_80
+.address_size 64
+
+// Optimized vectorized memory copy rule using 128-bit operations
+.visible .func rule_vectorized_copy(
+    .param .u64 dst_ptr,
+    .param .u64 src_ptr,
+    .param .u32 src_len,
+    .param .u64 params_ptr,
+    .param .u32 variant_idx,
+    .param .u32 variant_count)
+{
+    .reg .u64 %rd<10>;
+    .reg .u32 %r<10>;
+    .reg .v4 .u32 %vec<5>;
+    .reg .pred %p<5>;
+    
+    ld.param.u64 %rd1, [dst_ptr];
+    ld.param.u64 %rd2, [src_ptr];
+    ld.param.u32 %r1, [src_len];
+    
+    // Check alignment for vectorized operations
+    and.b64 %rd3, %rd1, 15;  // dst % 16
+    and.b64 %rd4, %rd2, 15;  // src % 16
+    or.b64 %rd5, %rd3, %rd4;
+    setp.eq.u64 %p1, %rd5, 0;  // both aligned?
+    
+    // Check if length >= 16 for vectorization
+    setp.ge.u32 %p2, %r1, 16;
+    and.pred %p3, %p1, %p2;
+    
+    @!%p3 bra scalar_copy;
+    
+vectorized_copy:
+    // Calculate number of 16-byte chunks
+    shr.u32 %r2, %r1, 4;       // chunks = len / 16
+    shl.u32 %r3, %r2, 4;       // bytes_copied = chunks * 16
+    sub.u32 %r4, %r1, %r3;     // remainder = len - bytes_copied
+    
+    mov.u32 %r5, 0;            // chunk counter
+    
+vec_loop:
+    setp.ge.u32 %p4, %r5, %r2;
+    @%p4 bra vec_remainder;
+    
+    shl.u32 %r6, %r5, 4;       // offset = i * 16
+    add.u64 %rd6, %rd2, %r6;   // src + offset
+    add.u64 %rd7, %rd1, %r6;   // dst + offset
+    
+    ld.v4.u32 %vec1, [%rd6];   // Load 16 bytes
+    st.v4.u32 [%rd7], %vec1;   // Store 16 bytes
+    
+    add.u32 %r5, %r5, 1;
+    bra vec_loop;
+    
+vec_remainder:
+    // Handle remaining bytes < 16
+    setp.eq.u32 %p5, %r4, 0;
+    @%p5 bra copy_done;
+    
+    add.u64 %rd8, %rd2, %r3;   // src + bytes_copied
+    add.u64 %rd9, %rd1, %r3;   // dst + bytes_copied
+    mov.u32 %r7, 0;
+    
+remainder_loop:
+    setp.ge.u32 %p6, %r7, %r4;
+    @%p6 bra copy_done;
+    
+    add.u64 %rd10, %rd8, %r7;
+    add.u64 %rd11, %rd9, %r7;
+    ld.u8 %r8, [%rd10];
+    st.u8 [%rd11], %r8;
+    
+    add.u32 %r7, %r7, 1;
+    bra remainder_loop;
+
+scalar_copy:
+    // Fallback to byte-by-byte copy
+    mov.u32 %r9, 0;
+    
+scalar_loop:
+    setp.ge.u32 %p7, %r9, %r1;
+    @%p7 bra copy_done;
+    
+    add.u64 %rd12, %rd2, %r9;
+    add.u64 %rd13, %rd1, %r9;
+    ld.u8 %r10, [%rd12];
+    st.u8 [%rd13], %r10;
+    
+    add.u32 %r9, %r9, 1;
+    bra scalar_loop;
+    
+copy_done:
+    ret;
+}

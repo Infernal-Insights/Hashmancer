@@ -13,9 +13,11 @@ void dl_rules_load_json(const char* path) {
   memset(host_rules, 0, sizeof(host_rules));
   host_rules[0].shape = PREFIX_1;
   host_rules[0].max_len = 32;
+  host_rules[0].length_delta = 1;  // Adds 1 character
   host_rules[0].params[0] = 0;
   host_rules[1].shape = SUFFIX_D4;
   host_rules[1].max_len = 32;
+  host_rules[1].length_delta = 4;  // Adds 4 digits
   cudaMemcpyToSymbol(g_rules, host_rules, sizeof(host_rules));
 
   DlRuleDispatch disp[6];

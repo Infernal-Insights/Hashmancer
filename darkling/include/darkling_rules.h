@@ -7,7 +7,8 @@ enum DlRuleShape : uint8_t { PREFIX_1, SUFFIX_D4, CASE_TOGGLE, LEET_LIGHT, SUFFI
 struct DlRuleMC {
   uint8_t  shape;
   uint8_t  max_len;
-  uint16_t flags;
+  int8_t   length_delta;
+  uint8_t  flags;
   uint8_t  params[16];
 };
 

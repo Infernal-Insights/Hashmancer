@@ -1,14 +1,78 @@
-.version 7.0
-.target sm_52
+.version 8.0
+.target sm_75
 .address_size 64
 
-.visible .func rule_apply(
-    .param .u64 dst,
-    .param .u64 src,
-    .param .u32 len,
-    .param .u64 params,
+.visible .func rule_suffix_d4(
+    .param .u64 dst_ptr,
+    .param .u64 src_ptr,
+    .param .u32 src_len,
+    .param .u64 params_ptr,
     .param .u32 variant_idx,
     .param .u32 variant_count)
 {
+    .reg .u64 %rd<10>;
+    .reg .u32 %r<15>;
+    .reg .u8  %b<5>;
+    
+    ld.param.u64 %rd1, [dst_ptr];
+    ld.param.u64 %rd2, [src_ptr];
+    ld.param.u32 %r1, [src_len];
+    ld.param.u32 %r2, [variant_idx];
+    
+    // Copy source to destination first
+    mov.u32 %r3, 0;
+    
+src_copy_loop:
+    setp.ge.u32 %p1, %r3, %r1;
+    @%p1 bra src_copy_done;
+    
+    add.u64 %rd7, %rd2, %r3;  // src + i
+    add.u64 %rd8, %rd1, %r3;  // dst + i
+    ld.u8 %b1, [%rd7];
+    st.u8 [%rd8], %b1;
+    
+    add.u32 %r3, %r3, 1;
+    bra src_copy_loop;
+    
+src_copy_done:
+    // Extract digits from variant_idx (0-9999)
+    // r2 = variant_idx
+    
+    // ones = variant % 10
+    rem.u32 %r4, %r2, 10;
+    add.u32 %r4, %r4, 48;  // + '0'
+    
+    // tens = (variant / 10) % 10
+    div.u32 %r5, %r2, 10;
+    rem.u32 %r5, %r5, 10;
+    add.u32 %r5, %r5, 48;  // + '0'
+    
+    // hundreds = (variant / 100) % 10
+    div.u32 %r6, %r2, 100;
+    rem.u32 %r6, %r6, 10;
+    add.u32 %r6, %r6, 48;  // + '0'
+    
+    // thousands = (variant / 1000) % 10
+    div.u32 %r7, %r2, 1000;
+    rem.u32 %r7, %r7, 10;
+    add.u32 %r7, %r7, 48;  // + '0'
+    
+    // Store digits at dst[len+0..3]
+    add.u64 %rd3, %rd1, %r1;     // dst + len
+    cvt.u8.u32 %b2, %r4;
+    st.u8 [%rd3], %b2;           // ones
+    
+    add.u64 %rd4, %rd3, 1;
+    cvt.u8.u32 %b3, %r5;
+    st.u8 [%rd4], %b3;           // tens
+    
+    add.u64 %rd5, %rd3, 2;
+    cvt.u8.u32 %b4, %r6;
+    st.u8 [%rd5], %b4;           // hundreds
+    
+    add.u64 %rd6, %rd3, 3;
+    cvt.u8.u32 %b5, %r7;
+    st.u8 [%rd6], %b5;           // thousands
+    
     ret;
 }

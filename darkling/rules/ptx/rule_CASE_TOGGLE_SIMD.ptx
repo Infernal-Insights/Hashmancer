@@ -1,0 +1,131 @@
+.version 8.0
+.target sm_80
+.address_size 64
+
+// SIMD case toggling with bit manipulation optimization
+.visible .func rule_case_toggle_simd(
+    .param .u64 dst_ptr,
+    .param .u64 src_ptr,
+    .param .u32 src_len,
+    .param .u64 params_ptr,
+    .param .u32 variant_idx,
+    .param .u32 variant_count)
+{
+    .reg .u64 %rd<15>;
+    .reg .u32 %r<20>;
+    .reg .v4 .u32 %vec<10>;
+    .reg .pred %p<10>;
+    
+    ld.param.u64 %rd1, [dst_ptr];
+    ld.param.u64 %rd2, [src_ptr];
+    ld.param.u32 %r1, [src_len];
+    
+    // SIMD constants for case toggling
+    // Mask to check if char is letter: 0x40404040 (bit 6 set)
+    mov.v4.u32 %vec1, {0x40404040, 0x40404040, 0x40404040, 0x40404040};
+    // XOR mask for case toggle: 0x20202020 (bit 5)
+    mov.v4.u32 %vec2, {0x20202020, 0x20202020, 0x20202020, 0x20202020};
+    // Mask for uppercase check: 0x5F5F5F5F (mask out bit 5)
+    mov.v4.u32 %vec3, {0x5F5F5F5F, 0x5F5F5F5F, 0x5F5F5F5F, 0x5F5F5F5F};
+    // Range check constants for A-Z (0x41-0x5A -> 0x01-0x1A after mask)
+    mov.v4.u32 %vec4, {0x01010101, 0x01010101, 0x01010101, 0x01010101};
+    mov.v4.u32 %vec5, {0x1A1A1A1A, 0x1A1A1A1A, 0x1A1A1A1A, 0x1A1A1A1A};
+    
+    // Check alignment for SIMD processing
+    and.b64 %rd3, %rd1, 15;
+    and.b64 %rd4, %rd2, 15;
+    or.b64 %rd5, %rd3, %rd4;
+    setp.eq.u64 %p1, %rd5, 0;
+    setp.ge.u32 %p2, %r1, 16;
+    and.pred %p3, %p1, %p2;
+    
+    @!%p3 bra scalar_toggle;
+    
+simd_toggle:
+    shr.u32 %r2, %r1, 4;       // chunks = len / 16
+    shl.u32 %r3, %r2, 4;       // bytes_processed
+    mov.u32 %r4, 0;            // chunk counter
+    
+simd_loop:
+    setp.ge.u32 %p4, %r4, %r2;
+    @%p4 bra simd_remainder;
+    
+    shl.u32 %r5, %r4, 4;
+    add.u64 %rd6, %rd2, %r5;
+    add.u64 %rd7, %rd1, %r5;
+    
+    // Load 16 bytes
+    ld.v4.u32 %vec6, [%rd6];
+    
+    // Check if characters are letters using bit manipulation
+    // For each byte: if ((c & 0x5F) >= 0x41 && (c & 0x5F) <= 0x5A) toggle bit 5
+    and.v4.u32 %vec7, %vec6, %vec3;    // mask out bit 5
+    sub.v4.u32 %vec8, %vec7, %vec4;    // subtract 0x41 (A)
+    setp.le.v4.u32 %p5, %vec8, %vec5;  // check if <= 0x1A (Z-A)
+    
+    // Apply case toggle where letters detected
+    selp.v4.u32 %vec9, %vec2, 0, %p5;  // select toggle mask or 0
+    xor.v4.u32 %vec10, %vec6, %vec9;   // apply toggle
+    
+    // Store result
+    st.v4.u32 [%rd7], %vec10;
+    
+    add.u32 %r4, %r4, 1;
+    bra simd_loop;
+    
+simd_remainder:
+    // Handle remaining bytes
+    sub.u32 %r6, %r1, %r3;
+    setp.eq.u32 %p6, %r6, 0;
+    @%p6 bra toggle_done;
+    
+    add.u64 %rd8, %rd2, %r3;
+    add.u64 %rd9, %rd1, %r3;
+    mov.u32 %r7, 0;
+    
+remainder_loop:
+    setp.ge.u32 %p7, %r7, %r6;
+    @%p7 bra toggle_done;
+    
+    add.u64 %rd10, %rd8, %r7;
+    add.u64 %rd11, %rd9, %r7;
+    ld.u8 %r8, [%rd10];
+    
+    // Scalar case toggle
+    and.u32 %r9, %r8, 0x5F;     // mask bit 5
+    sub.u32 %r10, %r9, 0x41;    // subtract 'A'
+    setp.le.u32 %p8, %r10, 25;  // check if letter
+    selp.u32 %r11, 0x20, 0, %p8; // select toggle or 0
+    xor.u32 %r12, %r8, %r11;    // apply toggle
+    
+    st.u8 [%rd11], %r12;
+    
+    add.u32 %r7, %r7, 1;
+    bra remainder_loop;
+    
+scalar_toggle:
+    // Pure scalar fallback
+    mov.u32 %r13, 0;
+    
+scalar_loop:
+    setp.ge.u32 %p9, %r13, %r1;
+    @%p9 bra toggle_done;
+    
+    add.u64 %rd12, %rd2, %r13;
+    add.u64 %rd13, %rd1, %r13;
+    ld.u8 %r14, [%rd12];
+    
+    and.u32 %r15, %r14, 0x5F;
+    sub.u32 %r16, %r15, 0x41;
+    setp.le.u32 %p10, %r16, 25;
+    selp.u32 %r17, 0x20, 0, %p10;
+    xor.u32 %r18, %r14, %r17;
+    
+    st.u8 [%rd13], %r18;
+    
+    add.u32 %r13, %r13, 1;
+    bra scalar_loop;
+    
+toggle_done:
+    ret;
+}
