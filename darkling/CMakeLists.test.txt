@@ -1,0 +1,62 @@
+cmake_minimum_required(VERSION 3.18)
+project(darkling_test LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+
+# Create a simplified build for CLI testing without CUDA
+add_library(darkling_stub
+  src/hashcat_rule_parser.cpp
+)
+
+# Stub implementations for missing functions
+file(WRITE ${CMAKE_BINARY_DIR}/stub_functions.cpp "
+#include \"darkling_rule_manager.h\"
+#include <cstring>
+
+// Stub implementations for testing CLI interface only
+DlRuleManager* dl_create_rule_manager(void) { return (DlRuleManager*)1; }
+void dl_destroy_rule_manager(DlRuleManager* manager) {}
+bool dl_load_builtin_rules(DlRuleManager* manager) { return true; }
+bool dl_load_ptx_rules(DlRuleManager* manager) { return true; }
+bool dl_load_user_rules_from_file(DlRuleManager* manager, const char* filepath, const char* name) { return true; }
+
+const DlRuleSet* dl_get_builtin_best64(DlRuleManager* manager) {
+    static DlRuleSet stub_rules;
+    stub_rules.rule_count = 64;
+    return &stub_rules;
+}
+
+void dl_execute_rule_batch_gpu(const DlRuleSet* rule_set, 
+                               const uint8_t* input_words, const uint32_t* input_lengths,
+                               uint8_t* output_candidates, uint32_t* output_lengths,
+                               uint32_t word_count, uint32_t max_output_length) {
+    // Stub implementation
+}
+
+// Legacy rule functions
+void dl_rules_load_json(const char* filepath) {}
+
+// CUDA stubs
+int cudaSetDevice(int device) { return 0; }
+const char* cudaGetErrorString(int error) { return \"Success\"; }
+int cudaMalloc(void** devPtr, size_t size) { *devPtr = malloc(size); return 0; }
+int cudaFree(void* devPtr) { free(devPtr); return 0; }
+int cudaMemcpy(void* dst, const void* src, size_t count, int kind) { memcpy(dst, src, count); return 0; }
+int cudaMemset(void* devPtr, int value, size_t count) { memset(devPtr, value, count); return 0; }
+int cudaDeviceSynchronize(void) { return 0; }
+int cudaMemcpyToSymbol(const void* symbol, const void* src, size_t count) { return 0; }
+")
+
+add_library(darkling_stub ${CMAKE_BINARY_DIR}/stub_functions.cpp src/hashcat_rule_parser.cpp)
+target_include_directories(darkling_stub PUBLIC include)
+
+# CLI test executable with stubs
+add_executable(main_cli_test src/main.cu)
+set_source_files_properties(src/main.cu PROPERTIES LANGUAGE CXX)
+target_link_libraries(main_cli_test PRIVATE darkling_stub)
+target_include_directories(main_cli_test PRIVATE include)
+
+# Integration test
+add_executable(test_cli_integration tests/test_cli_integration.cpp)
+target_link_libraries(test_cli_integration PRIVATE darkling_stub)
+target_include_directories(test_cli_integration PRIVATE include)

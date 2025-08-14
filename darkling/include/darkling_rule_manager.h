@@ -184,6 +184,17 @@ enum DlRuleError {
     DL_RULE_ERROR_PTX_NOT_AVAILABLE = 6
 };
 
+// Hashcat rule parsing
+#ifdef __cplusplus
+extern "C" {
+#endif
+bool dl_parse_hashcat_rules(const char* filepath, DlRuleSet* rule_set, const char* name);
+bool dl_validate_hashcat_rule_string(const char* rule_str);
+uint32_t dl_count_hashcat_rules(const char* filepath);
+#ifdef __cplusplus
+}
+#endif
+
 // Utility functions
 const char* dl_rule_error_string(enum DlRuleError error);
 bool dl_is_rule_destructive(const DlCompiledRule* rule);  // Does rule potentially reduce keyspace?

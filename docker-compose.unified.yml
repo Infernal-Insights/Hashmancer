@@ -1,0 +1,192 @@
+version: '3.8'
+
+services:
+  # Unified Hashmancer Server (API + NFS + Management)
+  hashmancer-unified:
+    build: 
+      context: .
+      dockerfile: server/Dockerfile.unified
+    ports:
+      - "8080:8080"      # Main API
+      - "9090:9090"      # Metrics
+      - "2049:2049"      # NFS
+      - "111:111"        # RPC portmapper
+      - "111:111/udp"    # RPC portmapper UDP
+      - "32765:32768:32765:32768"  # NFS additional ports
+      - "32765:32768:32765:32768/udp"  # NFS additional ports UDP
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=info
+      - DATABASE_URL=postgresql://hashmancer:${POSTGRES_PASSWORD}@postgres:5432/hashmancer
+      - REDIS_URL=redis://redis:6379/0
+      - NFS_ENABLED=true
+      - SHARED_STORAGE_PATH=/srv/hashmancer
+    volumes:
+      - ./server:/app/server
+      - ./shared:/app/shared
+      - shared_storage:/srv/hashmancer
+      - /var/run/docker.sock:/var/run/docker.sock
+    privileged: true  # Required for NFS server
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - hashmancer-net
+    restart: unless-stopped
+
+  # Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=hashmancer
+      - POSTGRES_USER=hashmancer
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hashmancer_prod_pass_change_me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - hashmancer-net
+    restart: unless-stopped
+
+  # Redis for caching and job queues
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_prod_pass_change_me}
+    volumes:
+      - redis_data:/data
+    networks:
+      - hashmancer-net
+    restart: unless-stopped
+
+  # Monitoring Stack
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - hashmancer-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-grafana_admin_change_me}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana-datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - hashmancer-net
+    restart: unless-stopped
+
+  # Log Management
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml
+    networks:
+      - hashmancer-net
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - shared_storage:/srv/hashmancer:ro
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - hashmancer-net
+    restart: unless-stopped
+
+  # Reverse Proxy & SSL Termination
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - shared_storage:/srv/hashmancer:ro
+    depends_on:
+      - hashmancer-unified
+      - grafana
+    networks:
+      - hashmancer-net
+    restart: unless-stopped
+
+  # Backup Service
+  backup:
+    image: alpine:latest
+    volumes:
+      - shared_storage:/srv/hashmancer
+      - postgres_data:/backup/postgres
+      - redis_data:/backup/redis
+      - grafana_data:/backup/grafana
+      - ./backups:/backups
+    command: |
+      sh -c "
+        apk add --no-cache rsync postgresql-client redis &&
+        while true; do
+          echo 'Running backup...' &&
+          rsync -av /srv/hashmancer/ /backups/hashmancer-$$(date +%Y%m%d_%H%M%S)/ &&
+          pg_dump postgresql://hashmancer:${POSTGRES_PASSWORD}@postgres:5432/hashmancer > /backups/db-$$(date +%Y%m%d_%H%M%S).sql &&
+          find /backups -name 'hashmancer-*' -mtime +7 -exec rm -rf {} + &&
+          find /backups -name 'db-*' -mtime +30 -delete &&
+          echo 'Backup completed' &&
+          sleep 86400
+        done
+      "
+    networks:
+      - hashmancer-net
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  loki_data:
+    driver: local
+  shared_storage:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /srv/hashmancer
+
+networks:
+  hashmancer-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

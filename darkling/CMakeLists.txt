@@ -50,6 +50,7 @@ add_library(darkling
   src/markov_chain_engine.cu
   src/rule_manager.cu
   src/rule_upload_handler.cpp
+  src/hashcat_rule_parser.cpp
   ${CMAKE_BINARY_DIR}/ptx_rules.o
 )
 

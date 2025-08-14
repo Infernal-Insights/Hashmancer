@@ -190,8 +190,10 @@ __device__ void apply_interpreted_rule(uint8_t* output, const uint8_t* input, ui
 
 // Host implementation
 class RuleManagerImpl {
-private:
+public:
     DlRuleSet builtin_best64;
+    
+private:
     std::vector<DlRuleSet> user_rule_sets;
     DlRuleFunctionTable function_table;
     DlRuleConfig config;
@@ -452,6 +454,12 @@ bool dl_load_builtin_rules(DlRuleManager* manager) {
 
 bool dl_load_ptx_rules(DlRuleManager* manager) {
     return reinterpret_cast<RuleManagerImpl*>(manager)->load_ptx_rules();
+}
+
+const DlRuleSet* dl_get_builtin_best64(DlRuleManager* manager) {
+    if (!manager) return nullptr;
+    RuleManagerImpl* impl = reinterpret_cast<RuleManagerImpl*>(manager);
+    return &impl->builtin_best64;
 }
 
 bool dl_load_user_rules_from_file(DlRuleManager* manager, const char* filepath, const char* name) {
