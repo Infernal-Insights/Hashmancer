@@ -76,6 +76,10 @@ add_custom_target(generate_ptx_rules
 
 add_dependencies(darkling generate_ptx_rules)
 
+# Main executables
+add_executable(main src/main.cu)
+target_link_libraries(main PRIVATE darkling)
+
 add_executable(main_demo src/main_demo.cu)
 target_link_libraries(main_demo PRIVATE darkling)
 

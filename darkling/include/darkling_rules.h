@@ -14,8 +14,9 @@ struct DlRuleMC {
 
 struct RuleParams { uint8_t bytes[16]; };
 
-typedef void (*RuleFn)(uint8_t* dst, const uint8_t* src, uint32_t len,
-                       const RuleParams* params, uint32_t variant_idx, uint32_t variant_count);
+typedef uint32_t (*RuleFn)(uint8_t* dst, const uint8_t* src, uint32_t len,
+                           const RuleParams* params, uint32_t variant_idx,
+                           uint32_t variant_count);
 
 struct DlRuleDispatch {
   DlRuleShape shape;

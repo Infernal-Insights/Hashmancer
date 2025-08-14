@@ -311,10 +311,21 @@ def dispatch_batches(lang: str = "English"):
             batch["hashes"] = json.dumps(hashes)
 
             attack = "mask"
-            if batch.get("wordlist") and batch.get("mask"):
-                attack = "hybrid"
-            elif batch.get("wordlist"):
-                attack = "dict"
+            mask = batch.get("mask")
+            wordlist = batch.get("wordlist")
+            rules = batch.get("rules")
+
+            if wordlist:
+                if rules:
+                    ext = os.path.splitext(str(rules))[1].lower()
+                    if ext in {".rule", ".rules"}:
+                        attack = "ext_rules"
+                    else:
+                        attack = "dict_rules"
+                else:
+                    attack = "dict"
+            elif mask:
+                attack = "mask"
 
             wordlist_key = ""
             if batch.get("wordlist"):
@@ -325,6 +336,7 @@ def dispatch_batches(lang: str = "English"):
                 "hashes": batch.get("hashes", "[]"),
                 "mask": batch.get("mask", ""),
                 "wordlist": batch.get("wordlist", ""),
+                "rules": batch.get("rules", ""),
                 "wordlist_key": wordlist_key,
                 "hash_mode": batch.get("hash_mode", "0"),
                 "attack_mode": attack,
@@ -346,13 +358,13 @@ def dispatch_batches(lang: str = "English"):
                 except RuntimeError:
                     pass
             else:
-                if attack == "mask" and darkling and pending_low < backlog_target:
+                if attack in ("mask", "dict_rules") and darkling and pending_low < backlog_target:
                     stream_choice = "low"
                 else:
                     stream_choice = "high"
 
             if stream_choice == "low":
-                if attack != "mask":
+                if attack not in ("mask", "dict_rules"):
                     # transform into a basic mask attack for darkling workers
                     mask_length = 8
                     if batch.get("wordlist"):
@@ -382,6 +394,7 @@ def dispatch_batches(lang: str = "English"):
                         {
                             "mask": mask,
                             "wordlist": "",
+                            "rules": "",
                             "wordlist_key": "",
                             "attack_mode": "mask",
                         }
@@ -418,7 +431,7 @@ def dispatch_batches(lang: str = "English"):
             if (
                 not use_llm
                 and darkling
-                and attack != "mask"
+                and attack not in ("mask", "dict_rules")
                 and pending_low < backlog_target
             ):
                 # transform into a basic mask attack for darkling workers
@@ -452,6 +465,7 @@ def dispatch_batches(lang: str = "English"):
                     {
                         "mask": mask,
                         "wordlist": "",
+                        "rules": "",
                         "wordlist_key": "",
                         "attack_mode": "mask",
                         "mask_charsets": json.dumps(cs_map),

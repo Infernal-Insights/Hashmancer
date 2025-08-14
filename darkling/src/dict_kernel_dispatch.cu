@@ -1,4 +1,5 @@
 #include <cuda_runtime.h>
+#include <stdio.h>
 #include "darkling_rules.h"
 #include "darkling_device_queue.h"
 #include "darkling_telemetry.h"
@@ -14,10 +15,10 @@ extern "C" __device__ void rule_case_toggle_simd_ptx(uint8_t*, const uint8_t*, u
 extern "C" __device__ void rule_leet_lookup_optimized_ptx(uint8_t*, const uint8_t*, uint32_t, const RuleParams*, uint32_t, uint32_t);
 #endif
 
-extern "C" __device__ void rule_prefix_1(uint8_t* dst, const uint8_t* src, uint32_t len,
-                                         const RuleParams* params, uint32_t variant_idx, uint32_t variant_count);
-extern "C" __device__ void rule_suffix_d4(uint8_t* dst, const uint8_t* src, uint32_t len,
-                                           const RuleParams* params, uint32_t variant_idx, uint32_t variant_count);
+extern "C" __device__ uint32_t rule_prefix_1(uint8_t* dst, const uint8_t* src, uint32_t len,
+                                             const RuleParams* params, uint32_t variant_idx, uint32_t variant_count);
+extern "C" __device__ uint32_t rule_suffix_d4(uint8_t* dst, const uint8_t* src, uint32_t len,
+                                               const RuleParams* params, uint32_t variant_idx, uint32_t variant_count);
 
 __global__ void persistent_kernel(const uint8_t* words, const uint32_t* offsets, DlTelemetry* tel) {
   DlWorkItem item;
@@ -27,6 +28,13 @@ __global__ void persistent_kernel(const uint8_t* words, const uint32_t* offsets,
     if (current_size > max_queue_size) {
       max_queue_size = current_size;
       atomicMax((unsigned long long*)&tel->queue_max_size, (unsigned long long)current_size);
+    }
+    if (item.word_count == 0) continue;
+    uint32_t end = offsets[item.word_start + item.word_count];
+    uint32_t last = offsets[item.word_start + item.word_count - 1];
+    if (end <= last) {
+      printf("missing sentinel for word range %u-%u\n", item.word_start, item.word_start + item.word_count);
+      continue;
     }
     for (uint32_t i = 0; i < item.word_count; ++i) {
       uint32_t idx = item.word_start + i;
@@ -39,11 +47,10 @@ __global__ void persistent_kernel(const uint8_t* words, const uint32_t* offsets,
       DlRuleDispatch disp = g_dispatch[rule.shape];
       uint8_t tmp[128];
       for (uint32_t v = 0; v < 1; ++v) {
-        uint32_t tmp_len = len;
-        if (tmp_len > 120) continue;
-        disp.fn(tmp, src, len, &params, v, disp.variants);
-        uint32_t dig[5];
-        md5_hash(tmp, tmp_len + rule.length_delta, dig);
+        uint32_t candidate_len = disp.fn(tmp, src, len, &params, v, disp.variants);
+        if (candidate_len > 120) continue;
+        uint32_t dig[4];
+        md5_hash(tmp, candidate_len, dig);
         atomicAdd(&tel->candidates_generated, 1ULL);
         if (check_hash(dig)) {
           atomicAdd(&tel->hits, 1ULL);

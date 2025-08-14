@@ -2,8 +2,10 @@
 #include <string.h>
 #include "darkling_rules.h"
 
-extern "C" __device__ void rule_prefix_1(uint8_t*, const uint8_t*, uint32_t, const RuleParams*, uint32_t, uint32_t);
-extern "C" __device__ void rule_suffix_d4(uint8_t*, const uint8_t*, uint32_t, const RuleParams*, uint32_t, uint32_t);
+extern "C" __device__ uint32_t rule_prefix_1(uint8_t*, const uint8_t*, uint32_t,
+                                             const RuleParams*, uint32_t, uint32_t);
+extern "C" __device__ uint32_t rule_suffix_d4(uint8_t*, const uint8_t*, uint32_t,
+                                               const RuleParams*, uint32_t, uint32_t);
 
 __device__ __constant__ DlRuleMC g_rules[256];
 __device__ __constant__ DlRuleDispatch g_dispatch[6];

@@ -263,7 +263,9 @@ class GPUSidecar(threading.Thread):
             self.worker_id,
             f"GPU {self.gpu['uuid']} processing {batch_id}",
         )
-        if (
+        if batch.get("attack_mode") == "dict_rules":
+            founds = self.run_darkling_engine(batch)
+        elif (
             self.gpu.get("pci_link_width", 16) <= 4
             and self.low_bw_engine == "darkling"
         ):
@@ -336,6 +338,7 @@ class GPUSidecar(threading.Thread):
                 restore = Path(rf.name)
 
             wordlist_path = batch.get("wordlist")
+            rule_path = batch.get("rules")
             job_id = batch.get("job_id", batch_id)
 
             if not wordlist_path or not os.path.isfile(str(wordlist_path)):
@@ -402,8 +405,23 @@ class GPUSidecar(threading.Thread):
                     cmd += ["-a", "3", batch["mask"]]
                 elif attack == "dict" and wordlist_path:
                     cmd += ["-a", "0", wordlist_path]
-                elif attack == "hybrid" and wordlist_path and batch.get("mask"):
-                    cmd += ["-a", "6", wordlist_path, batch["mask"]]
+                elif attack == "dict_rules" and (wordlist_path or batch.get("shards")):
+                    if engine == "darkling-engine":
+                        shards = []
+                        try:
+                            shards = json.loads(batch.get("shards", "[]"))
+                        except json.JSONDecodeError:
+                            shards = []
+                        for shard in shards:
+                            cmd += ["--shard", shard]
+                        if rule_path:
+                            cmd += ["--rules", rule_path]
+                    else:
+                        cmd += ["-a", "0", wordlist_path]
+                        if rule_path:
+                            cmd += ["-r", rule_path]
+                elif attack == "ext_rules" and wordlist_path and rule_path:
+                    cmd += ["-a", "0", wordlist_path, "-r", rule_path]
 
                 if engine == "darkling-engine":
                     if range_start is not None:
@@ -435,6 +453,8 @@ class GPUSidecar(threading.Thread):
                         env["DARKLING_GRID"] = str(grid)
                     if block:
                         env["DARKLING_BLOCK"] = str(block)
+                    if rule_path:
+                        env["DARKLING_RULES"] = str(rule_path)
                 self._apply_power_limit(engine)
                 proc = subprocess.Popen(
                     cmd,
@@ -560,13 +580,29 @@ class GPUSidecar(threading.Thread):
     def run_darkling_engine(self, batch: dict) -> list[str]:
         """Execute the ``darkling-engine`` with caching and batch splitting.
 
-        The method expects the external ``darkling-engine`` executable and
-        behaves similarly to :meth:`run_hashcat`. It splits large hash lists
-        into chunks of ``MAX_HASHES`` and caches mask charsets on the GPU so
-        subsequent calls avoid reloading them. When ``probabilistic_order`` is
-        enabled, a Markov model is used to generate a probability ordered list
-        of mask indices, allowing optional inverse ordering.
+        Supports both mask attacks and dictionary+rules mode. For mask attacks
+        the engine preloads mask charsets and optionally orders candidates using
+        probabilistic indexing. For dictionary+rules jobs the darkling rule
+        engine is invoked without mask handling.
         """
+
+        attack = batch.get("attack_mode", "mask")
+        hashes = json.loads(batch.get("hashes", "[]"))
+
+        if attack != "mask":
+            hash_chunks = [
+                hashes[i : i + MAX_HASHES] for i in range(0, len(hashes), MAX_HASHES)
+            ]
+            results: list[str] = []
+            for chunk in hash_chunks:
+                sub = batch.copy()
+                sub["hashes"] = json.dumps(chunk)
+                results.extend(
+                    self._run_engine(
+                        "darkling-engine", sub, skip_charsets=True
+                    )
+                )
+            return results
 
         def _count_mask(mask: str) -> int:
             count = 0
@@ -601,8 +637,6 @@ class GPUSidecar(threading.Thread):
         reload_cs = not self.darkling_ctx.matches(cs_map)
         if reload_cs:
             self.darkling_ctx.load(cs_map)
-
-        hashes = json.loads(batch.get("hashes", "[]"))
 
         hash_chunks = [
             hashes[i : i + MAX_HASHES] for i in range(0, len(hashes), MAX_HASHES)
