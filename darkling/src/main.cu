@@ -13,6 +13,9 @@
 #include "darkling_telemetry.h"
 #include "darkling_rule_manager.h"
 #include "hash_primitives.cuh"
+#include "gpu_manager.h"
+#include "rule_analytics.h"
+#include "checkpoint_manager.h"
 
 // Minimal constants for mask kernel
 #define MAX_UTF8_BYTES 4
@@ -266,6 +269,16 @@ struct CLIArgs {
     
     // Legacy Darkling options
     std::string ruleset;            // --ruleset (for backward compatibility)
+    
+    // Advanced performance options
+    bool multi_gpu = false;         // --multi-gpu
+    bool smart_rules = false;       // --smart-rules
+    std::string checkpoint_file;    // --checkpoint
+    bool resume = false;            // --resume
+    int checkpoint_interval = 300;  // --checkpoint-interval (seconds)
+    bool analytics = false;         // --analytics
+    std::string job_id;             // --job-id
+    bool benchmark = false;         // --benchmark
 };
 
 void print_usage(const char* prog) {
@@ -291,6 +304,16 @@ void print_usage(const char* prog) {
     std::printf("  -w, --workload-profile NUM Workload profile (1-4)\n");
     std::printf("  -1, -2, -3, -4 CHARSET     Custom charset\n");
     std::printf("  --ruleset FILE             Legacy ruleset JSON file\n");
+    std::printf("\n");
+    std::printf("Advanced Performance Options:\n");
+    std::printf("  --multi-gpu                Enable multi-GPU acceleration\n");
+    std::printf("  --smart-rules              Use AI-powered rule selection\n");
+    std::printf("  --checkpoint FILE          Checkpoint file for resume\n");
+    std::printf("  --resume                   Resume from checkpoint\n");
+    std::printf("  --checkpoint-interval SEC  Auto-checkpoint interval\n");
+    std::printf("  --analytics                Enable rule analytics\n");
+    std::printf("  --job-id ID                Unique job identifier\n");
+    std::printf("  --benchmark                Run performance benchmark\n");
     std::printf("  -h, --help                 Show this help\n");
 }
 
@@ -362,6 +385,31 @@ bool parse_args(int argc, char** argv, CLIArgs& args) {
         }
         else if (arg == "--mask" && i + 1 < argc) {
             args.mask = argv[++i];
+        }
+        // Advanced performance options
+        else if (arg == "--multi-gpu") {
+            args.multi_gpu = true;
+        }
+        else if (arg == "--smart-rules") {
+            args.smart_rules = true;
+        }
+        else if (arg == "--checkpoint" && i + 1 < argc) {
+            args.checkpoint_file = argv[++i];
+        }
+        else if (arg == "--resume") {
+            args.resume = true;
+        }
+        else if (arg == "--checkpoint-interval" && i + 1 < argc) {
+            args.checkpoint_interval = std::atoi(argv[++i]);
+        }
+        else if (arg == "--analytics") {
+            args.analytics = true;
+        }
+        else if (arg == "--job-id" && i + 1 < argc) {
+            args.job_id = argv[++i];
+        }
+        else if (arg == "--benchmark") {
+            args.benchmark = true;
         }
         // Positional arguments
         else if (arg[0] != '-') {
@@ -673,12 +721,44 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    // Initialize CUDA device
-    cudaError_t err = cudaSetDevice(args.device_id - 1); // Convert to 0-based indexing
-    if (err != cudaSuccess) {
-        std::fprintf(stderr, "Failed to set CUDA device %d: %s\n", 
-                    args.device_id, cudaGetErrorString(err));
-        return 1;
+    // Initialize GPU Manager for advanced multi-GPU support
+    std::unique_ptr<GPUManager> gpu_manager;
+    std::vector<int> active_devices;
+    
+    if (args.multi_gpu || args.benchmark) {
+        gpu_manager = std::make_unique<GPUManager>();
+        if (!gpu_manager->initialize()) {
+            std::fprintf(stderr, "Failed to initialize GPU manager\n");
+            return 1;
+        }
+        
+        auto available_gpus = gpu_manager->get_available_gpus();
+        if (available_gpus.empty()) {
+            std::fprintf(stderr, "No available GPUs found\n");
+            return 1;
+        }
+        
+        for (const auto& gpu : available_gpus) {
+            active_devices.push_back(gpu.device_id);
+        }
+        
+        if (!args.quiet) {
+            std::printf("Multi-GPU mode: Using %zu GPUs\n", active_devices.size());
+            for (const auto& gpu : available_gpus) {
+                std::printf("  GPU %d: %s (%zu MB)\n", 
+                           gpu.device_id, gpu.name.c_str(), 
+                           gpu.total_memory / (1024 * 1024));
+            }
+        }
+    } else {
+        // Single GPU mode
+        cudaError_t err = cudaSetDevice(args.device_id - 1);
+        if (err != cudaSuccess) {
+            std::fprintf(stderr, "Failed to set CUDA device %d: %s\n", 
+                        args.device_id, cudaGetErrorString(err));
+            return 1;
+        }
+        active_devices.push_back(args.device_id - 1);
     }
     
     // Initialize rule manager
@@ -697,6 +777,52 @@ int main(int argc, char** argv) {
     
     if (!dl_load_ptx_rules(rule_manager)) {
         std::fprintf(stderr, "Warning: PTX rules not available\n");
+    }
+    
+    // Initialize analytics system if requested
+    std::unique_ptr<RuleAnalytics> analytics_system;
+    std::unique_ptr<SmartRuleSelector> smart_selector;
+    
+    if (args.analytics || args.smart_rules) {
+        analytics_system = std::make_unique<RuleAnalytics>();
+        if (analytics_system->initialize()) {
+            if (!args.quiet) {
+                std::printf("Rule analytics system initialized\n");
+            }
+            
+            if (args.smart_rules) {
+                smart_selector = std::make_unique<SmartRuleSelector>(analytics_system.get());
+                if (!args.quiet) {
+                    std::printf("Smart rule selection enabled\n");
+                }
+            }
+        } else {
+            std::fprintf(stderr, "Warning: Failed to initialize analytics system\n");
+        }
+    }
+    
+    // Initialize checkpoint system
+    std::unique_ptr<CheckpointManager> checkpoint_manager;
+    std::unique_ptr<JobRecoverySystem> recovery_system;
+    std::string effective_job_id = args.job_id;
+    
+    if (!args.checkpoint_file.empty() || args.resume || !effective_job_id.empty()) {
+        checkpoint_manager = std::make_unique<CheckpointManager>();
+        if (checkpoint_manager->initialize()) {
+            checkpoint_manager->set_auto_checkpoint_interval(args.checkpoint_interval);
+            recovery_system = std::make_unique<JobRecoverySystem>(checkpoint_manager.get());
+            
+            if (effective_job_id.empty()) {
+                // Generate job ID based on parameters
+                effective_job_id = "job_" + std::to_string(std::time(nullptr));
+            }
+            
+            if (!args.quiet) {
+                std::printf("Checkpoint system initialized (Job ID: %s)\n", effective_job_id.c_str());
+            }
+        } else {
+            std::fprintf(stderr, "Warning: Failed to initialize checkpoint system\n");
+        }
     }
     
     // Load user rules if specified
