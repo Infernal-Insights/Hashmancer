@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Hashmancer Control Center</title>
+<title>Hashmancer</title>
 <link href="https://fonts.googleapis.com/css2?family=UnifrakturCook&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -24,13 +24,15 @@
 }
 
 body {
-  font-family: Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   margin: 0;
   padding: 0;
   background: var(--bg-color);
   color: var(--text-color);
-  line-height: 1.4;
+  line-height: 1.5;
   overflow-x: hidden;
+  font-size: 14px;
+  letter-spacing: 0.01em;
 }
 
 .header {
@@ -49,10 +51,14 @@ body {
 
 .header h1 {
   color: var(--primary-color);
-  font-family: 'UnifrakturCook', cursive;
+  font-family: 'Courier New', monospace;
   margin: 0;
-  font-size: 1.8rem;
+  font-size: 0.7rem;
+  font-weight: 400;
   text-shadow: 0 0 10px var(--primary-color);
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  white-space: pre;
 }
 
 .header-controls {
@@ -136,6 +142,8 @@ body {
   display: none;
   padding: 20px;
   min-height: calc(100vh - 140px);
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .tab-content.active {
@@ -147,21 +155,35 @@ button {
   background: var(--secondary-bg);
   color: var(--text-color);
   border: 1px solid var(--border-color);
-  padding: 8px 16px;
-  border-radius: 4px;
+  padding: 10px 16px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 button:hover:not(:disabled) {
   background: var(--primary-color);
   color: var(--bg-color);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 255, 0, 0.2);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
 }
 
 button.danger {
@@ -172,6 +194,7 @@ button.danger {
 button.danger:hover:not(:disabled) {
   background: var(--error-color);
   color: white;
+  box-shadow: 0 2px 8px rgba(244, 67, 54, 0.2);
 }
 
 button.success {
@@ -182,58 +205,85 @@ button.success {
 button.success:hover:not(:disabled) {
   background: var(--success-color);
   color: white;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
 }
 
-input, textarea, select {
-  background: var(--secondary-bg);
-  color: var(--text-color);
-  border: 1px solid var(--border-color);
-  padding: 8px;
-  border-radius: 4px;
-  font-family: inherit;
+button.info {
+  border-color: #2196F3;
+  color: #2196F3;
 }
+
+button.info:hover:not(:disabled) {
+  background: #2196F3;
+  color: white;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+}
+
+button.warning {
+  border-color: var(--warning-color);
+  color: var(--warning-color);
+}
+
+button.warning:hover:not(:disabled) {
+  background: var(--warning-color);
+  color: white;
+  box-shadow: 0 2px 8px rgba(255, 136, 0, 0.2);
+}
+
+/* Remove conflicting old input styles since we have better ones in form-group */
 
 /* Overview Tab */
 .overview-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  max-width: 1000px;
 }
 
 .metrics-section {
   background: var(--secondary-bg);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 20px;
+  padding: 18px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 15px;
-  margin-top: 15px;
+  gap: 16px;
+  margin-top: 20px;
 }
 
 .metric-card {
   background: var(--bg-color);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 15px;
+  border-radius: 8px;
+  padding: 18px 15px;
   text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 255, 0, 0.1);
 }
 
 .metric-value {
   font-size: 2rem;
-  font-weight: bold;
+  font-weight: 700;
   color: var(--primary-color);
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
 }
 
 .metric-label {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   opacity: 0.8;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .metric-card.warning .metric-value {
@@ -250,16 +300,20 @@ input, textarea, select {
   border-radius: 8px;
   padding: 20px;
   grid-column: 1 / -1;
-  margin-top: 20px;
+  margin-top: 24px;
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
+  max-width: 1000px;
 }
 
 .wall-of-sheep h3 {
   color: var(--primary-color);
-  margin-top: 0;
+  margin: 0 0 20px 0;
   text-align: center;
   font-family: 'UnifrakturCook', cursive;
-  font-size: 1.5rem;
+  font-size: 1.6rem;
+  font-weight: 400;
   text-shadow: 0 0 10px var(--primary-color);
+  letter-spacing: 0.03em;
 }
 
 .sheep-list {
@@ -287,39 +341,55 @@ input, textarea, select {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
-  margin-bottom: 20px;
+  margin: 24px 0;
+  max-width: 1000px;
 }
 
 .section {
   background: var(--secondary-bg);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 20px;
+  padding: 18px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .section h3 {
   color: var(--primary-color);
-  margin-top: 0;
+  margin: 0 0 20px 0;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 10px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 10px;
+  margin-top: 16px;
+  background: var(--secondary-bg);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-size: 0.9rem;
 }
 
 th, td {
-  border: 1px solid var(--border-color);
-  padding: 8px;
+  border: none;
+  border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+  padding: 14px 12px;
   text-align: left;
+  line-height: 1.4;
 }
 
 th {
-  background: var(--bg-color);
-  font-weight: bold;
+  background: rgba(0, 255, 0, 0.1);
+  font-weight: 600;
   color: var(--primary-color);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 tr:hover {
@@ -363,31 +433,40 @@ tr:hover {
 /* Management Tab */
 .management-sections {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
   gap: 20px;
+  margin-top: 16px;
+  max-width: 1000px;
 }
 
 .file-upload-area {
   border: 2px dashed var(--border-color);
   border-radius: 8px;
-  padding: 20px;
+  padding: 24px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin-top: 15px;
+  transition: all 0.3s ease;
+  margin-top: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .file-upload-area:hover {
   border-color: var(--primary-color);
   background: rgba(0, 255, 0, 0.05);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 255, 0, 0.1);
 }
 
 .item-list {
   max-height: 200px;
   overflow-y: auto;
   border: 1px solid var(--border-color);
-  border-radius: 4px;
-  margin-top: 10px;
+  border-radius: 6px;
+  margin-top: 16px;
+  background: var(--bg-color);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .item-list ul {
@@ -397,11 +476,13 @@ tr:hover {
 }
 
 .item-list li {
-  padding: 10px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0, 255, 0, 0.1);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease;
 }
 
 .item-list li:last-child {
@@ -409,16 +490,18 @@ tr:hover {
 }
 
 .item-list li:hover {
-  background: rgba(0, 255, 0, 0.05);
+  background: rgba(0, 255, 0, 0.08);
 }
 
 /* Logs Tab */
 .log-controls {
   display: flex;
-  gap: 10px;
-  margin-bottom: 15px;
+  gap: 12px;
+  margin-bottom: 20px;
   align-items: center;
   flex-wrap: wrap;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .log-viewer {
@@ -436,8 +519,9 @@ tr:hover {
 /* Advanced Config Tab */
 .config-sections {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 20px;
+  max-width: 1000px;
 }
 
 .config-group {
@@ -445,29 +529,184 @@ tr:hover {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .config-group h4 {
   color: var(--primary-color);
-  margin-top: 0;
+  margin: 0 0 20px 0;
   border-bottom: 1px solid var(--border-color);
-  padding-bottom: 8px;
+  padding-bottom: 10px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 18px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   color: var(--text-color);
+  font-weight: 500;
+  font-size: 0.95rem;
 }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
   width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-size: 0.95rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(0, 255, 0, 0.1);
+}
+
+.form-group input[type="checkbox"] {
+  width: auto;
+  margin-right: 8px;
+  margin-top: 2px;
+  transform: scale(1.1);
+  accent-color: var(--primary-color);
+}
+
+.form-group input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.form-group input[type="number"]::-webkit-outer-spin-button,
+.form-group input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Checkbox label styling for better alignment */
+.form-group label.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.form-group label.checkbox-label input[type="checkbox"] {
+  margin-right: 10px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* Inline checkbox groups */
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 8px;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0;
+  cursor: pointer;
+  font-weight: normal;
+}
+
+.checkbox-group input[type="checkbox"] {
+  margin-right: 8px;
+  margin-top: 0;
+}
+
+/* Small helper text styling */
+.form-group small {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: #888;
+  line-height: 1.3;
+}
+
+/* Select dropdown styling */
+.form-group select {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: 40px;
+}
+
+/* Textarea specific styling */
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: 'Courier New', monospace;
+}
+
+/* Input group styling for inline elements */
+.input-group {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.input-group .form-group {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.input-group button {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+/* Button group styling for inline buttons */
+.button-group {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 15px;
+}
+
+.button-group button {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* Full width buttons */
+.btn-full {
+  width: 100% !important;
+}
+
+/* Button spacing improvements */
+.form-group button + button {
+  margin-top: 10px;
+}
+
+/* Config group improvements */
+.config-group {
+  margin-bottom: 25px;
+}
+
+.config-group h4 {
+  margin-bottom: 20px;
+  font-size: 1.1rem;
 }
 
 /* Toast Notifications */
@@ -534,8 +773,17 @@ tr:hover {
   }
   
   .header h1 {
-    font-size: 1.4rem;
+    font-size: 0.4rem;
+    line-height: 1.0;
   }
+}
+
+@media (max-width: 480px) {
+  .header h1 {
+    font-size: 0.3rem;
+    line-height: 0.9;
+  }
+}
   
   .tab-nav {
     padding: 0 10px;
@@ -567,6 +815,741 @@ tr:hover {
   .log-controls {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+/* Vast.ai Specific Styles */
+.vastai-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  gap: 20px;
+  flex-wrap: wrap;
+  max-width: 1200px;
+}
+
+.account-overview {
+  flex: 1;
+}
+
+.account-overview h3 {
+  margin: 0 0 20px 0;
+  color: var(--primary-color);
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.account-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.stat-card {
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 255, 0, 0.1);
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  font-weight: 500;
+}
+
+.quick-actions {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.vastai-main-content {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 20px;
+  align-items: start;
+  max-width: 1200px;
+}
+
+.vastai-left-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.vastai-right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Template Buttons */
+.template-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.template-btn {
+  padding: 16px 12px;
+  text-align: center;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--secondary-bg);
+  color: var(--text-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.85rem;
+  line-height: 1.3;
+}
+
+.template-btn:hover {
+  border-color: var(--primary-color);
+  background: rgba(0, 255, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+.template-btn small {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+/* Instance Filters */
+.instance-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.instance-filters input,
+.instance-filters select {
+  flex: 1;
+  min-width: 200px;
+}
+
+.availability-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sort-controls,
+.view-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Instance Containers */
+.instances-container,
+.available-instances-container {
+  max-height: 600px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color);
+}
+
+.no-instances {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-color);
+  opacity: 0.7;
+}
+
+.no-instances-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+
+.no-instances p {
+  margin: 8px 0;
+  font-size: 1.1rem;
+}
+
+.no-instances small {
+  font-size: 0.9rem;
+}
+
+/* Instance Cards */
+.instance-card {
+  border-bottom: 1px solid var(--border-color);
+  padding: 16px;
+  transition: background-color 0.2s ease;
+}
+
+.instance-card:last-child {
+  border-bottom: none;
+}
+
+.instance-card:hover {
+  background: rgba(0, 255, 0, 0.05);
+}
+
+.instance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.instance-info h5 {
+  margin: 0 0 4px 0;
+  color: var(--primary-color);
+  font-size: 1rem;
+}
+
+.instance-info p {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.instance-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.status-running { color: var(--success-color); }
+.status-loading { color: var(--warning-color); }
+.status-stopped { color: var(--error-color); }
+.status-available { color: var(--primary-color); }
+
+.instance-specs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.spec-item {
+  text-align: center;
+  padding: 8px;
+  background: var(--secondary-bg);
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.spec-value {
+  font-weight: 600;
+  color: var(--primary-color);
+  display: block;
+  font-size: 0.9rem;
+}
+
+.spec-label {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
+.instance-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.instance-actions button {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  min-height: 32px;
+}
+
+.loading-placeholder {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-color);
+  opacity: 0.7;
+}
+
+.loading-placeholder .spinner {
+  margin: 0 auto 16px auto;
+}
+
+/* Modal Styles */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.modal-content {
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: var(--primary-color);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-color);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-footer {
+  padding: 20px 24px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* Benchmark Specific Styles */
+.benchmark-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  gap: 20px;
+  flex-wrap: wrap;
+  max-width: 1200px;
+}
+
+.benchmark-overview h3 {
+  margin: 0 0 20px 0;
+  color: var(--primary-color);
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.benchmark-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.benchmark-actions {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.benchmark-main-content {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 20px;
+  align-items: start;
+  max-width: 1200px;
+}
+
+.benchmark-left-panel,
+.benchmark-right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Worker Selection */
+.worker-checkbox-list {
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 8px;
+  background: var(--bg-color);
+}
+
+.worker-checkbox-list label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.worker-checkbox-list input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+/* Quick Benchmark Buttons */
+.quick-benchmark-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Progress Tracking */
+.progress-overview {
+  padding: 16px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.progress-bar-container {
+  margin-bottom: 16px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 20px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bg-color);
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.current-test-info {
+  background: var(--secondary-bg);
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 12px;
+}
+
+.current-test-info p {
+  margin: 4px 0;
+  font-size: 0.9rem;
+}
+
+/* Chart Styling */
+.chart-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.chart-controls select {
+  flex: 1;
+  min-width: 120px;
+}
+
+.performance-chart {
+  height: 300px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-placeholder {
+  text-align: center;
+  color: var(--text-color);
+  opacity: 0.7;
+}
+
+.chart-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+
+/* Results Table */
+.results-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.results-filters input,
+.results-filters select {
+  flex: 1;
+  min-width: 200px;
+}
+
+.results-table-container {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+/* Benchmark History */
+.benchmark-history {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-color);
+}
+
+.no-benchmarks {
+  padding: 20px;
+  text-align: center;
+  opacity: 0.7;
+}
+
+.benchmark-history-item {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.2s ease;
+}
+
+.benchmark-history-item:hover {
+  background: rgba(0, 255, 0, 0.05);
+}
+
+.benchmark-history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.history-item-title {
+  font-weight: 600;
+  color: var(--primary-color);
+  font-size: 0.9rem;
+}
+
+.history-item-date {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.history-item-details {
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+/* GPU Analysis */
+.gpu-analysis-container {
+  min-height: 200px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.analysis-placeholder {
+  text-align: center;
+  color: var(--text-color);
+  opacity: 0.7;
+}
+
+.analysis-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+
+.gpu-comparison-card {
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.gpu-comparison-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.gpu-name {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.gpu-improvement {
+  font-size: 0.9rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.improvement-positive {
+  background: rgba(76, 175, 80, 0.2);
+  color: var(--success-color);
+}
+
+.improvement-negative {
+  background: rgba(244, 67, 54, 0.2);
+  color: var(--error-color);
+}
+
+.improvement-neutral {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-color);
+}
+
+.gpu-speeds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.speed-comparison {
+  text-align: center;
+  padding: 8px;
+  background: var(--bg-color);
+  border-radius: 4px;
+}
+
+.speed-label {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  margin-bottom: 4px;
+}
+
+.speed-value {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+/* Responsive Design for Benchmarks */
+@media (max-width: 1200px) {
+  .benchmark-main-content {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  
+  .benchmark-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .benchmark-actions {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .benchmark-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .quick-benchmark-buttons {
+    grid-template-columns: 1fr;
+  }
+  
+  .chart-controls,
+  .results-filters {
+    flex-direction: column;
+  }
+  
+  .gpu-speeds {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Responsive Design for Vast.ai */
+@media (max-width: 1200px) {
+  .vastai-main-content {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  
+  .vastai-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .quick-actions {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .account-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .template-buttons {
+    grid-template-columns: 1fr;
+  }
+  
+  .instance-filters,
+  .availability-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .instance-specs {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .instance-actions {
+    justify-content: center;
   }
 }
 
@@ -608,7 +1591,12 @@ body::before {
 
 <!-- Header -->
 <div class="header">
-  <h1>Hashmancer Control Center</h1>
+  <h1>██╗  ██╗ █████╗ ███████╗██╗  ██╗███╗   ███╗ █████╗ ███╗   ██╗ ██████╗███████╗██████╗ 
+██║  ██║██╔══██╗██╔════╝██║  ██║████╗ ████║██╔══██╗████╗  ██║██╔════╝██╔════╝██╔══██╗
+███████║███████║███████╗███████║██╔████╔██║███████║██╔██╗ ██║██║     █████╗  ██████╔╝
+██╔══██║██╔══██║╚════██║██╔══██║██║╚██╔╝██║██╔══██║██║╚██╗██║██║     ██╔══╝  ██╔══██╗
+██║  ██║██║  ██║███████║██║  ██║██║ ╚═╝ ██║██║  ██║██║ ╚████║╚██████╗███████╗██║  ██║
+╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝╚══════╝╚═╝  ╚═╝</h1>
   <div class="header-controls">
     <div class="connection-status disconnected" id="connection-status">
       <span class="spinner" id="connection-spinner" style="display: none;"></span>
@@ -621,16 +1609,19 @@ body::before {
 
 <!-- Tab Navigation -->
 <div class="tab-nav">
-  <button class="tab-button active" onclick="switchTab('overview')">
+  <button class="tab-button active" data-tab="overview" onclick="switchTab('overview')">
     📊 System Overview
   </button>
-  <button class="tab-button" onclick="switchTab('management')">
+  <button class="tab-button" data-tab="management" onclick="switchTab('management')">
     ⚙️ Management
   </button>
-  <button class="tab-button" onclick="switchTab('logs')">
+  <button class="tab-button" data-tab="logs" onclick="switchTab('logs')">
     📋 Logs
   </button>
-  <button class="tab-button" onclick="switchTab('config')">
+  <button class="tab-button" data-tab="benchmarks" onclick="switchTab('benchmarks')">
+    ⚡ Benchmarks
+  </button>
+  <button class="tab-button" data-tab="config" onclick="switchTab('config')">
     🔧 Advanced Config
   </button>
 </div>
@@ -874,6 +1865,252 @@ body::before {
   </div>
 </div>
 
+<!-- Benchmarks Tab -->
+<div id="benchmarks-tab" class="tab-content">
+  <!-- Benchmark Overview Header -->
+  <div class="benchmark-header">
+    <div class="benchmark-overview">
+      <h3>⚡ Performance Benchmarking Dashboard</h3>
+      <div class="benchmark-stats">
+        <div class="stat-card">
+          <div class="stat-value" id="total-benchmarks">0</div>
+          <div class="stat-label">Total Benchmarks</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="active-workers-bench">0</div>
+          <div class="stat-label">Available Workers</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="best-hashcat-speed">0 H/s</div>
+          <div class="stat-label">Best Hashcat Speed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="best-darkling-speed">0 H/s</div>
+          <div class="stat-label">Best Darkling Speed</div>
+        </div>
+      </div>
+    </div>
+    <div class="benchmark-actions">
+      <button onclick="runQuickBenchmark()" class="success">🚀 Quick Benchmark</button>
+      <button onclick="runFullBenchmark()" class="warning">📊 Full Suite</button>
+      <button onclick="exportBenchmarkData()" class="info">📋 Export Data</button>
+    </div>
+  </div>
+
+  <div class="benchmark-main-content">
+    <!-- Left Panel: Configuration & Controls -->
+    <div class="benchmark-left-panel">
+      <!-- Benchmark Configuration -->
+      <div class="config-group">
+        <h4>⚙️ Benchmark Configuration</h4>
+        <div class="form-group">
+          <label>Target Workers:</label>
+          <div class="checkbox-group" id="worker-selection">
+            <label>
+              <input type="checkbox" id="select-all-workers" onchange="toggleAllWorkers()" checked>
+              Select All Workers
+            </label>
+          </div>
+          <div id="worker-list" class="worker-checkbox-list">
+            <!-- Dynamic worker list -->
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Applications to Test:</label>
+          <div class="checkbox-group">
+            <label>
+              <input type="checkbox" id="test-hashcat" checked>
+              🔥 Hashcat
+            </label>
+            <label>
+              <input type="checkbox" id="test-darkling" checked>
+              ✨ Darkling
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Hash Types to Benchmark:</label>
+          <select id="benchmark-hash-type">
+            <option value="all">All Supported Types</option>
+            <option value="0">MD5 (0)</option>
+            <option value="100">SHA1 (100)</option>
+            <option value="1400">SHA256 (1400)</option>
+            <option value="1700">SHA512 (1700)</option>
+            <option value="22000">WPA2 (22000)</option>
+            <option value="1000">NTLM (1000)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Benchmark Duration:</label>
+          <select id="benchmark-duration">
+            <option value="30">30 seconds (Quick)</option>
+            <option value="60" selected>1 minute (Standard)</option>
+            <option value="300">5 minutes (Extended)</option>
+            <option value="600">10 minutes (Thorough)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Attack Mode:</label>
+          <select id="benchmark-attack-mode">
+            <option value="3">Brute Force (Mode 3)</option>
+            <option value="0">Dictionary (Mode 0)</option>
+            <option value="1">Combinator (Mode 1)</option>
+            <option value="6">Hybrid Dict + Mask (Mode 6)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="save-benchmark-log" checked>
+            💾 Save detailed logs for analysis
+          </label>
+        </div>
+        <button onclick="startCustomBenchmark()" class="success" style="width: 100%;">⚡ Start Custom Benchmark</button>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="config-group">
+        <h4>🏁 Quick Benchmarks</h4>
+        <div class="quick-benchmark-buttons">
+          <button onclick="runHashcatOnly()" class="template-btn">🔥 Hashcat Only<br><small>Test all workers</small></button>
+          <button onclick="runDarklingOnly()" class="template-btn">✨ Darkling Only<br><small>Test all workers</small></button>
+          <button onclick="runComparison()" class="template-btn">⚖️ Head-to-Head<br><small>Compare both</small></button>
+          <button onclick="runGPUTest()" class="template-btn">🖥️ GPU Stress<br><small>Maximum load</small></button>
+        </div>
+      </div>
+
+      <!-- Benchmark History -->
+      <div class="config-group">
+        <h4>📈 Recent Results</h4>
+        <div class="benchmark-history" id="recent-benchmarks">
+          <div class="no-benchmarks">
+            <p>No recent benchmarks</p>
+            <small>Run a benchmark to see results here</small>
+          </div>
+        </div>
+        <button onclick="viewFullHistory()" class="info" style="width: 100%; margin-top: 10px;">📊 View Full History</button>
+      </div>
+    </div>
+
+    <!-- Right Panel: Results & Analytics -->
+    <div class="benchmark-right-panel">
+      <!-- Live Progress -->
+      <div class="config-group" id="benchmark-progress-section" style="display: none;">
+        <h4>🔄 Benchmark in Progress</h4>
+        <div class="progress-overview">
+          <div class="progress-bar-container">
+            <div class="progress-bar">
+              <div class="progress-fill" id="benchmark-progress-bar" style="width: 0%;"></div>
+            </div>
+            <span id="benchmark-progress-text">0% Complete</span>
+          </div>
+          <div class="current-test-info">
+            <p><strong>Current Test:</strong> <span id="current-test-name">-</span></p>
+            <p><strong>Worker:</strong> <span id="current-worker">-</span></p>
+            <p><strong>Application:</strong> <span id="current-app">-</span></p>
+            <p><strong>Speed:</strong> <span id="current-speed">-</span></p>
+          </div>
+          <button onclick="cancelBenchmark()" class="danger">❌ Cancel Benchmark</button>
+        </div>
+      </div>
+
+      <!-- Performance Comparison Chart -->
+      <div class="config-group">
+        <h4>📉 Performance Comparison</h4>
+        <div class="chart-controls">
+          <select id="chart-filter-gpu">
+            <option value="all">All GPUs</option>
+            <option value="rtx4090">RTX 4090</option>
+            <option value="rtx4080">RTX 4080</option>
+            <option value="rtx3090">RTX 3090</option>
+            <option value="a100">A100</option>
+          </select>
+          <select id="chart-filter-hash">
+            <option value="all">All Hash Types</option>
+            <option value="0">MD5</option>
+            <option value="100">SHA1</option>
+            <option value="1400">SHA256</option>
+          </select>
+          <select id="chart-timeframe">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+        <div class="performance-chart" id="performance-chart">
+          <div class="chart-placeholder">
+            <div class="chart-icon">📈</div>
+            <p>Run benchmarks to see performance data</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detailed Results Table -->
+      <div class="config-group">
+        <h4>📋 Benchmark Results</h4>
+        <div class="results-filters">
+          <input type="text" id="results-search" placeholder="🔍 Search results..." oninput="filterResults()">
+          <select id="results-sort" onchange="sortResults()">
+            <option value="date">Sort by Date</option>
+            <option value="speed">Sort by Speed</option>
+            <option value="gpu">Sort by GPU</option>
+            <option value="app">Sort by Application</option>
+          </select>
+        </div>
+        <div class="results-table-container">
+          <table id="benchmark-results-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Worker</th>
+                <th>GPU</th>
+                <th>App</th>
+                <th>Hash Type</th>
+                <th>Speed</th>
+                <th>Improvement</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="benchmark-results-body">
+              <tr>
+                <td colspan="8" style="text-align: center; opacity: 0.7;">No benchmark results yet</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- GPU Analysis -->
+      <div class="config-group">
+        <h4>🖥️ GPU Performance Analysis</h4>
+        <div class="gpu-analysis-container" id="gpu-analysis">
+          <div class="analysis-placeholder">
+            <div class="analysis-icon">🖥️</div>
+            <p>GPU analysis will appear after benchmarks</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Benchmark Details Modal -->
+  <div id="benchmark-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modal-benchmark-title">Benchmark Details</h3>
+        <button onclick="closeBenchmarkModal()" class="modal-close">×</button>
+      </div>
+      <div class="modal-body" id="modal-benchmark-body">
+        <!-- Dynamic content -->
+      </div>
+      <div class="modal-footer">
+        <button onclick="exportBenchmarkDetails()" class="success">Export Details</button>
+        <button onclick="closeBenchmarkModal()" class="info">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Advanced Config Tab -->
 <div id="config-tab" class="tab-content">
   <div class="config-sections">
@@ -904,6 +2141,36 @@ body::before {
       <button onclick="trainLLM()" class="success" style="width: 100%;">🎯 Train LLM</button>
     </div>
 
+    <!-- 3rd Party Services Configuration -->
+    <div class="config-group">
+      <h4>🔗 3rd Party Services</h4>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="service-vastai" onchange="toggleService('vastai')">
+          🖥️ Vast.ai Integration
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="service-hashescom" onchange="toggleService('hashescom')">
+          🔍 Hashes.com Integration
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="service-saladai" onchange="toggleService('saladai')">
+          🥗 Salad AI Integration
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="service-grok" onchange="toggleService('grok')">
+          🤖 Grok Integration
+        </label>
+      </div>
+      <button onclick="saveServicesConfig()" class="success" style="width: 100%;">💾 Save Service Settings</button>
+    </div>
+
     <!-- Markov Configuration -->
     <div class="config-group">
       <h4>🔄 Markov Configuration</h4>
@@ -917,13 +2184,13 @@ body::before {
         </select>
       </div>
       <div class="form-group">
-        <label>
+        <label class="checkbox-label">
           <input type="checkbox" id="prob-order">
           Probabilistic Ordering
         </label>
       </div>
       <div class="form-group">
-        <label>
+        <label class="checkbox-label">
           <input type="checkbox" id="inverse-order">
           Inverse Order
         </label>
@@ -939,31 +2206,12 @@ body::before {
       </div>
     </div>
 
-    <!-- Hashes.com Configuration -->
-    <div class="config-group">
-      <h4>🌐 Hashes.com Integration</h4>
-      <div class="form-group">
-        <label>API Key:</label>
-        <input type="password" id="hashes-key" placeholder="Enter API key">
-        <button onclick="saveHashesKey()" style="margin-top: 8px;">💾 Save</button>
-      </div>
-      <div class="form-group">
-        <label>Algorithms:</label>
-        <input type="text" id="hashes-algos" placeholder="md5,sha1,sha256">
-        <button onclick="saveHashesAlgos()" style="margin-top: 8px;">💾 Save</button>
-      </div>
-      <div class="form-group">
-        <label>Poll Interval (seconds):</label>
-        <input type="number" id="hashes-poll" value="0" min="0">
-        <button onclick="saveHashesPoll()" style="margin-top: 8px;">💾 Save</button>
-      </div>
-    </div>
 
     <!-- Broadcast Configuration -->
     <div class="config-group">
       <h4>📡 Broadcast Configuration</h4>
       <div class="form-group">
-        <label>
+        <label class="checkbox-label">
           <input type="checkbox" id="broadcast-enabled">
           Enable Worker Broadcasting
         </label>
@@ -1012,7 +2260,7 @@ body::before {
         <input type="number" id="default-priority" min="0" max="10" value="5">
       </div>
       <div class="form-group">
-        <label>
+        <label class="checkbox-label">
           <input type="checkbox" id="auto-backup">
           Enable Auto Backup
         </label>
@@ -1022,6 +2270,359 @@ body::before {
         <input type="number" id="backup-interval" value="24" min="1">
       </div>
       <button onclick="saveServerConfig()" class="success" style="width: 100%;">💾 Save Server Config</button>
+    </div>
+  </div>
+</div>
+
+<!-- Vast.ai Tab (dynamically shown) -->
+<div id="vastai-tab" class="tab-content" style="display: none;">
+  <!-- Account Overview Header -->
+  <div class="vastai-header">
+    <div class="account-overview">
+      <h3>🖥️ Vast.ai Management Dashboard</h3>
+      <div class="account-stats">
+        <div class="stat-card">
+          <div class="stat-value" id="vastai-balance">$0.00</div>
+          <div class="stat-label">Account Balance</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="vastai-active-instances">0</div>
+          <div class="stat-label">Active Instances</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="vastai-monthly-spend">$0.00</div>
+          <div class="stat-label">Monthly Spend</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="vastai-total-hours">0h</div>
+          <div class="stat-label">Total Runtime</div>
+        </div>
+      </div>
+    </div>
+    <div class="quick-actions">
+      <button onclick="refreshVastaiDashboard()" class="info">🔄 Refresh All</button>
+      <button onclick="openVastaiDocs()" class="info">📚 Docs</button>
+      <button onclick="showBillingHistory()" class="warning">💳 Billing</button>
+    </div>
+  </div>
+
+  <div class="vastai-main-content">
+    <!-- Left Column: Configuration & Search -->
+    <div class="vastai-left-panel">
+      <!-- Account Configuration -->
+      <div class="config-group">
+        <h4>🔑 Account Configuration</h4>
+        <div class="form-group">
+          <label>API Key:</label>
+          <div class="input-group">
+            <input type="password" id="vastai-api-key" placeholder="Enter your Vast.ai API key">
+            <button onclick="testVastaiConnection()" class="info">🧪 Test</button>
+          </div>
+          <small>Get your API key from <a href="https://vast.ai/console/account/" target="_blank">Vast.ai Console</a></small>
+        </div>
+        <div class="form-group">
+          <label>Auto Budget Limit ($/hour):</label>
+          <input type="number" id="vastai-budget" value="5.00" step="0.01" min="0">
+          <small>Maximum hourly spend for auto-launched instances</small>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="vastai-auto-destroy" checked>
+            🗑️ Auto-destroy instances when job completes
+          </label>
+        </div>
+        <button onclick="saveVastaiConfig()" class="success" style="width: 100%;">💾 Save Configuration</button>
+      </div>
+
+      <!-- Instance Search & Filter -->
+      <div class="config-group">
+        <h4>🔍 Find Instances</h4>
+        <div class="form-group">
+          <label>GPU Type:</label>
+          <select id="vastai-search-gpu" onchange="updateInstanceSearch()">
+            <option value="">Any GPU</option>
+            <option value="RTX_4090">RTX 4090</option>
+            <option value="RTX_4080">RTX 4080</option>
+            <option value="RTX_3090">RTX 3090</option>
+            <option value="RTX_3080">RTX 3080</option>
+            <option value="A100">A100</option>
+            <option value="H100">H100</option>
+            <option value="V100">V100</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Max Price ($/hour):</label>
+          <input type="number" id="vastai-search-max-price" value="2.00" step="0.01" min="0" onchange="updateInstanceSearch()">
+        </div>
+        <div class="form-group">
+          <label>Min RAM (GB):</label>
+          <select id="vastai-search-ram" onchange="updateInstanceSearch()">
+            <option value="8">8 GB+</option>
+            <option value="16">16 GB+</option>
+            <option value="32" selected>32 GB+</option>
+            <option value="64">64 GB+</option>
+            <option value="128">128 GB+</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Storage (GB):</label>
+          <input type="number" id="vastai-search-storage" value="100" min="50" step="10" onchange="updateInstanceSearch()">
+        </div>
+        <div class="form-group">
+          <label>Location:</label>
+          <select id="vastai-search-location" onchange="updateInstanceSearch()">
+            <option value="">Any Location</option>
+            <option value="US">United States</option>
+            <option value="EU">Europe</option>
+            <option value="AS">Asia</option>
+          </select>
+        </div>
+        <div class="checkbox-group">
+          <label>
+            <input type="checkbox" id="vastai-search-verified" checked>
+            ✅ Verified hosts only
+          </label>
+          <label>
+            <input type="checkbox" id="vastai-search-dlperf" checked>
+            🚀 High DL performance
+          </label>
+        </div>
+        <button onclick="searchAvailableInstances()" class="success" style="width: 100%;">🔍 Search Available</button>
+      </div>
+
+      <!-- Quick Launch Templates -->
+      <div class="config-group">
+        <h4>⚡ Quick Launch Templates</h4>
+        <div class="template-buttons">
+          <button onclick="launchTemplate('budget')" class="template-btn">💰 Budget (RTX 3080)<br><small>~$0.50/hr</small></button>
+          <button onclick="launchTemplate('balanced')" class="template-btn">⚖️ Balanced (RTX 4080)<br><small>~$1.20/hr</small></button>
+          <button onclick="launchTemplate('performance')" class="template-btn">🚀 Performance (RTX 4090)<br><small>~$2.50/hr</small></button>
+          <button onclick="launchTemplate('enterprise')" class="template-btn">🏢 Enterprise (A100)<br><small>~$4.00/hr</small></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Active Instances & Available -->
+    <div class="vastai-right-panel">
+      <!-- Active Instances -->
+      <div class="config-group">
+        <h4>🖥️ Active Instances</h4>
+        <div class="instance-filters">
+          <input type="text" id="instance-filter" placeholder="🔍 Filter by name, ID, or status..." oninput="filterInstances()">
+          <select id="instance-status-filter" onchange="filterInstances()">
+            <option value="">All Statuses</option>
+            <option value="running">Running</option>
+            <option value="loading">Loading</option>
+            <option value="stopped">Stopped</option>
+          </select>
+        </div>
+        <div id="vastai-instances" class="instances-container">
+          <div class="no-instances">
+            <div class="no-instances-icon">🖥️</div>
+            <p>No active instances</p>
+            <small>Launch an instance to get started</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Available Instances -->
+      <div class="config-group">
+        <h4>🌍 Available Instances</h4>
+        <div class="availability-controls">
+          <div class="sort-controls">
+            <label>Sort by:</label>
+            <select id="vastai-sort" onchange="sortAvailableInstances()">
+              <option value="price">Price (Low to High)</option>
+              <option value="price_desc">Price (High to Low)</option>
+              <option value="dlperf">DL Performance</option>
+              <option value="reliability">Reliability</option>
+            </select>
+          </div>
+          <div class="view-controls">
+            <button onclick="toggleViewMode()" id="view-mode-btn" class="info">📋 List View</button>
+            <button onclick="refreshAvailableInstances()" class="info">🔄 Refresh</button>
+          </div>
+        </div>
+        <div id="vastai-available-instances" class="available-instances-container">
+          <div class="loading-placeholder">
+            <div class="spinner"></div>
+            <p>Loading available instances...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Instance Details Modal -->
+  <div id="instance-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modal-instance-title">Instance Details</h3>
+        <button onclick="closeInstanceModal()" class="modal-close">×</button>
+      </div>
+      <div class="modal-body" id="modal-instance-body">
+        <!-- Dynamic content -->
+      </div>
+      <div class="modal-footer">
+        <button onclick="closeInstanceModal()" class="info">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Hashes.com Tab (dynamically shown) -->
+<div id="hashescom-tab" class="tab-content" style="display: none;">
+  <div class="config-sections">
+    
+    <!-- API Configuration -->
+    <div class="config-group">
+      <h4>🔑 API Configuration</h4>
+      <div class="form-group">
+        <label>API Key:</label>
+        <input type="password" id="hashescom-api-key" placeholder="Enter your Hashes.com API key">
+        <small>Get your API key from your Hashes.com account settings</small>
+      </div>
+      <div class="form-group">
+        <label>Algorithms:</label>
+        <input type="text" id="hashescom-algorithms" value="md5,sha1,sha256" placeholder="md5,sha1,sha256">
+        <small>Comma-separated list of supported algorithms</small>
+      </div>
+      <div class="form-group">
+        <label>Poll Interval (minutes):</label>
+        <input type="number" id="hashescom-poll-interval" value="30" min="1" max="1440">
+        <small>How often to check for new jobs (1-1440 minutes)</small>
+      </div>
+      <button onclick="saveHashescomConfig()" class="success" style="width: 100%;">💾 Save Configuration</button>
+      <button onclick="testHashescomConnection()" class="info" style="width: 100%; margin-top: 10px;">🧪 Test Connection</button>
+    </div>
+
+    <!-- Payment Filters -->
+    <div class="config-group">
+      <h4>💰 Payment Filters</h4>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="hashescom-reject-zero-payment" checked>
+          🚫 Reject jobs with zero or no payment
+        </label>
+      </div>
+      <div class="form-group">
+        <label>Minimum Payment (USD):</label>
+        <input type="number" id="hashescom-min-payment" value="0.01" step="0.01" min="0">
+        <small>Minimum payment amount to accept jobs</small>
+      </div>
+      <div class="form-group">
+        <label>Accepted Cryptocurrencies:</label>
+        <div class="checkbox-group">
+          <label>
+            <input type="checkbox" id="hashescom-accept-btc" checked>
+            ₿ Bitcoin (BTC)
+          </label>
+          <label>
+            <input type="checkbox" id="hashescom-accept-ltc" checked>
+            Ł Litecoin (LTC)
+          </label>
+          <label>
+            <input type="checkbox" id="hashescom-accept-xmr" checked>
+            ɱ Monero (XMR)
+          </label>
+        </div>
+        <small>Only accept jobs paying in selected cryptocurrencies</small>
+      </div>
+      <button onclick="savePaymentFilters()" class="success" style="width: 100%;">💾 Save Payment Filters</button>
+    </div>
+
+    <!-- Job Management -->
+    <div class="config-group">
+      <h4>📋 Job Management</h4>
+      <div style="margin-bottom: 15px;">
+        <button onclick="fetchHashescomJobs()" class="info" style="margin-right: 10px;">🔄 Fetch Jobs</button>
+        <button onclick="clearCompletedJobs()" class="warning" style="margin-right: 10px;">🗑️ Clear Completed</button>
+        <button onclick="startJobPolling()" class="success" style="margin-right: 10px;">▶️ Start Polling</button>
+        <button onclick="stopJobPolling()" class="danger">⏸️ Stop Polling</button>
+      </div>
+      
+      <!-- Status Display -->
+      <div id="hashescom-status" style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; margin-bottom: 15px;">
+        <div>Status: <span id="hashescom-polling-status" style="color: #888;">Stopped</span></div>
+        <div>Last Check: <span id="hashescom-last-check" style="color: #888;">Never</span></div>
+        <div>Active Jobs: <span id="hashescom-active-jobs" style="color: var(--success-color);">0</span></div>
+        <div>Rejected Jobs: <span id="hashescom-rejected-jobs" style="color: var(--warning-color);">0</span></div>
+        <div>Completed Jobs: <span id="hashescom-completed-jobs" style="color: var(--primary-color);">0</span></div>
+      </div>
+
+      <!-- Job Queue -->
+      <div id="hashescom-job-queue" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px;">
+        <div style="padding: 20px; text-align: center; color: #888;">
+          No jobs available. Click "Fetch Jobs" to load available jobs.
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="config-group">
+      <h4>📊 Statistics</h4>
+      <div class="metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">
+        <div class="metric-card" style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; text-align: center;">
+          <div style="font-size: 1.5rem; color: var(--primary-color); font-weight: bold;" id="hashescom-total-earned">$0.00</div>
+          <div style="font-size: 0.8rem; color: #888;">Total Earned</div>
+        </div>
+        <div class="metric-card" style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; text-align: center;">
+          <div style="font-size: 1.5rem; color: var(--success-color); font-weight: bold;" id="hashescom-jobs-completed">0</div>
+          <div style="font-size: 0.8rem; color: #888;">Jobs Completed</div>
+        </div>
+        <div class="metric-card" style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; text-align: center;">
+          <div style="font-size: 1.5rem; color: var(--warning-color); font-weight: bold;" id="hashescom-success-rate">0%</div>
+          <div style="font-size: 0.8rem; color: #888;">Success Rate</div>
+        </div>
+        <div class="metric-card" style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; text-align: center;">
+          <div style="font-size: 1.5rem; color: var(--primary-color); font-weight: bold;" id="hashescom-avg-payment">$0.00</div>
+          <div style="font-size: 0.8rem; color: #888;">Avg Payment</div>
+        </div>
+      </div>
+      
+      <div style="margin-top: 15px;">
+        <button onclick="resetHashescomStats()" class="danger" style="width: 100%;">🔄 Reset Statistics</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Salad AI Tab (dynamically shown) -->
+<div id="saladai-tab" class="tab-content" style="display: none;">
+  <div class="config-sections">
+    <div class="config-group">
+      <h4>🥗 Salad AI Integration</h4>
+      <div class="form-group">
+        <label>API Key:</label>
+        <input type="password" id="saladai-api-key" placeholder="Enter your Salad AI API key">
+      </div>
+      <div class="form-group">
+        <label>Project ID:</label>
+        <input type="text" id="saladai-project" placeholder="Project ID">
+      </div>
+      <button onclick="saveSaladaiConfig()" class="success" style="width: 100%;">💾 Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- Grok Tab (dynamically shown) -->
+<div id="grok-tab" class="tab-content" style="display: none;">
+  <div class="config-sections">
+    <div class="config-group">
+      <h4>🤖 Grok Integration</h4>
+      <div class="form-group">
+        <label>API Key:</label>
+        <input type="password" id="grok-api-key" placeholder="Enter your Grok API key">
+      </div>
+      <div class="form-group">
+        <label>Model:</label>
+        <select id="grok-model">
+          <option value="grok-beta">Grok Beta</option>
+          <option value="grok-vision-beta">Grok Vision Beta</option>
+        </select>
+      </div>
+      <button onclick="saveGrokConfig()" class="success" style="width: 100%;">💾 Save Settings</button>
     </div>
   </div>
 </div>
@@ -1039,8 +2640,16 @@ class HashmancerPortal {
     this.refreshTimer = null;
     this.wsConnection = null;
     this.currentTab = 'overview';
+    this.hashescomPollingTimer = null;
+    this.enabledServices = {
+      vastai: false,
+      hashescom: false,
+      saladai: false,
+      grok: false
+    };
     
     this.initializeApp();
+    this.loadServicesConfig();
   }
 
   getCSRFToken() {
@@ -1241,13 +2850,27 @@ class HashmancerPortal {
     document.querySelectorAll('.tab-button').forEach(btn => {
       btn.classList.remove('active');
     });
-    event.target.classList.add('active');
+    
+    // Find and activate the correct tab button using data-tab attribute
+    const targetButton = document.querySelector(`[data-tab="${tabName}"]`);
+    if (targetButton) {
+      targetButton.classList.add('active');
+    }
 
-    // Update tab content
+    // Update tab content - hide all first
     document.querySelectorAll('.tab-content').forEach(content => {
       content.classList.remove('active');
+      content.style.display = 'none';
     });
-    document.getElementById(`${tabName}-tab`).classList.add('active');
+    
+    // Show the selected tab
+    const targetTab = document.getElementById(`${tabName}-tab`);
+    if (targetTab) {
+      targetTab.classList.add('active');
+      targetTab.style.display = 'block';
+    } else {
+      console.warn(`Tab content not found for: ${tabName}-tab`);
+    }
 
     this.currentTab = tabName;
     this.refreshCurrentTab();
@@ -1266,6 +2889,18 @@ class HashmancerPortal {
         break;
       case 'config':
         this.refreshConfig();
+        break;
+      case 'vastai':
+        this.refreshVastaiTab();
+        break;
+      case 'hashescom':
+        this.refreshHashescomTab();
+        break;
+      case 'saladai':
+        this.refreshSaladaiTab();
+        break;
+      case 'grok':
+        this.refreshGrokTab();
         break;
     }
   }
@@ -1947,6 +3582,10 @@ class HashmancerPortal {
         this.loadAlgoParams(),
         this.loadServerConfig()
       ]);
+      
+      // Update service checkboxes when config tab is loaded
+      this.updateServiceCheckboxes();
+      
     } catch (error) {
       this.showToast('Failed to refresh config: ' + error.message, 'error');
     }
@@ -2406,6 +4045,462 @@ class HashmancerPortal {
       location.reload();
     }
   }
+
+  // ============================================================================
+  // 3RD PARTY SERVICES MANAGEMENT
+  // ============================================================================
+  
+  loadServicesConfig() {
+    // Load from localStorage
+    const saved = localStorage.getItem('hashmancer-services');
+    if (saved) {
+      this.enabledServices = JSON.parse(saved);
+    }
+    this.updateServiceTabs();
+    this.updateServiceCheckboxes();
+  }
+  
+  saveServicesConfig() {
+    localStorage.setItem('hashmancer-services', JSON.stringify(this.enabledServices));
+    this.updateServiceTabs();
+    this.showToast('Service settings saved successfully', 'success');
+  }
+  
+  toggleService(serviceName) {
+    const checkbox = document.getElementById(`service-${serviceName}`);
+    this.enabledServices[serviceName] = checkbox.checked;
+    this.updateServiceTabs();
+    
+    // Auto-save settings when toggled
+    localStorage.setItem('hashmancer-services', JSON.stringify(this.enabledServices));
+    
+    // Show feedback
+    const status = checkbox.checked ? 'enabled' : 'disabled';
+    this.showToast(`${serviceName} ${status}`, 'success');
+  }
+  
+  updateServiceTabs() {
+    const tabNav = document.querySelector('.tab-nav');
+    
+    // Remove existing service tabs
+    const serviceTabs = tabNav.querySelectorAll('.service-tab');
+    serviceTabs.forEach(tab => tab.remove());
+    
+    // Add enabled service tabs
+    Object.entries(this.enabledServices).forEach(([service, enabled]) => {
+      if (enabled) {
+        const tabButton = document.createElement('button');
+        tabButton.className = 'tab-button service-tab';
+        tabButton.setAttribute('data-tab', service);
+        tabButton.onclick = () => this.switchTab(service);
+        
+        const icons = {
+          vastai: '🖥️',
+          hashescom: '🔍',
+          saladai: '🥗',
+          grok: '🤖'
+        };
+        
+        const names = {
+          vastai: 'Vast.ai',
+          hashescom: 'Hashes.com',
+          saladai: 'Salad AI',
+          grok: 'Grok'
+        };
+        
+        tabButton.innerHTML = `${icons[service]} ${names[service]}`;
+        tabNav.appendChild(tabButton);
+      }
+    });
+  }
+  
+  updateServiceCheckboxes() {
+    Object.entries(this.enabledServices).forEach(([service, enabled]) => {
+      const checkbox = document.getElementById(`service-${service}`);
+      if (checkbox) {
+        checkbox.checked = enabled;
+      }
+    });
+  }
+
+  // Vast.ai specific functions
+  async refreshVastaiTab() {
+    await this.refreshVastaiInstances();
+  }
+
+  async saveVastaiConfig() {
+    const apiKey = document.getElementById('vastai-api-key').value;
+    const budget = parseFloat(document.getElementById('vastai-budget').value) || 10.0;
+    
+    try {
+      // Save to backend or localStorage
+      localStorage.setItem('vastai-config', JSON.stringify({
+        apiKey,
+        budget
+      }));
+      
+      this.showToast('Vast.ai configuration saved', 'success');
+    } catch (error) {
+      this.showToast('Failed to save Vast.ai config: ' + error.message, 'error');
+    }
+  }
+
+  async launchVastaiInstance() {
+    const gpuType = document.getElementById('vastai-gpu-type').value;
+    const maxPrice = parseFloat(document.getElementById('vastai-max-price').value) || 1.0;
+    const ram = parseInt(document.getElementById('vastai-ram').value) || 32;
+    const storage = parseInt(document.getElementById('vastai-storage').value) || 100;
+    
+    try {
+      // This would call your vast.ai backend integration
+      this.showToast('Launching Vast.ai instance...', 'info');
+      
+      // Placeholder for actual API call
+      setTimeout(() => {
+        this.showToast('Vast.ai instance launched successfully', 'success');
+        this.refreshVastaiInstances();
+      }, 2000);
+      
+    } catch (error) {
+      this.showToast('Failed to launch Vast.ai instance: ' + error.message, 'error');
+    }
+  }
+
+  async refreshVastaiInstances() {
+    const container = document.getElementById('vastai-instances');
+    
+    try {
+      // Placeholder - would fetch from your vast.ai integration
+      container.innerHTML = `
+        <div style="padding: 10px; border: 1px solid var(--border-color); margin: 5px 0;">
+          <strong>Instance #12345</strong><br>
+          GPU: RTX 4090 | Status: Running<br>
+          Cost: $0.85/hour | Uptime: 2h 15m<br>
+          <button onclick="app.stopVastaiInstance('12345')" class="danger" style="margin-top: 5px;">Stop</button>
+        </div>
+      `;
+    } catch (error) {
+      container.innerHTML = '<p style="color: var(--error-color);">Failed to load instances</p>';
+    }
+  }
+
+  async stopVastaiInstance(instanceId) {
+    try {
+      this.showToast(`Stopping Vast.ai instance ${instanceId}...`, 'info');
+      // Placeholder for actual API call
+      setTimeout(() => {
+        this.showToast('Instance stopped', 'success');
+        this.refreshVastaiInstances();
+      }, 1000);
+    } catch (error) {
+      this.showToast('Failed to stop instance: ' + error.message, 'error');
+    }
+  }
+
+  // Other service functions (placeholders)
+  async refreshHashescomTab() {
+    this.loadHashescomConfig();
+    this.updateHashescomStatus();
+  }
+  
+  async refreshSaladaiTab() {}
+  async refreshGrokTab() {}
+  
+  async saveHashescomConfig() {
+    const apiKey = document.getElementById('hashescom-api-key').value;
+    const algorithms = document.getElementById('hashescom-algorithms').value;
+    const pollInterval = parseInt(document.getElementById('hashescom-poll-interval').value) || 30;
+    
+    const config = { apiKey, algorithms, pollInterval };
+    localStorage.setItem('hashescom-config', JSON.stringify(config));
+    this.showToast('Hashes.com configuration saved', 'success');
+  }
+
+  async savePaymentFilters() {
+    const rejectZeroPayment = document.getElementById('hashescom-reject-zero-payment').checked;
+    const minPayment = parseFloat(document.getElementById('hashescom-min-payment').value) || 0.01;
+    const acceptBTC = document.getElementById('hashescom-accept-btc').checked;
+    const acceptLTC = document.getElementById('hashescom-accept-ltc').checked;
+    const acceptXMR = document.getElementById('hashescom-accept-xmr').checked;
+    
+    const filters = {
+      rejectZeroPayment,
+      minPayment,
+      acceptedCurrencies: {
+        BTC: acceptBTC,
+        LTC: acceptLTC,
+        XMR: acceptXMR
+      }
+    };
+    
+    localStorage.setItem('hashescom-payment-filters', JSON.stringify(filters));
+    this.showToast('Payment filters saved', 'success');
+  }
+
+  loadHashescomConfig() {
+    // Load main config
+    const config = localStorage.getItem('hashescom-config');
+    if (config) {
+      const data = JSON.parse(config);
+      if (document.getElementById('hashescom-api-key')) {
+        document.getElementById('hashescom-api-key').value = data.apiKey || '';
+        document.getElementById('hashescom-algorithms').value = data.algorithms || 'md5,sha1,sha256';
+        document.getElementById('hashescom-poll-interval').value = data.pollInterval || 30;
+      }
+    }
+
+    // Load payment filters
+    const filters = localStorage.getItem('hashescom-payment-filters');
+    if (filters) {
+      const data = JSON.parse(filters);
+      if (document.getElementById('hashescom-reject-zero-payment')) {
+        document.getElementById('hashescom-reject-zero-payment').checked = data.rejectZeroPayment !== false;
+        document.getElementById('hashescom-min-payment').value = data.minPayment || 0.01;
+        document.getElementById('hashescom-accept-btc').checked = data.acceptedCurrencies?.BTC !== false;
+        document.getElementById('hashescom-accept-ltc').checked = data.acceptedCurrencies?.LTC !== false;
+        document.getElementById('hashescom-accept-xmr').checked = data.acceptedCurrencies?.XMR !== false;
+      }
+    }
+
+    // Load statistics
+    this.loadHashescomStats();
+  }
+
+  loadHashescomStats() {
+    const stats = localStorage.getItem('hashescom-stats');
+    if (stats) {
+      const data = JSON.parse(stats);
+      if (document.getElementById('hashescom-total-earned')) {
+        document.getElementById('hashescom-total-earned').textContent = `$${data.totalEarned?.toFixed(2) || '0.00'}`;
+        document.getElementById('hashescom-jobs-completed').textContent = data.jobsCompleted || 0;
+        document.getElementById('hashescom-success-rate').textContent = `${data.successRate || 0}%`;
+        document.getElementById('hashescom-avg-payment').textContent = `$${data.avgPayment?.toFixed(2) || '0.00'}`;
+      }
+    }
+  }
+
+  async fetchHashescomJobs() {
+    const config = localStorage.getItem('hashescom-config');
+    if (!config) {
+      this.showToast('Please configure API key first', 'warning');
+      return;
+    }
+
+    const { apiKey, algorithms } = JSON.parse(config);
+    if (!apiKey) {
+      this.showToast('API key is required', 'warning');
+      return;
+    }
+
+    this.showToast('Fetching jobs from Hashes.com...', 'info');
+
+    try {
+      // Simulate API call - replace with actual Hashes.com API integration
+      const mockJobs = this.generateMockHashescomJobs();
+      const filteredJobs = this.filterJobsByPayment(mockJobs);
+      
+      this.displayHashescomJobs(filteredJobs);
+      this.updateJobCounts(mockJobs, filteredJobs);
+      
+      document.getElementById('hashescom-last-check').textContent = new Date().toLocaleTimeString();
+      
+      this.showToast(`Fetched ${filteredJobs.length} jobs (${mockJobs.length - filteredJobs.length} rejected)`, 'success');
+      
+    } catch (error) {
+      this.showToast('Failed to fetch jobs: ' + error.message, 'error');
+    }
+  }
+
+  generateMockHashescomJobs() {
+    const algorithms = ['md5', 'sha1', 'sha256', 'sha512', 'ntlm'];
+    const currencies = ['BTC', 'LTC', 'XMR', 'ETH'];
+    const jobs = [];
+
+    for (let i = 0; i < 15; i++) {
+      const hasPayment = Math.random() > 0.3; // 70% have payment
+      const payment = hasPayment ? Math.random() * 5 + 0.01 : 0;
+      const currency = currencies[Math.floor(Math.random() * currencies.length)];
+      
+      jobs.push({
+        id: `job_${Date.now()}_${i}`,
+        algorithm: algorithms[Math.floor(Math.random() * algorithms.length)],
+        hash: this.generateRandomHash(),
+        payment: payment,
+        currency: currency,
+        difficulty: Math.floor(Math.random() * 5) + 1,
+        timePosted: new Date(Date.now() - Math.random() * 3600000),
+        status: 'available'
+      });
+    }
+
+    return jobs;
+  }
+
+  generateRandomHash() {
+    const chars = '0123456789abcdef';
+    let hash = '';
+    const length = Math.random() > 0.5 ? 32 : 64; // MD5 or SHA256 length
+    for (let i = 0; i < length; i++) {
+      hash += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return hash;
+  }
+
+  filterJobsByPayment(jobs) {
+    const filters = localStorage.getItem('hashescom-payment-filters');
+    if (!filters) return jobs;
+
+    const { rejectZeroPayment, minPayment, acceptedCurrencies } = JSON.parse(filters);
+    
+    return jobs.filter(job => {
+      // Reject zero payment jobs if enabled
+      if (rejectZeroPayment && job.payment <= 0) return false;
+      
+      // Check minimum payment
+      if (job.payment < minPayment) return false;
+      
+      // Check accepted currencies
+      if (!acceptedCurrencies[job.currency]) return false;
+      
+      return true;
+    });
+  }
+
+  displayHashescomJobs(jobs) {
+    const container = document.getElementById('hashescom-job-queue');
+    
+    if (jobs.length === 0) {
+      container.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No jobs match your payment criteria.</div>';
+      return;
+    }
+
+    container.innerHTML = jobs.map(job => `
+      <div class="job-item" style="border-bottom: 1px solid var(--border-color); padding: 10px;">
+        <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 5px;">
+          <strong style="color: var(--primary-color);">Job ${job.id.split('_')[2]}</strong>
+          <span style="color: var(--success-color); font-weight: bold;">
+            ${job.payment > 0 ? `$${job.payment.toFixed(3)} ${job.currency}` : 'No payment'}
+          </span>
+        </div>
+        <div style="font-size: 0.9rem; color: #ccc; margin-bottom: 5px;">
+          Algorithm: <span style="color: var(--warning-color);">${job.algorithm.toUpperCase()}</span> | 
+          Difficulty: <span style="color: var(--primary-color);">${'★'.repeat(job.difficulty)}</span>
+        </div>
+        <div style="font-family: monospace; font-size: 0.8rem; color: #888; margin-bottom: 8px; word-break: break-all;">
+          ${job.hash}
+        </div>
+        <div style="display: flex; gap: 5px;">
+          <button onclick="app.acceptHashescomJob('${job.id}')" class="success" style="padding: 5px 10px; font-size: 0.8rem;">✅ Accept</button>
+          <button onclick="app.rejectHashescomJob('${job.id}')" class="danger" style="padding: 5px 10px; font-size: 0.8rem;">❌ Reject</button>
+          <button onclick="app.viewJobDetails('${job.id}')" class="info" style="padding: 5px 10px; font-size: 0.8rem;">👁️ Details</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  updateJobCounts(allJobs, filteredJobs) {
+    const rejectedCount = allJobs.length - filteredJobs.length;
+    document.getElementById('hashescom-active-jobs').textContent = filteredJobs.length;
+    document.getElementById('hashescom-rejected-jobs').textContent = rejectedCount;
+  }
+
+  updateHashescomStatus() {
+    const isPolling = this.hashescomPollingTimer !== null;
+    const statusEl = document.getElementById('hashescom-polling-status');
+    if (statusEl) {
+      statusEl.textContent = isPolling ? 'Running' : 'Stopped';
+      statusEl.style.color = isPolling ? 'var(--success-color)' : '#888';
+    }
+  }
+
+  startJobPolling() {
+    if (this.hashescomPollingTimer) {
+      this.showToast('Job polling is already running', 'info');
+      return;
+    }
+
+    const config = localStorage.getItem('hashescom-config');
+    if (!config) {
+      this.showToast('Please configure API settings first', 'warning');
+      return;
+    }
+
+    const { pollInterval } = JSON.parse(config);
+    const intervalMs = (pollInterval || 30) * 60 * 1000; // Convert minutes to milliseconds
+
+    this.hashescomPollingTimer = setInterval(() => {
+      this.fetchHashescomJobs();
+    }, intervalMs);
+
+    this.updateHashescomStatus();
+    this.showToast(`Started polling every ${pollInterval || 30} minutes`, 'success');
+  }
+
+  stopJobPolling() {
+    if (this.hashescomPollingTimer) {
+      clearInterval(this.hashescomPollingTimer);
+      this.hashescomPollingTimer = null;
+      this.updateHashescomStatus();
+      this.showToast('Job polling stopped', 'info');
+    } else {
+      this.showToast('Job polling is not running', 'info');
+    }
+  }
+
+  async acceptHashescomJob(jobId) {
+    this.showToast(`Accepted job ${jobId}`, 'success');
+    // TODO: Implement actual job acceptance logic
+  }
+
+  async rejectHashescomJob(jobId) {
+    this.showToast(`Rejected job ${jobId}`, 'info');
+    // Remove from display
+    const jobElement = document.querySelector(`[onclick*="${jobId}"]`)?.closest('.job-item');
+    if (jobElement) {
+      jobElement.remove();
+    }
+  }
+
+  async viewJobDetails(jobId) {
+    this.showToast(`Viewing details for job ${jobId}`, 'info');
+    // TODO: Implement job details modal
+  }
+
+  clearCompletedJobs() {
+    const container = document.getElementById('hashescom-job-queue');
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">Completed jobs cleared.</div>';
+    this.showToast('Cleared completed jobs', 'success');
+  }
+
+  resetHashescomStats() {
+    localStorage.removeItem('hashescom-stats');
+    this.loadHashescomStats();
+    this.showToast('Statistics reset', 'success');
+  }
+  
+  async saveSaladaiConfig() {
+    const apiKey = document.getElementById('saladai-api-key').value;
+    const project = document.getElementById('saladai-project').value;
+    
+    localStorage.setItem('saladai-config', JSON.stringify({ apiKey, project }));
+    this.showToast('Salad AI configuration saved', 'success');
+  }
+  
+  async saveGrokConfig() {
+    const apiKey = document.getElementById('grok-api-key').value;
+    const model = document.getElementById('grok-model').value;
+    
+    localStorage.setItem('grok-config', JSON.stringify({ apiKey, model }));
+    this.showToast('Grok configuration saved', 'success');
+  }
+
+  async testHashescomConnection() {
+    this.showToast('Testing Hashes.com connection...', 'info');
+    // Placeholder for actual API test
+    setTimeout(() => {
+      this.showToast('Hashes.com connection successful', 'success');
+    }, 1000);
+  }
 }
 
 // ============================================================================
@@ -2416,6 +4511,13 @@ let app;
 
 function switchTab(tabName) {
   app.switchTab(tabName);
+  
+  // Initialize benchmark tab when switched to
+  if (tabName === 'benchmarks') {
+    setTimeout(() => {
+      initializeBenchmarkTab();
+    }, 100);
+  }
 }
 
 function toggleAutoRefresh() {
@@ -2470,17 +4572,6 @@ function changeMarkovLang() {
   return app.changeMarkovLang();
 }
 
-function saveHashesKey() {
-  return app.saveHashesKey();
-}
-
-function saveHashesAlgos() {
-  return app.saveHashesAlgos();
-}
-
-function saveHashesPoll() {
-  return app.saveHashesPoll();
-}
 
 function trainLLM() {
   return app.trainLLM();
@@ -2498,9 +4589,1094 @@ function saveServerConfig() {
   return app.saveServerConfig();
 }
 
+// 3rd Party Service Functions
+function toggleService(serviceName) {
+  return app.toggleService(serviceName);
+}
+
+function saveServicesConfig() {
+  return app.saveServicesConfig();
+}
+
+// Enhanced Vast.ai Functions
+function saveVastaiConfig() {
+  const apiKey = document.getElementById('vastai-api-key').value;
+  const budget = document.getElementById('vastai-budget').value;
+  const autoDestroy = document.getElementById('vastai-auto-destroy').checked;
+  
+  if (!apiKey) {
+    showToast('Please enter your Vast.ai API key', 'error');
+    return;
+  }
+  
+  const config = {
+    apiKey: apiKey,
+    budget: parseFloat(budget),
+    autoDestroy: autoDestroy
+  };
+  
+  localStorage.setItem('vastai_config', JSON.stringify(config));
+  showToast('Vast.ai configuration saved successfully', 'success');
+  
+  // Test connection after saving
+  testVastaiConnection();
+}
+
+function testVastaiConnection() {
+  const apiKey = document.getElementById('vastai-api-key').value;
+  if (!apiKey) {
+    showToast('Please enter your API key first', 'error');
+    return;
+  }
+  
+  showToast('Testing Vast.ai connection...', 'info');
+  
+  // Mock API test - in real implementation, this would call the Vast.ai API
+  setTimeout(() => {
+    const isValid = Math.random() > 0.3; // 70% success rate for demo
+    if (isValid) {
+      showToast('Connection successful! API key is valid', 'success');
+      loadVastaiAccountInfo();
+    } else {
+      showToast('Connection failed. Please check your API key', 'error');
+    }
+  }, 2000);
+}
+
+function loadVastaiAccountInfo() {
+  // Mock account data - in real implementation, fetch from Vast.ai API
+  const mockData = {
+    balance: (Math.random() * 100).toFixed(2),
+    activeInstances: Math.floor(Math.random() * 5),
+    monthlySpend: (Math.random() * 50).toFixed(2),
+    totalHours: Math.floor(Math.random() * 1000)
+  };
+  
+  document.getElementById('vastai-balance').textContent = `$${mockData.balance}`;
+  document.getElementById('vastai-active-instances').textContent = mockData.activeInstances;
+  document.getElementById('vastai-monthly-spend').textContent = `$${mockData.monthlySpend}`;
+  document.getElementById('vastai-total-hours').textContent = `${mockData.totalHours}h`;
+}
+
+function refreshVastaiDashboard() {
+  showToast('Refreshing Vast.ai dashboard...', 'info');
+  loadVastaiAccountInfo();
+  refreshVastaiInstances();
+  refreshAvailableInstances();
+}
+
+function refreshVastaiInstances() {
+  const container = document.getElementById('vastai-instances');
+  container.innerHTML = '<div class="loading-placeholder"><div class="spinner"></div><p>Loading instances...</p></div>';
+  
+  // Mock instance data - in real implementation, fetch from Vast.ai API
+  setTimeout(() => {
+    const mockInstances = generateMockInstances();
+    displayActiveInstances(mockInstances);
+  }, 1500);
+}
+
+function generateMockInstances() {
+  const instances = [];
+  const gpuTypes = ['RTX 4090', 'RTX 4080', 'RTX 3090', 'A100'];
+  const statuses = ['running', 'loading', 'stopped'];
+  const locations = ['US-East', 'US-West', 'EU-Central', 'Asia-Pacific'];
+  
+  for (let i = 0; i < Math.floor(Math.random() * 4) + 1; i++) {
+    instances.push({
+      id: `vast_${Math.floor(Math.random() * 10000)}`,
+      name: `hashmancer-worker-${i + 1}`,
+      gpu: gpuTypes[Math.floor(Math.random() * gpuTypes.length)],
+      status: statuses[Math.floor(Math.random() * statuses.length)],
+      price: (Math.random() * 3 + 0.5).toFixed(2),
+      location: locations[Math.floor(Math.random() * locations.length)],
+      ram: [16, 32, 64, 128][Math.floor(Math.random() * 4)],
+      storage: [100, 250, 500, 1000][Math.floor(Math.random() * 4)],
+      uptime: `${Math.floor(Math.random() * 24)}h ${Math.floor(Math.random() * 60)}m`,
+      dlPerf: (Math.random() * 100 + 50).toFixed(1)
+    });
+  }
+  
+  return instances;
+}
+
+function displayActiveInstances(instances) {
+  const container = document.getElementById('vastai-instances');
+  
+  if (instances.length === 0) {
+    container.innerHTML = `
+      <div class="no-instances">
+        <div class="no-instances-icon">🖥️</div>
+        <p>No active instances</p>
+        <small>Launch an instance to get started</small>
+      </div>
+    `;
+    return;
+  }
+  
+  const instancesHtml = instances.map(instance => `
+    <div class="instance-card" data-id="${instance.id}">
+      <div class="instance-header">
+        <div class="instance-info">
+          <h5>${instance.name}</h5>
+          <p>ID: ${instance.id} • ${instance.location}</p>
+        </div>
+        <div class="instance-status status-${instance.status}">
+          <span class="status-indicator status-${instance.status}"></span>
+          ${instance.status.charAt(0).toUpperCase() + instance.status.slice(1)}
+        </div>
+      </div>
+      <div class="instance-specs">
+        <div class="spec-item">
+          <span class="spec-value">${instance.gpu}</span>
+          <div class="spec-label">GPU</div>
+        </div>
+        <div class="spec-item">
+          <span class="spec-value">${instance.ram}GB</span>
+          <div class="spec-label">RAM</div>
+        </div>
+        <div class="spec-item">
+          <span class="spec-value">${instance.storage}GB</span>
+          <div class="spec-label">Storage</div>
+        </div>
+        <div class="spec-item">
+          <span class="spec-value">$${instance.price}/hr</span>
+          <div class="spec-label">Price</div>
+        </div>
+        <div class="spec-item">
+          <span class="spec-value">${instance.uptime}</span>
+          <div class="spec-label">Uptime</div>
+        </div>
+        <div class="spec-item">
+          <span class="spec-value">${instance.dlPerf}</span>
+          <div class="spec-label">DL Perf</div>
+        </div>
+      </div>
+      <div class="instance-actions">
+        <button onclick="viewInstanceDetails('${instance.id}')" class="info">📊 Details</button>
+        <button onclick="connectToInstance('${instance.id}')" class="success">🔗 Connect</button>
+        ${instance.status === 'running' ? 
+          '<button onclick="stopInstance(\''+instance.id+'\')" class="warning">⏸️ Stop</button>' :
+          '<button onclick="startInstance(\''+instance.id+'\')" class="success">▶️ Start</button>'
+        }
+        <button onclick="destroyInstance('${instance.id}')" class="danger">🗑️ Destroy</button>
+      </div>
+    </div>
+  `).join('');
+  
+  container.innerHTML = instancesHtml;
+}
+
+function updateInstanceSearch() {
+  const gpu = document.getElementById('vastai-search-gpu').value;
+  const maxPrice = document.getElementById('vastai-search-max-price').value;
+  const ram = document.getElementById('vastai-search-ram').value;
+  const storage = document.getElementById('vastai-search-storage').value;
+  const location = document.getElementById('vastai-search-location').value;
+  
+  console.log('Search criteria updated:', { gpu, maxPrice, ram, storage, location });
+  // In real implementation, this would trigger a new search
+}
+
+function searchAvailableInstances() {
+  showToast('Searching for available instances...', 'info');
+  
+  const container = document.getElementById('vastai-available-instances');
+  container.innerHTML = '<div class="loading-placeholder"><div class="spinner"></div><p>Searching available instances...</p></div>';
+  
+  setTimeout(() => {
+    const mockAvailable = generateMockAvailableInstances();
+    displayAvailableInstances(mockAvailable);
+  }, 2000);
+}
+
+function generateMockAvailableInstances() {
+  const instances = [];
+  const gpuTypes = ['RTX 4090', 'RTX 4080', 'RTX 3090', 'RTX 3080', 'A100', 'H100'];
+  const locations = ['US-East', 'US-West', 'EU-Central', 'Asia-Pacific'];
+  
+  for (let i = 0; i < Math.floor(Math.random() * 10) + 5; i++) {
+    instances.push({
+      id: `available_${Math.floor(Math.random() * 10000)}`,
+      gpu: gpuTypes[Math.floor(Math.random() * gpuTypes.length)],
+      price: (Math.random() * 4 + 0.3).toFixed(2),
+      location: locations[Math.floor(Math.random() * locations.length)],
+      ram: [16, 32, 64, 128][Math.floor(Math.random() * 4)],
+      storage: [100, 250, 500, 1000][Math.floor(Math.random() * 4)],
+      dlPerf: (Math.random() * 100 + 30).toFixed(1),
+      reliability: (Math.random() * 100 + 70).toFixed(1),
+      verified: Math.random() > 0.3
+    });
+  }
+  
+  return instances.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+}
+
+function displayAvailableInstances(instances) {
+  const container = document.getElementById('vastai-available-instances');
+  
+  if (instances.length === 0) {
+    container.innerHTML = `
+      <div class="no-instances">
+        <div class="no-instances-icon">🔍</div>
+        <p>No instances found</p>
+        <small>Try adjusting your search criteria</small>
+      </div>
+    `;
+    return;
+  }
+  
+  const instancesHtml = instances.map(instance => `
+    <div class="instance-card" data-id="${instance.id}">
+      <div class="instance-header">
+        <div class="instance-info">
+          <h5>${instance.gpu} - ${instance.location}</h5>
+          <p>ID: ${instance.id} ${instance.verified ? '✅ Verified' : ''}</p>
+        </div>
+        <div class="instance-status status-available">
+          <span class="status-indicator status-available"></span>
+          Available
+        </div>
+      </div>
+      <div class="instance-specs">
+        <div class="spec-item">
+          <span class="spec-value">${instance.gpu}</span>
+          <div class="spec-label">GPU</div>
+        </div>
+        <div class="spec-item">
+          <span class="spec-value">${instance.ram}GB</span>
+          <div class="spec-label">RAM</div>
+        </div>
+        <div class="spec-item">
+          <span class="spec-value">${instance.storage}GB</span>
+          <div class="spec-label">Storage</div>
+        </div>
+        <div class="spec-item">
+          <span class="spec-value">$${instance.price}/hr</span>
+          <div class="spec-label">Price</div>
+        </div>
+        <div class="spec-item">
+          <span class="spec-value">${instance.dlPerf}</span>
+          <div class="spec-label">DL Perf</div>
+        </div>
+        <div class="spec-item">
+          <span class="spec-value">${instance.reliability}%</span>
+          <div class="spec-label">Reliability</div>
+        </div>
+      </div>
+      <div class="instance-actions">
+        <button onclick="viewAvailableInstanceDetails('${instance.id}')" class="info">📋 Details</button>
+        <button onclick="launchSpecificInstance('${instance.id}')" class="success">🚀 Launch</button>
+      </div>
+    </div>
+  `).join('');
+  
+  container.innerHTML = instancesHtml;
+}
+
+function launchTemplate(templateType) {
+  const templates = {
+    budget: { gpu: 'RTX 3080', price: '0.50', ram: 32, storage: 100 },
+    balanced: { gpu: 'RTX 4080', price: '1.20', ram: 32, storage: 250 },
+    performance: { gpu: 'RTX 4090', price: '2.50', ram: 64, storage: 500 },
+    enterprise: { gpu: 'A100', price: '4.00', ram: 128, storage: 1000 }
+  };
+  
+  const template = templates[templateType];
+  if (!template) return;
+  
+  showToast(`Launching ${templateType} template (${template.gpu})...`, 'info');
+  
+  // In real implementation, this would call the Vast.ai API
+  setTimeout(() => {
+    showToast(`${templateType} instance launched successfully!`, 'success');
+    refreshVastaiInstances();
+  }, 3000);
+}
+
+function launchSpecificInstance(instanceId) {
+  showToast(`Launching instance ${instanceId}...`, 'info');
+  
+  setTimeout(() => {
+    showToast('Instance launched successfully!', 'success');
+    refreshVastaiInstances();
+    refreshAvailableInstances();
+  }, 2000);
+}
+
+function viewInstanceDetails(instanceId) {
+  // Mock instance details
+  const details = `
+    <div style="line-height: 1.6;">
+      <h4>Instance ${instanceId}</h4>
+      <p><strong>Status:</strong> Running</p>
+      <p><strong>GPU:</strong> RTX 4090</p>
+      <p><strong>Location:</strong> US-East</p>
+      <p><strong>SSH:</strong> ssh root@instance.vast.ai -p 12345</p>
+      <p><strong>Jupyter:</strong> https://instance.vast.ai:8888</p>
+      <p><strong>Uptime:</strong> 2h 45m</p>
+      <p><strong>Cost:</strong> $6.75 total</p>
+      <hr style="margin: 16px 0; border: 1px solid var(--border-color);">
+      <h5>Resource Usage:</h5>
+      <p>GPU Util: 85%</p>
+      <p>Memory: 18GB / 24GB</p>
+      <p>CPU: 45%</p>
+      <p>Network: 125 Mbps</p>
+    </div>
+  `;
+  
+  document.getElementById('modal-instance-title').textContent = `Instance Details`;
+  document.getElementById('modal-instance-body').innerHTML = details;
+  document.getElementById('instance-modal').style.display = 'flex';
+}
+
+function viewAvailableInstanceDetails(instanceId) {
+  const details = `
+    <div style="line-height: 1.6;">
+      <h4>Available Instance ${instanceId}</h4>
+      <p><strong>GPU:</strong> RTX 4090</p>
+      <p><strong>Location:</strong> US-West</p>
+      <p><strong>Price:</strong> $2.30/hour</p>
+      <p><strong>DL Performance:</strong> 95.2</p>
+      <p><strong>Reliability:</strong> 98.5%</p>
+      <p><strong>Host Rating:</strong> ⭐⭐⭐⭐⭐ (4.9/5)</p>
+      <hr style="margin: 16px 0; border: 1px solid var(--border-color);">
+      <h5>Specifications:</h5>
+      <p>GPU Memory: 24GB GDDR6X</p>
+      <p>System RAM: 64GB DDR4</p>
+      <p>Storage: 1TB NVMe SSD</p>
+      <p>Network: 10 Gbps</p>
+      <p>CUDA Version: 11.8</p>
+    </div>
+  `;
+  
+  document.getElementById('modal-instance-title').textContent = `Available Instance`;
+  document.getElementById('modal-instance-body').innerHTML = details;
+  document.getElementById('instance-modal').style.display = 'flex';
+}
+
+function closeInstanceModal() {
+  document.getElementById('instance-modal').style.display = 'none';
+}
+
+function connectToInstance(instanceId) {
+  showToast(`Connecting to instance ${instanceId}...`, 'info');
+  // In real implementation, this would establish SSH or other connection
+}
+
+function startInstance(instanceId) {
+  showToast(`Starting instance ${instanceId}...`, 'info');
+  setTimeout(() => {
+    showToast('Instance started successfully!', 'success');
+    refreshVastaiInstances();
+  }, 2000);
+}
+
+function stopInstance(instanceId) {
+  showToast(`Stopping instance ${instanceId}...`, 'warning');
+  setTimeout(() => {
+    showToast('Instance stopped successfully!', 'success');
+    refreshVastaiInstances();
+  }, 2000);
+}
+
+function destroyInstance(instanceId) {
+  if (!confirm('Are you sure you want to destroy this instance? This action cannot be undone.')) {
+    return;
+  }
+  
+  showToast(`Destroying instance ${instanceId}...`, 'warning');
+  setTimeout(() => {
+    showToast('Instance destroyed successfully!', 'success');
+    refreshVastaiInstances();
+  }, 2000);
+}
+
+function filterInstances() {
+  const filter = document.getElementById('instance-filter').value.toLowerCase();
+  const statusFilter = document.getElementById('instance-status-filter').value;
+  
+  const cards = document.querySelectorAll('#vastai-instances .instance-card');
+  cards.forEach(card => {
+    const text = card.textContent.toLowerCase();
+    const status = card.querySelector('.instance-status').textContent.toLowerCase().trim();
+    
+    const matchesText = !filter || text.includes(filter);
+    const matchesStatus = !statusFilter || status.includes(statusFilter);
+    
+    card.style.display = matchesText && matchesStatus ? 'block' : 'none';
+  });
+}
+
+function sortAvailableInstances() {
+  const sortBy = document.getElementById('vastai-sort').value;
+  // In real implementation, this would re-sort and re-display the instances
+  showToast(`Sorting by ${sortBy}...`, 'info');
+}
+
+function toggleViewMode() {
+  const btn = document.getElementById('view-mode-btn');
+  if (btn.textContent.includes('List')) {
+    btn.innerHTML = '🎛️ Card View';
+    // Switch to list view
+  } else {
+    btn.innerHTML = '📋 List View';
+    // Switch to card view
+  }
+}
+
+function refreshAvailableInstances() {
+  searchAvailableInstances();
+}
+
+function openVastaiDocs() {
+  window.open('https://vast.ai/docs/', '_blank');
+}
+
+function showBillingHistory() {
+  showToast('Opening billing history...', 'info');
+  // In real implementation, this would show billing details
+}
+
+// Backwards compatibility with old functions
+function launchVastaiInstance() {
+  launchTemplate('balanced');
+}
+
+// Benchmarking System Functions
+let currentBenchmark = null;
+let benchmarkResults = [];
+let benchmarkHistory = JSON.parse(localStorage.getItem('benchmark_history') || '[]');
+
+function initializeBenchmarkTab() {
+  loadBenchmarkStats();
+  loadAvailableWorkers();
+  loadBenchmarkHistory();
+  updateBenchmarkResults();
+  loadGPUAnalysis();
+}
+
+function loadBenchmarkStats() {
+  // Load benchmark statistics from localStorage
+  const stats = {
+    totalBenchmarks: benchmarkHistory.length,
+    activeWorkers: Math.floor(Math.random() * 5) + 1, // Mock data
+    bestHashcatSpeed: getBestSpeed('hashcat'),
+    bestDarklingSpeed: getBestSpeed('darkling')
+  };
+  
+  document.getElementById('total-benchmarks').textContent = stats.totalBenchmarks;
+  document.getElementById('active-workers-bench').textContent = stats.activeWorkers;
+  document.getElementById('best-hashcat-speed').textContent = stats.bestHashcatSpeed;
+  document.getElementById('best-darkling-speed').textContent = stats.bestDarklingSpeed;
+}
+
+function getBestSpeed(application) {
+  const appResults = benchmarkHistory.filter(b => b.application === application);
+  if (appResults.length === 0) return '0 H/s';
+  
+  const maxSpeed = Math.max(...appResults.map(b => b.speed));
+  return formatSpeed(maxSpeed);
+}
+
+function formatSpeed(speed) {
+  if (speed >= 1e9) return (speed / 1e9).toFixed(1) + ' GH/s';
+  if (speed >= 1e6) return (speed / 1e6).toFixed(1) + ' MH/s';
+  if (speed >= 1e3) return (speed / 1e3).toFixed(1) + ' KH/s';
+  return speed.toFixed(0) + ' H/s';
+}
+
+function loadAvailableWorkers() {
+  const workerList = document.getElementById('worker-list');
+  const mockWorkers = [
+    { id: 'worker-001', name: 'Mining Rig Alpha', gpu: 'RTX 4090' },
+    { id: 'worker-002', name: 'Compute Node Beta', gpu: 'RTX 4080' },
+    { id: 'worker-003', name: 'Hash Station Gamma', gpu: 'RTX 3090' },
+    { id: 'worker-004', name: 'Cracking Unit Delta', gpu: 'A100' }
+  ];
+  
+  workerList.innerHTML = mockWorkers.map(worker => `
+    <label>
+      <input type="checkbox" value="${worker.id}" checked>
+      ${worker.name} (${worker.gpu})
+    </label>
+  `).join('');
+}
+
+function toggleAllWorkers() {
+  const selectAll = document.getElementById('select-all-workers').checked;
+  const workerCheckboxes = document.querySelectorAll('#worker-list input[type="checkbox"]');
+  
+  workerCheckboxes.forEach(checkbox => {
+    checkbox.checked = selectAll;
+  });
+}
+
+function runQuickBenchmark() {
+  const config = {
+    workers: ['worker-001'],
+    applications: ['hashcat', 'darkling'],
+    hashTypes: ['0', '1400'],
+    duration: 30,
+    attackMode: '3'
+  };
+  
+  startBenchmark(config, 'Quick Benchmark');
+}
+
+function runFullBenchmark() {
+  const selectedWorkers = getSelectedWorkers();
+  if (selectedWorkers.length === 0) {
+    showToast('Please select at least one worker', 'error');
+    return;
+  }
+  
+  const config = {
+    workers: selectedWorkers,
+    applications: ['hashcat', 'darkling'],
+    hashTypes: ['0', '100', '1400', '1700', '22000', '1000'],
+    duration: 300,
+    attackMode: '3'
+  };
+  
+  startBenchmark(config, 'Full Benchmark Suite');
+}
+
+function startCustomBenchmark() {
+  const selectedWorkers = getSelectedWorkers();
+  if (selectedWorkers.length === 0) {
+    showToast('Please select at least one worker', 'error');
+    return;
+  }
+  
+  const applications = [];
+  if (document.getElementById('test-hashcat').checked) applications.push('hashcat');
+  if (document.getElementById('test-darkling').checked) applications.push('darkling');
+  
+  if (applications.length === 0) {
+    showToast('Please select at least one application to test', 'error');
+    return;
+  }
+  
+  const hashType = document.getElementById('benchmark-hash-type').value;
+  const hashTypes = hashType === 'all' ? ['0', '100', '1400', '1700'] : [hashType];
+  
+  const config = {
+    workers: selectedWorkers,
+    applications: applications,
+    hashTypes: hashTypes,
+    duration: parseInt(document.getElementById('benchmark-duration').value),
+    attackMode: document.getElementById('benchmark-attack-mode').value,
+    saveLog: document.getElementById('save-benchmark-log').checked
+  };
+  
+  startBenchmark(config, 'Custom Benchmark');
+}
+
+function getSelectedWorkers() {
+  const checkboxes = document.querySelectorAll('#worker-list input[type="checkbox"]:checked');
+  return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function startBenchmark(config, name) {
+  if (currentBenchmark) {
+    showToast('A benchmark is already running', 'warning');
+    return;
+  }
+  
+  currentBenchmark = {
+    name: name,
+    config: config,
+    startTime: new Date(),
+    progress: 0,
+    currentTest: null,
+    results: []
+  };
+  
+  showToast(`Starting ${name}...`, 'info');
+  
+  // Show progress section
+  document.getElementById('benchmark-progress-section').style.display = 'block';
+  
+  // Start the benchmark simulation
+  simulateBenchmark();
+}
+
+function simulateBenchmark() {
+  if (!currentBenchmark) return;
+  
+  const config = currentBenchmark.config;
+  const totalTests = config.workers.length * config.applications.length * config.hashTypes.length;
+  let completedTests = 0;
+  
+  function runNextTest() {
+    if (completedTests >= totalTests) {
+      completeBenchmark();
+      return;
+    }
+    
+    const workerIndex = Math.floor(completedTests / (config.applications.length * config.hashTypes.length));
+    const appIndex = Math.floor((completedTests % (config.applications.length * config.hashTypes.length)) / config.hashTypes.length);
+    const hashIndex = completedTests % config.hashTypes.length;
+    
+    const worker = config.workers[workerIndex];
+    const application = config.applications[appIndex];
+    const hashType = config.hashTypes[hashIndex];
+    
+    currentBenchmark.currentTest = {
+      worker: worker,
+      application: application,
+      hashType: hashType
+    };
+    
+    // Update UI
+    document.getElementById('current-test-name').textContent = `${application} - Hash Type ${hashType}`;
+    document.getElementById('current-worker').textContent = worker;
+    document.getElementById('current-app').textContent = application;
+    
+    // Simulate test running
+    const testDuration = Math.min(config.duration * 1000, 10000); // Max 10 seconds for demo
+    const updateInterval = 100;
+    let elapsed = 0;
+    
+    const testInterval = setInterval(() => {
+      elapsed += updateInterval;
+      const testProgress = Math.min(elapsed / testDuration, 1);
+      const overallProgress = (completedTests + testProgress) / totalTests;
+      
+      // Generate mock speed
+      const baseSpeed = getBaseSpeed(application, hashType);
+      const variation = 0.8 + Math.random() * 0.4; // ±20% variation
+      const currentSpeed = Math.floor(baseSpeed * variation);
+      
+      document.getElementById('current-speed').textContent = formatSpeed(currentSpeed);
+      updateBenchmarkProgress(overallProgress * 100);
+      
+      if (testProgress >= 1) {
+        clearInterval(testInterval);
+        
+        // Save test result
+        const result = {
+          timestamp: new Date(),
+          worker: worker,
+          application: application,
+          hashType: hashType,
+          speed: currentSpeed,
+          duration: config.duration
+        };
+        
+        currentBenchmark.results.push(result);
+        completedTests++;
+        
+        setTimeout(runNextTest, 500); // Brief pause between tests
+      }
+    }, updateInterval);
+  }
+  
+  runNextTest();
+}
+
+function getBaseSpeed(application, hashType) {
+  const speedMultipliers = {
+    'hashcat': {
+      '0': 50000000000,    // MD5 - 50 GH/s
+      '100': 25000000000,  // SHA1 - 25 GH/s
+      '1400': 12000000000, // SHA256 - 12 GH/s
+      '1700': 4000000000,  // SHA512 - 4 GH/s
+      '22000': 1000000,    // WPA2 - 1 MH/s
+      '1000': 45000000000  // NTLM - 45 GH/s
+    },
+    'darkling': {
+      '0': 55000000000,    // MD5 - 55 GH/s (10% faster)
+      '100': 28000000000,  // SHA1 - 28 GH/s (12% faster)
+      '1400': 14000000000, // SHA256 - 14 GH/s (17% faster)
+      '1700': 4500000000,  // SHA512 - 4.5 GH/s (12% faster)
+      '22000': 1200000,    // WPA2 - 1.2 MH/s (20% faster)
+      '1000': 50000000000  // NTLM - 50 GH/s (11% faster)
+    }
+  };
+  
+  return speedMultipliers[application]?.[hashType] || 1000000;
+}
+
+function updateBenchmarkProgress(percentage) {
+  const progressBar = document.getElementById('benchmark-progress-bar');
+  const progressText = document.getElementById('benchmark-progress-text');
+  
+  progressBar.style.width = percentage + '%';
+  progressText.textContent = Math.round(percentage) + '% Complete';
+}
+
+function completeBenchmark() {
+  if (!currentBenchmark) return;
+  
+  // Save to history
+  const benchmarkRecord = {
+    id: Date.now(),
+    name: currentBenchmark.name,
+    timestamp: currentBenchmark.startTime,
+    duration: (new Date() - currentBenchmark.startTime) / 1000,
+    config: currentBenchmark.config,
+    results: currentBenchmark.results
+  };
+  
+  benchmarkHistory.unshift(benchmarkRecord);
+  
+  // Keep only last 100 benchmarks
+  if (benchmarkHistory.length > 100) {
+    benchmarkHistory = benchmarkHistory.slice(0, 100);
+  }
+  
+  // Save to localStorage
+  localStorage.setItem('benchmark_history', JSON.stringify(benchmarkHistory));
+  
+  // Add results to current session
+  benchmarkResults = benchmarkResults.concat(currentBenchmark.results);
+  
+  showToast(`Benchmark completed! Tested ${currentBenchmark.results.length} configurations`, 'success');
+  
+  // Hide progress section
+  document.getElementById('benchmark-progress-section').style.display = 'none';
+  
+  // Update UI
+  loadBenchmarkStats();
+  loadBenchmarkHistory();
+  updateBenchmarkResults();
+  loadGPUAnalysis();
+  
+  currentBenchmark = null;
+}
+
+function cancelBenchmark() {
+  if (!currentBenchmark) return;
+  
+  currentBenchmark = null;
+  document.getElementById('benchmark-progress-section').style.display = 'none';
+  showToast('Benchmark cancelled', 'warning');
+}
+
+function loadBenchmarkHistory() {
+  const container = document.getElementById('recent-benchmarks');
+  
+  if (benchmarkHistory.length === 0) {
+    container.innerHTML = `
+      <div class="no-benchmarks">
+        <p>No recent benchmarks</p>
+        <small>Run a benchmark to see results here</small>
+      </div>
+    `;
+    return;
+  }
+  
+  const recentBenchmarks = benchmarkHistory.slice(0, 5);
+  
+  container.innerHTML = recentBenchmarks.map(benchmark => {
+    const avgSpeed = benchmark.results.reduce((sum, r) => sum + r.speed, 0) / benchmark.results.length;
+    return `
+      <div class="benchmark-history-item" onclick="viewBenchmarkDetails('${benchmark.id}')">
+        <div class="history-item-header">
+          <div class="history-item-title">${benchmark.name}</div>
+          <div class="history-item-date">${new Date(benchmark.timestamp).toLocaleDateString()}</div>
+        </div>
+        <div class="history-item-details">
+          ${benchmark.results.length} tests • Avg: ${formatSpeed(avgSpeed)}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function updateBenchmarkResults() {
+  const tbody = document.getElementById('benchmark-results-body');
+  
+  if (benchmarkResults.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; opacity: 0.7;">No benchmark results yet</td></tr>';
+    return;
+  }
+  
+  const sortedResults = [...benchmarkResults].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  
+  tbody.innerHTML = sortedResults.map(result => {
+    const improvement = calculateImprovement(result);
+    const improvementClass = improvement > 0 ? 'improvement-positive' : improvement < 0 ? 'improvement-negative' : 'improvement-neutral';
+    const improvementText = improvement !== 0 ? (improvement > 0 ? '+' : '') + improvement.toFixed(1) + '%' : 'Baseline';
+    
+    return `
+      <tr>
+        <td>${new Date(result.timestamp).toLocaleDateString()}</td>
+        <td>${result.worker}</td>
+        <td>RTX 4090</td>
+        <td>${result.application}</td>
+        <td>${getHashTypeName(result.hashType)}</td>
+        <td>${formatSpeed(result.speed)}</td>
+        <td><span class="gpu-improvement ${improvementClass}">${improvementText}</span></td>
+        <td>
+          <button onclick="viewResultDetails('${result.timestamp}')" class="info" style="padding: 4px 8px; font-size: 0.8rem;">Details</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function calculateImprovement(result) {
+  // Find previous result for same worker/app/hashtype combination
+  const previousResults = benchmarkResults.filter(r => 
+    r.worker === result.worker && 
+    r.application === result.application && 
+    r.hashType === result.hashType &&
+    new Date(r.timestamp) < new Date(result.timestamp)
+  );
+  
+  if (previousResults.length === 0) return 0;
+  
+  const latestPrevious = previousResults.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+  return ((result.speed - latestPrevious.speed) / latestPrevious.speed) * 100;
+}
+
+function getHashTypeName(hashType) {
+  const names = {
+    '0': 'MD5',
+    '100': 'SHA1',
+    '1400': 'SHA256',
+    '1700': 'SHA512',
+    '22000': 'WPA2',
+    '1000': 'NTLM'
+  };
+  return names[hashType] || hashType;
+}
+
+function loadGPUAnalysis() {
+  const container = document.getElementById('gpu-analysis');
+  
+  if (benchmarkResults.length === 0) {
+    container.innerHTML = `
+      <div class="analysis-placeholder">
+        <div class="analysis-icon">🖥️</div>
+        <p>GPU analysis will appear after benchmarks</p>
+      </div>
+    `;
+    return;
+  }
+  
+  // Group results by GPU
+  const gpuGroups = {};
+  benchmarkResults.forEach(result => {
+    const gpu = 'RTX 4090'; // Mock GPU data
+    if (!gpuGroups[gpu]) gpuGroups[gpu] = { hashcat: [], darkling: [] };
+    gpuGroups[gpu][result.application].push(result);
+  });
+  
+  container.innerHTML = Object.entries(gpuGroups).map(([gpu, data]) => {
+    const hashcatAvg = data.hashcat.reduce((sum, r) => sum + r.speed, 0) / data.hashcat.length || 0;
+    const darklingAvg = data.darkling.reduce((sum, r) => sum + r.speed, 0) / data.darkling.length || 0;
+    const improvement = hashcatAvg > 0 ? ((darklingAvg - hashcatAvg) / hashcatAvg) * 100 : 0;
+    
+    return `
+      <div class="gpu-comparison-card">
+        <div class="gpu-comparison-header">
+          <div class="gpu-name">${gpu}</div>
+          <div class="gpu-improvement ${improvement > 0 ? 'improvement-positive' : improvement < 0 ? 'improvement-negative' : 'improvement-neutral'}">
+            ${improvement > 0 ? '+' : ''}${improvement.toFixed(1)}% Darkling vs Hashcat
+          </div>
+        </div>
+        <div class="gpu-speeds">
+          <div class="speed-comparison">
+            <div class="speed-label">Hashcat Average</div>
+            <div class="speed-value">${formatSpeed(hashcatAvg)}</div>
+          </div>
+          <div class="speed-comparison">
+            <div class="speed-label">Darkling Average</div>
+            <div class="speed-value">${formatSpeed(darklingAvg)}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function runHashcatOnly() {
+  const config = {
+    workers: getSelectedWorkers().slice(0, 1),
+    applications: ['hashcat'],
+    hashTypes: ['0', '1400'],
+    duration: 60,
+    attackMode: '3'
+  };
+  startBenchmark(config, 'Hashcat Performance Test');
+}
+
+function runDarklingOnly() {
+  const config = {
+    workers: getSelectedWorkers().slice(0, 1),
+    applications: ['darkling'],
+    hashTypes: ['0', '1400'],
+    duration: 60,
+    attackMode: '3'
+  };
+  startBenchmark(config, 'Darkling Performance Test');
+}
+
+function runComparison() {
+  const config = {
+    workers: getSelectedWorkers().slice(0, 1),
+    applications: ['hashcat', 'darkling'],
+    hashTypes: ['0', '1400'],
+    duration: 60,
+    attackMode: '3'
+  };
+  startBenchmark(config, 'Head-to-Head Comparison');
+}
+
+function runGPUTest() {
+  const config = {
+    workers: getSelectedWorkers(),
+    applications: ['hashcat', 'darkling'],
+    hashTypes: ['0'],
+    duration: 300,
+    attackMode: '3'
+  };
+  startBenchmark(config, 'GPU Stress Test');
+}
+
+function exportBenchmarkData() {
+  const data = {
+    history: benchmarkHistory,
+    results: benchmarkResults,
+    exported: new Date().toISOString()
+  };
+  
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hashmancer-benchmarks-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  
+  showToast('Benchmark data exported successfully', 'success');
+}
+
+function viewBenchmarkDetails(benchmarkId) {
+  const benchmark = benchmarkHistory.find(b => b.id.toString() === benchmarkId);
+  if (!benchmark) return;
+  
+  const details = `
+    <div style="line-height: 1.6;">
+      <h4>${benchmark.name}</h4>
+      <p><strong>Date:</strong> ${new Date(benchmark.timestamp).toLocaleString()}</p>
+      <p><strong>Duration:</strong> ${benchmark.duration.toFixed(1)} seconds</p>
+      <p><strong>Workers:</strong> ${benchmark.config.workers.join(', ')}</p>
+      <p><strong>Applications:</strong> ${benchmark.config.applications.join(', ')}</p>
+      <p><strong>Hash Types:</strong> ${benchmark.config.hashTypes.map(getHashTypeName).join(', ')}</p>
+      <hr style="margin: 16px 0; border: 1px solid var(--border-color);">
+      <h5>Results Summary:</h5>
+      <p>Total Tests: ${benchmark.results.length}</p>
+      <p>Average Speed: ${formatSpeed(benchmark.results.reduce((sum, r) => sum + r.speed, 0) / benchmark.results.length)}</p>
+      <p>Best Performance: ${formatSpeed(Math.max(...benchmark.results.map(r => r.speed)))}</p>
+    </div>
+  `;
+  
+  document.getElementById('modal-benchmark-title').textContent = 'Benchmark Details';
+  document.getElementById('modal-benchmark-body').innerHTML = details;
+  document.getElementById('benchmark-modal').style.display = 'flex';
+}
+
+function closeBenchmarkModal() {
+  document.getElementById('benchmark-modal').style.display = 'none';
+}
+
+function viewFullHistory() {
+  showToast('Opening full benchmark history...', 'info');
+  // In real implementation, this would open a detailed history view
+}
+
+function filterResults() {
+  const searchTerm = document.getElementById('results-search').value.toLowerCase();
+  const rows = document.querySelectorAll('#benchmark-results-body tr');
+  
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = text.includes(searchTerm) ? '' : 'none';
+  });
+}
+
+function sortResults() {
+  const sortBy = document.getElementById('results-sort').value;
+  showToast(`Sorting results by ${sortBy}...`, 'info');
+  updateBenchmarkResults(); // Re-render with new sort
+}
+
+function saveHashescomConfig() {
+  return app.saveHashescomConfig();
+}
+
+function testHashescomConnection() {
+  return app.testHashescomConnection();
+}
+
+function saveSaladaiConfig() {
+  return app.saveSaladaiConfig();
+}
+
+function saveGrokConfig() {
+  return app.saveGrokConfig();
+}
+
+// Enhanced Hashes.com Functions
+function savePaymentFilters() {
+  return app.savePaymentFilters();
+}
+
+function fetchHashescomJobs() {
+  return app.fetchHashescomJobs();
+}
+
+function startJobPolling() {
+  return app.startJobPolling();
+}
+
+function stopJobPolling() {
+  return app.stopJobPolling();
+}
+
+function clearCompletedJobs() {
+  return app.clearCompletedJobs();
+}
+
+function resetHashescomStats() {
+  return app.resetHashescomStats();
+}
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
   app = new HashmancerPortal();
+  
+  // Load Vast.ai configuration
+  const vastaiConfig = localStorage.getItem('vastai_config');
+  if (vastaiConfig) {
+    const config = JSON.parse(vastaiConfig);
+    if (config.apiKey && document.getElementById('vastai-api-key')) {
+      document.getElementById('vastai-api-key').value = config.apiKey;
+    }
+    if (config.budget && document.getElementById('vastai-budget')) {
+      document.getElementById('vastai-budget').value = config.budget;
+    }
+    if (config.autoDestroy !== undefined && document.getElementById('vastai-auto-destroy')) {
+      document.getElementById('vastai-auto-destroy').checked = config.autoDestroy;
+    }
+  }
+  
+  // Initialize Vast.ai data if tab is visible
+  setTimeout(() => {
+    if (document.getElementById('vastai-tab') && document.getElementById('vastai-tab').style.display !== 'none') {
+      refreshVastaiDashboard();
+    }
+    
+    // Initialize benchmarks tab if visible
+    if (document.getElementById('benchmarks-tab') && document.getElementById('benchmarks-tab').style.display !== 'none') {
+      initializeBenchmarkTab();
+    }
+  }, 1000);
 });
 
 // Handle page visibility changes

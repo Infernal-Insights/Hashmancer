@@ -1,0 +1,655 @@
+{% extends "base.html" %}
+
+{% block title %}Jobs - Hashmancer Portal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1><i class="bi bi-list-task"></i> Jobs</h1>
+                <p class="text-muted">Manage your hash cracking jobs and assignments</p>
+            </div>
+            <div>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newJobModal">
+                    <i class="bi bi-plus-circle"></i> New Job
+                </button>
+                <button class="btn btn-secondary" onclick="refreshJobs()">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Job Statistics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3>{{ jobs|selectattr("status", "equalto", "running")|list|length }}</h3>
+                <p class="mb-0">Running Jobs</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body text-center">
+                <h3>{{ jobs|selectattr("status", "equalto", "queued")|list|length }}</h3>
+                <p class="mb-0">Queued Jobs</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3>{{ jobs|selectattr("status", "equalto", "completed")|list|length }}</h3>
+                <p class="mb-0">Completed Jobs</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <h3>{{ jobs|selectattr("status", "equalto", "failed")|list|length }}</h3>
+                <p class="mb-0">Failed Jobs</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Jobs List -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h5><i class="bi bi-list"></i> Job Queue</h5>
+                <div>
+                    <select class="form-select form-select-sm" id="statusFilter" onchange="filterJobs()">
+                        <option value="">All Status</option>
+                        <option value="running">Running</option>
+                        <option value="queued">Queued</option>
+                        <option value="completed">Completed</option>
+                        <option value="failed">Failed</option>
+                        <option value="paused">Paused</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if jobs %}
+                <div class="table-responsive">
+                    <table class="table table-hover" id="jobsTable">
+                        <thead>
+                            <tr>
+                                <th>Job ID</th>
+                                <th>Status</th>
+                                <th>Hash File</th>
+                                <th>Wordlist</th>
+                                <th>Workers</th>
+                                <th>Progress</th>
+                                <th>Time</th>
+                                <th>Results</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in jobs %}
+                            <tr data-status="{{ job.status }}">
+                                <td>
+                                    <code class="text-primary">{{ job.id }}</code>
+                                    <br>
+                                    <small class="text-muted">Created: 2024-01-15 {{ loop.index0 + 10 }}:30</small>
+                                </td>
+                                <td>
+                                    <span class="badge 
+                                        {% if job.status == 'running' %}bg-success
+                                        {% elif job.status == 'queued' %}bg-warning
+                                        {% elif job.status == 'completed' %}bg-primary
+                                        {% elif job.status == 'failed' %}bg-danger
+                                        {% elif job.status == 'paused' %}bg-secondary
+                                        {% endif %}">
+                                        {{ job.status|title }}
+                                    </span>
+                                    {% if job.status == 'running' %}
+                                    <br><small class="text-success">
+                                        <i class="bi bi-play-fill"></i> Active
+                                    </small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>{{ job.hash_file }}</strong>
+                                    <br>
+                                    <small class="text-muted">
+                                        {% set hash_count = (loop.index0 * 1234) + 5000 %}
+                                        {{ "{:,}".format(hash_count) }} hashes
+                                    </small>
+                                </td>
+                                <td>
+                                    <strong>{{ job.wordlist }}</strong>
+                                    {% if job.get('rules') %}
+                                    <br><small class="text-muted">+ Rules</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ job.assigned_workers }}</span>
+                                    {% if job.assigned_workers > 0 %}
+                                    <br><small class="text-success">Active</small>
+                                    {% else %}
+                                    <br><small class="text-warning">Unassigned</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if job.status in ['running', 'completed'] %}
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar 
+                                            {% if job.progress >= 100 %}bg-success
+                                            {% elif job.progress >= 75 %}bg-info
+                                            {% elif job.progress >= 50 %}bg-warning
+                                            {% else %}bg-danger
+                                            {% endif %}" 
+                                            style="width: {{ job.progress }}%">
+                                            {{ "%.1f"|format(job.progress) }}%
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if job.status == 'running' %}
+                                    <strong>ETA: {{ job.estimated_completion }}</strong>
+                                    <br><small class="text-muted">
+                                        Running: {{ (loop.index0 * 15) + 30 }}m
+                                    </small>
+                                    {% elif job.status == 'completed' %}
+                                    <strong>Completed</strong>
+                                    <br><small class="text-muted">
+                                        Duration: {{ (loop.index0 * 45) + 120 }}m
+                                    </small>
+                                    {% elif job.status == 'queued' %}
+                                    <span class="text-warning">Waiting</span>
+                                    <br><small class="text-muted">Position: {{ loop.index }}</small>
+                                    {% else %}
+                                    <span class="text-muted">{{ job.estimated_completion }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if job.status == 'completed' %}
+                                    {% set found_hashes = (loop.index0 * 12) + 45 %}
+                                    <strong class="text-success">{{ found_hashes }} found</strong>
+                                    <br><small class="text-muted">
+                                        {{ "%.1f"|format((found_hashes / (loop.index0 * 1234 + 5000)) * 100) }}% success
+                                    </small>
+                                    {% elif job.status == 'running' %}
+                                    {% set current_found = loop.index0 * 3 %}
+                                    <span class="text-info">{{ current_found }} found</span>
+                                    <br><small class="text-muted">In progress</small>
+                                    {% else %}
+                                    <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-sm btn-outline-info" onclick="showJobDetails('{{ job.id }}')">
+                                            <i class="bi bi-info-circle"></i>
+                                        </button>
+                                        {% if job.status == 'running' %}
+                                        <button class="btn btn-sm btn-outline-warning" onclick="pauseJob('{{ job.id }}')">
+                                            <i class="bi bi-pause"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" onclick="stopJob('{{ job.id }}')">
+                                            <i class="bi bi-stop"></i>
+                                        </button>
+                                        {% elif job.status == 'paused' %}
+                                        <button class="btn btn-sm btn-outline-success" onclick="resumeJob('{{ job.id }}')">
+                                            <i class="bi bi-play"></i>
+                                        </button>
+                                        {% elif job.status == 'queued' %}
+                                        <button class="btn btn-sm btn-outline-primary" onclick="assignWorkers('{{ job.id }}')">
+                                            <i class="bi bi-cpu"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" onclick="cancelJob('{{ job.id }}')">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                        {% elif job.status == 'completed' %}
+                                        <button class="btn btn-sm btn-outline-success" onclick="downloadResults('{{ job.id }}')">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-list-task fs-1 text-muted"></i>
+                    <h3 class="text-muted mt-3">No Jobs Found</h3>
+                    <p class="text-muted">Create your first hash cracking job to get started.</p>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newJobModal">
+                        <i class="bi bi-plus-circle"></i> Create First Job
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Job Modal -->
+<div class="modal fade" id="newJobModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Create New Job</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newJobForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Job Name *</label>
+                                <input type="text" class="form-control" id="jobName" required 
+                                       placeholder="e.g., Corporate Hash Analysis">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Hash Type *</label>
+                                <select class="form-select" id="hashType" required>
+                                    <option value="">Select hash type</option>
+                                    <option value="md5">MD5</option>
+                                    <option value="sha1">SHA1</option>
+                                    <option value="sha256">SHA256</option>
+                                    <option value="ntlm">NTLM</option>
+                                    <option value="bcrypt">bcrypt</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Hash File *</label>
+                        <input type="file" class="form-control" id="hashFile" accept=".txt,.hash" required>
+                        <div class="form-text">Upload a file containing hashes to crack (one per line)</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Wordlist *</label>
+                                <select class="form-select" id="wordlist" required>
+                                    <option value="">Select wordlist</option>
+                                    <option value="rockyou.txt">RockYou (14M passwords)</option>
+                                    <option value="common-passwords.txt">Common Passwords (1M)</option>
+                                    <option value="custom.txt">Upload Custom Wordlist</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Rules (Optional)</label>
+                                <select class="form-select" id="rulesFile">
+                                    <option value="">No rules</option>
+                                    <option value="best64.rule">Best64 Rules</option>
+                                    <option value="leetspeak.rule">Leetspeak Rules</option>
+                                    <option value="custom.rule">Upload Custom Rules</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Priority</label>
+                                <select class="form-select" id="jobPriority">
+                                    <option value="low">Low</option>
+                                    <option value="normal" selected>Normal</option>
+                                    <option value="high">High</option>
+                                    <option value="urgent">Urgent</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Auto-assign Workers</label>
+                                <select class="form-select" id="autoAssign">
+                                    <option value="yes" selected>Yes</option>
+                                    <option value="no">No</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Max Workers</label>
+                                <input type="number" class="form-control" id="maxWorkers" value="5" min="1" max="50">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Additional Options</label>
+                        <textarea class="form-control" id="additionalOptions" rows="2" 
+                                  placeholder="Additional hashcat options (advanced users)"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createJob()">Create Job</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Job Details Modal -->
+<div class="modal fade" id="jobDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-info-circle"></i> Job Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="jobDetailsContent">
+                Loading...
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Worker Assignment Modal -->
+<div class="modal fade" id="workerAssignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-cpu"></i> Assign Workers</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Available Workers:</label>
+                    <div id="availableWorkersList">
+                        Loading...
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Or launch new workers:</label>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <select class="form-select" id="newWorkerGpu">
+                                <option value="rtx4090">RTX 4090</option>
+                                <option value="a100_80gb">A100 80GB</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <input type="number" class="form-control" id="newWorkerCount" placeholder="Count" min="1" max="10">
+                        </div>
+                    </div>
+                </div>
+                <input type="hidden" id="assignJobId">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="executeWorkerAssignment()">Assign Workers</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterJobs() {
+    const filter = document.getElementById('statusFilter').value;
+    const rows = document.querySelectorAll('#jobsTable tbody tr');
+    
+    rows.forEach(row => {
+        const status = row.dataset.status;
+        row.style.display = (!filter || status === filter) ? '' : 'none';
+    });
+}
+
+function refreshJobs() {
+    location.reload();
+}
+
+function showJobDetails(jobId) {
+    // Mock job details
+    const jobDetails = {
+        'job_001': {
+            id: 'job_001',
+            name: 'Corporate Hash Analysis',
+            status: 'running',
+            hash_type: 'NTLM',
+            hash_file: 'corporate_hashes.txt',
+            hash_count: 15420,
+            wordlist: 'rockyou.txt',
+            rules: 'best64.rule',
+            progress: 45.2,
+            found_hashes: 67,
+            assigned_workers: 3,
+            created_at: '2024-01-15 14:30:15',
+            started_at: '2024-01-15 14:35:20',
+            estimated_completion: '2h 15m'
+        }
+    };
+    
+    const job = jobDetails[jobId] || jobDetails['job_001'];
+    
+    const content = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Job Information</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Job ID:</strong></td><td><code>${job.id}</code></td></tr>
+                    <tr><td><strong>Name:</strong></td><td>${job.name}</td></tr>
+                    <tr><td><strong>Status:</strong></td><td><span class="badge bg-success">${job.status}</span></td></tr>
+                    <tr><td><strong>Hash Type:</strong></td><td>${job.hash_type}</td></tr>
+                    <tr><td><strong>Created:</strong></td><td>${job.created_at}</td></tr>
+                    <tr><td><strong>Started:</strong></td><td>${job.started_at}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Progress & Results</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Progress:</strong></td><td>${job.progress}%</td></tr>
+                    <tr><td><strong>Total Hashes:</strong></td><td>${job.hash_count.toLocaleString()}</td></tr>
+                    <tr><td><strong>Found:</strong></td><td class="text-success">${job.found_hashes}</td></tr>
+                    <tr><td><strong>Success Rate:</strong></td><td>${((job.found_hashes / job.hash_count) * 100).toFixed(2)}%</td></tr>
+                    <tr><td><strong>Workers:</strong></td><td>${job.assigned_workers}</td></tr>
+                    <tr><td><strong>ETA:</strong></td><td>${job.estimated_completion}</td></tr>
+                </table>
+            </div>
+        </div>
+        
+        <div class="row mt-3">
+            <div class="col-md-12">
+                <h6>Files</h6>
+                <ul class="list-group">
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span><i class="bi bi-file-text"></i> ${job.hash_file}</span>
+                        <button class="btn btn-sm btn-outline-primary">Download</button>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span><i class="bi bi-file-text"></i> ${job.wordlist}</span>
+                        <span class="text-muted">System wordlist</span>
+                    </li>
+                    ${job.rules ? `<li class="list-group-item d-flex justify-content-between">
+                        <span><i class="bi bi-gear"></i> ${job.rules}</span>
+                        <span class="text-muted">Rules file</span>
+                    </li>` : ''}
+                </ul>
+            </div>
+        </div>
+        
+        <div class="row mt-3">
+            <div class="col-md-12">
+                <h6>Performance Metrics</h6>
+                <div class="progress mb-2">
+                    <div class="progress-bar" style="width: ${job.progress}%">${job.progress}%</div>
+                </div>
+                <small class="text-muted">
+                    Processing rate: ~2.5 GH/s | 
+                    Time remaining: ${job.estimated_completion} |
+                    Current keyspace: 14.3B
+                </small>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('jobDetailsContent').innerHTML = content;
+    new bootstrap.Modal(document.getElementById('jobDetailsModal')).show();
+}
+
+function pauseJob(jobId) {
+    if (confirm(`Pause job ${jobId}?`)) {
+        // Mock API call
+        alert('Job paused successfully');
+        refreshJobs();
+    }
+}
+
+function resumeJob(jobId) {
+    if (confirm(`Resume job ${jobId}?`)) {
+        // Mock API call
+        alert('Job resumed successfully');
+        refreshJobs();
+    }
+}
+
+function stopJob(jobId) {
+    if (confirm(`Stop job ${jobId}? This will terminate the job permanently.`)) {
+        // Mock API call
+        alert('Job stopped');
+        refreshJobs();
+    }
+}
+
+function cancelJob(jobId) {
+    if (confirm(`Cancel job ${jobId}? This action cannot be undone.`)) {
+        // Mock API call
+        alert('Job cancelled');
+        refreshJobs();
+    }
+}
+
+function assignWorkers(jobId) {
+    document.getElementById('assignJobId').value = jobId;
+    
+    // Mock available workers
+    const mockWorkers = [
+        {id: 'vast_001', gpu: 'RTX 4090', status: 'idle'},
+        {id: 'vast_002', gpu: 'RTX 4090', status: 'idle'},
+        {id: 'vast_003', gpu: 'A100 80GB', status: 'busy'}
+    ];
+    
+    let workersList = '';
+    mockWorkers.forEach(worker => {
+        const disabled = worker.status === 'busy' ? 'disabled' : '';
+        workersList += `
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="${worker.id}" id="worker_${worker.id}" ${disabled}>
+                <label class="form-check-label" for="worker_${worker.id}">
+                    ${worker.id} (${worker.gpu}) - ${worker.status}
+                </label>
+            </div>
+        `;
+    });
+    
+    document.getElementById('availableWorkersList').innerHTML = workersList;
+    new bootstrap.Modal(document.getElementById('workerAssignModal')).show();
+}
+
+function executeWorkerAssignment() {
+    const jobId = document.getElementById('assignJobId').value;
+    const selectedWorkers = Array.from(document.querySelectorAll('#availableWorkersList input:checked')).map(cb => cb.value);
+    const newWorkerCount = parseInt(document.getElementById('newWorkerCount').value) || 0;
+    
+    if (selectedWorkers.length === 0 && newWorkerCount === 0) {
+        alert('Please select existing workers or specify new workers to launch');
+        return;
+    }
+    
+    // Mock assignment
+    alert(`Assigned ${selectedWorkers.length} existing workers and launching ${newWorkerCount} new workers for job ${jobId}`);
+    bootstrap.Modal.getInstance(document.getElementById('workerAssignModal')).hide();
+    refreshJobs();
+}
+
+function downloadResults(jobId) {
+    // Mock results download
+    const mockResults = `# Results for job ${jobId}
+# Generated on ${new Date().toISOString()}
+admin:password123
+user1:qwerty
+test:123456
+manager:welcome1
+`;
+    
+    const blob = new Blob([mockResults], {type: 'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${jobId}_results.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function createJob() {
+    const form = document.getElementById('newJobForm');
+    const formData = new FormData(form);
+    
+    // Basic validation
+    const jobName = document.getElementById('jobName').value;
+    const hashType = document.getElementById('hashType').value;
+    const hashFile = document.getElementById('hashFile').files[0];
+    const wordlist = document.getElementById('wordlist').value;
+    
+    if (!jobName || !hashType || !hashFile || !wordlist) {
+        alert('Please fill in all required fields');
+        return;
+    }
+    
+    // Mock job creation
+    const jobId = 'job_' + Date.now();
+    alert(`Job created successfully!\nJob ID: ${jobId}\nThe job has been added to the queue and will start processing soon.`);
+    
+    bootstrap.Modal.getInstance(document.getElementById('newJobModal')).hide();
+    form.reset();
+    refreshJobs();
+}
+
+// Handle custom file uploads
+document.getElementById('wordlist').addEventListener('change', function() {
+    if (this.value === 'custom.txt') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.txt,.dic,.wordlist';
+        input.onchange = function() {
+            if (this.files[0]) {
+                alert('Custom wordlist uploaded: ' + this.files[0].name);
+            }
+        };
+        input.click();
+    }
+});
+
+document.getElementById('rulesFile').addEventListener('change', function() {
+    if (this.value === 'custom.rule') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.rule,.rules';
+        input.onchange = function() {
+            if (this.files[0]) {
+                alert('Custom rules uploaded: ' + this.files[0].name);
+            }
+        };
+        input.click();
+    }
+});
+</script>
+{% endblock %}

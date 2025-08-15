@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Hashmancer Portal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1><i class="bi bi-speedometer2"></i> Dashboard</h1>
+        <p class="text-muted">Real-time overview of your Hashmancer workers and costs</p>
+    </div>
+</div>
+
+<!-- Status Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ cost_summary.active_workers }}</h4>
+                        <p class="card-text">Active Workers</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-cpu fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ total_gpus }}</h4>
+                        <p class="card-text">Total GPUs</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-gpu-card fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">${{ "%.2f"|format(cost_summary.estimated_hourly_cost) }}</h4>
+                        <p class="card-text">Hourly Cost</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-currency-dollar fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">${{ "%.2f"|format(cost_summary.total_cost) }}</h4>
+                        <p class="card-text">Total Cost</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-graph-up fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-pie-chart"></i> Workers by Status</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="statusChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-bar-chart"></i> Cost by GPU Type</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="costChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Workers -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h5><i class="bi bi-list"></i> Recent Workers</h5>
+                <a href="/workers" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body">
+                {% if workers %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Instance ID</th>
+                                <th>Status</th>
+                                <th>GPU</th>
+                                <th>Price/hr</th>
+                                <th>Uptime</th>
+                                <th>Cost</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for worker in workers[:10] %}
+                            <tr>
+                                <td>
+                                    <code>{{ worker.instance_id[:12] }}...</code>
+                                </td>
+                                <td>
+                                    <span class="badge {% if worker.status.value == 'running' %}bg-success{% elif worker.status.value == 'creating' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                        {{ worker.status.value }}
+                                    </span>
+                                </td>
+                                <td>{{ worker.gpu_count }}x {{ worker.gpu_type.value }}</td>
+                                <td>${{ "%.3f"|format(worker.price_per_hour) }}</td>
+                                <td>{{ "%.1f"|format(worker.uptime_seconds / 3600) }}h</td>
+                                <td>${{ "%.2f"|format(worker.total_cost) }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="stopWorker('{{ worker.instance_id }}')">
+                                        <i class="bi bi-stop"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-cpu fs-1 text-muted"></i>
+                    <p class="text-muted mt-2">No workers currently deployed</p>
+                    <a href="/launch" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Launch Your First Worker
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-lightning"></i> Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <a href="/launch" class="btn btn-success w-100 mb-2">
+                            <i class="bi bi-plus-circle"></i> Launch Worker
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-warning w-100 mb-2" onclick="evaluateScaling()">
+                            <i class="bi bi-arrows-expand"></i> Auto-Scale
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="/costs" class="btn btn-info w-100 mb-2">
+                            <i class="bi bi-graph-up"></i> View Costs
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-danger w-100 mb-2" onclick="stopAllWorkers()">
+                            <i class="bi bi-stop"></i> Stop All
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Workers by Status Chart
+const statusCtx = document.getElementById('statusChart').getContext('2d');
+const statusChart = new Chart(statusCtx, {
+    type: 'doughnut',
+    data: {
+        labels: [{% for status, count in workers_by_status.items() %}'{{ status }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            data: [{% for status, count in workers_by_status.items() %}{{ count }}{% if not loop.last %},{% endif %}{% endfor %}],
+            backgroundColor: [
+                '#28a745', '#dc3545', '#ffc107', '#6c757d', '#17a2b8'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    }
+});
+
+// Cost by GPU Type Chart
+const costCtx = document.getElementById('costChart').getContext('2d');
+const costChart = new Chart(costCtx, {
+    type: 'bar',
+    data: {
+        labels: [{% for gpu_type, cost in cost_summary.cost_by_gpu_type.items() %}'{{ gpu_type }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            label: 'Cost ($)',
+            data: [{% for gpu_type, cost in cost_summary.cost_by_gpu_type.items() %}{{ cost }}{% if not loop.last %},{% endif %}{% endfor %}],
+            backgroundColor: '#007bff'
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+// Live updates via WebSocket
+const ws = new WebSocket(`ws://${window.location.host}/ws/live-updates`);
+ws.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    // Update dashboard with live data
+    console.log('Live update:', data);
+};
+
+// Action functions
+function stopWorker(instanceId) {
+    if (confirm('Are you sure you want to stop this worker?')) {
+        fetch(`/api/workers/${instanceId}`, {method: 'DELETE'})
+            .then(response => response.json())
+            .then(data => {
+                alert('Worker stop initiated');
+                location.reload();
+            })
+            .catch(error => alert('Error: ' + error));
+    }
+}
+
+function evaluateScaling() {
+    fetch('/api/scaling/evaluate', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            if (data.action === 'none') {
+                alert('No scaling action needed');
+            } else {
+                if (confirm(`Scaling recommendation: ${data.action}\nTarget workers: ${data.target_workers}\nReason: ${data.reason}\n\nExecute this action?`)) {
+                    fetch('/api/scaling/execute', {method: 'POST'})
+                        .then(response => response.json())
+                        .then(result => {
+                            alert(result.message);
+                            location.reload();
+                        });
+                }
+            }
+        });
+}
+
+function stopAllWorkers() {
+    if (confirm('Are you sure you want to stop ALL workers? This action cannot be undone.')) {
+        // Implementation would iterate through all workers
+        alert('Stop all workers feature coming soon');
+    }
+}
+</script>
+{% endblock %}

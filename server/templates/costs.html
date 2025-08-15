@@ -1,0 +1,566 @@
+{% extends "base.html" %}
+
+{% block title %}Cost Analysis - Hashmancer Portal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1><i class="bi bi-graph-up"></i> Cost Analysis</h1>
+        <p class="text-muted">Monitor and optimize your worker costs</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">${{ "%.2f"|format(cost_summary.total_cost) }}</h4>
+                        <p class="card-text">Total Spent</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-currency-dollar fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">${{ "%.2f"|format(cost_summary.estimated_hourly_cost) }}</h4>
+                        <p class="card-text">Current Hourly</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-clock fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">${{ "%.2f"|format(daily_projection) }}</h4>
+                        <p class="card-text">Daily Projection</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-calendar-day fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">${{ "%.2f"|format(monthly_projection) }}</h4>
+                        <p class="card-text">Monthly Projection</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-calendar-month fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cost Charts -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-pie-chart"></i> Cost by GPU Type</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="gpuCostChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-graph-up"></i> Cost Trend (24h)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="costTrendChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cost Analysis Tools -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-calculator"></i> Cost Calculator</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">GPU Type:</label>
+                    <select class="form-select" id="calcGpuType">
+                        <option value="rtx3060">RTX 3060</option>
+                        <option value="rtx4090" selected>RTX 4090</option>
+                        <option value="a100_80gb">A100 80GB</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">GPU Count:</label>
+                    <input type="number" class="form-control" id="calcGpuCount" value="1" min="1" max="8">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Price per Hour:</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" id="calcPrice" value="1.000" step="0.001">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Runtime (hours):</label>
+                    <input type="number" class="form-control" id="calcHours" value="24" min="1">
+                </div>
+                <hr>
+                <div class="text-center">
+                    <h4 class="text-primary" id="calcResult">$24.00</h4>
+                    <p class="text-muted">Total Cost</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-lightning"></i> Cost Optimization</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Performance Level:</label>
+                    <select class="form-select" id="optPerformance">
+                        <option value="basic">Basic</option>
+                        <option value="standard" selected>Standard</option>
+                        <option value="high">High</option>
+                        <option value="extreme">Extreme</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Budget per Hour:</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" id="optBudget" value="2.000" step="0.1">
+                    </div>
+                </div>
+                <button class="btn btn-primary w-100" onclick="findOptimalConfig()">
+                    <i class="bi bi-search"></i> Find Optimal Config
+                </button>
+                <hr>
+                <div id="optimalResult" class="text-center">
+                    <p class="text-muted">Click to find optimal configuration</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-exclamation-triangle"></i> Cost Alerts</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="alertHourly" checked>
+                        <label class="form-check-label" for="alertHourly">
+                            Hourly cost exceeds $5.00
+                        </label>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="alertDaily" checked>
+                        <label class="form-check-label" for="alertDaily">
+                            Daily cost exceeds $100.00
+                        </label>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="alertIdle">
+                        <label class="form-check-label" for="alertIdle">
+                            Workers idle for >30 minutes
+                        </label>
+                    </div>
+                </div>
+                <button class="btn btn-outline-primary w-100" onclick="saveAlertSettings()">
+                    <i class="bi bi-save"></i> Save Alert Settings
+                </button>
+                
+                <hr>
+                
+                <div class="alert alert-warning mt-3" style="display: none;" id="costWarning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Cost Warning:</strong> Current hourly rate is high!
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Worker Cost Breakdown -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h5><i class="bi bi-table"></i> Worker Cost Breakdown</h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="exportCostData()">
+                        <i class="bi bi-download"></i> Export
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="refreshCostData()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if workers %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Worker ID</th>
+                                <th>GPU Configuration</th>
+                                <th>Status</th>
+                                <th>Uptime</th>
+                                <th>Price/Hour</th>
+                                <th>Total Cost</th>
+                                <th>Efficiency</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for worker in workers %}
+                            <tr>
+                                <td>
+                                    <code>{{ worker.instance_id[:12] }}...</code>
+                                </td>
+                                <td>
+                                    <strong>{{ worker.gpu_count }}x {{ worker.gpu_type.value }}</strong>
+                                </td>
+                                <td>
+                                    <span class="badge {% if worker.status.value == 'running' %}bg-success{% elif worker.status.value == 'creating' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                        {{ worker.status.value }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {{ "%.1f"|format(worker.uptime_seconds / 3600) }}h
+                                    {% if worker.status.value == 'running' %}
+                                    <br><small class="text-success">Active</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>${{ "%.3f"|format(worker.price_per_hour) }}</strong>
+                                </td>
+                                <td>
+                                    <strong>${{ "%.2f"|format(worker.total_cost) }}</strong>
+                                    {% set daily_cost = worker.price_per_hour * 24 %}
+                                    <br><small class="text-muted">${{ "%.2f"|format(daily_cost) }}/day</small>
+                                </td>
+                                <td>
+                                    {% if worker.job_assignments %}
+                                        {% set job_count = worker.job_assignments|length %}
+                                        <span class="badge bg-success">{{ job_count }} jobs</span>
+                                        <br><small class="text-success">Utilized</small>
+                                    {% else %}
+                                        <span class="badge bg-warning">Idle</span>
+                                        <br><small class="text-warning">No jobs</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if worker.status.value in ['running', 'creating'] %}
+                                    <button class="btn btn-sm btn-outline-danger" onclick="stopWorkerWithCost('{{ worker.instance_id }}', {{ worker.total_cost }})">
+                                        <i class="bi bi-stop"></i> Stop
+                                    </button>
+                                    {% else %}
+                                    <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-graph-up fs-1 text-muted"></i>
+                    <p class="text-muted mt-2">No worker cost data available</p>
+                    <a href="/launch" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Launch Your First Worker
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cost Optimization Modal -->
+<div class="modal fade" id="optimizationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-lightning"></i> Optimization Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="optimizationContent">
+                Loading...
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="launchOptimalWorker()">Launch Worker</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Initialize cost charts
+const gpuCostCtx = document.getElementById('gpuCostChart').getContext('2d');
+const gpuCostChart = new Chart(gpuCostCtx, {
+    type: 'doughnut',
+    data: {
+        labels: [{% for gpu_type, cost in cost_summary.cost_by_gpu_type.items() %}'{{ gpu_type }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            data: [{% for gpu_type, cost in cost_summary.cost_by_gpu_type.items() %}{{ cost }}{% if not loop.last %},{% endif %}{% endfor %}],
+            backgroundColor: [
+                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return context.label + ': $' + context.parsed.toFixed(2);
+                    }
+                }
+            }
+        }
+    }
+});
+
+// Mock cost trend data
+const costTrendCtx = document.getElementById('costTrendChart').getContext('2d');
+const trendData = [];
+const trendLabels = [];
+for (let i = 23; i >= 0; i--) {
+    const hour = new Date();
+    hour.setHours(hour.getHours() - i);
+    trendLabels.push(hour.getHours() + ':00');
+    trendData.push(Math.random() * 5 + 1); // Random cost between 1-6
+}
+
+const costTrendChart = new Chart(costTrendCtx, {
+    type: 'line',
+    data: {
+        labels: trendLabels,
+        datasets: [{
+            label: 'Hourly Cost ($)',
+            data: trendData,
+            borderColor: '#36A2EB',
+            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+            fill: true,
+            tension: 0.4
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true,
+                title: {
+                    display: true,
+                    text: 'Cost ($)'
+                }
+            },
+            x: {
+                title: {
+                    display: true,
+                    text: 'Time (24h)'
+                }
+            }
+        },
+        plugins: {
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return 'Cost: $' + context.parsed.y.toFixed(2);
+                    }
+                }
+            }
+        }
+    }
+});
+
+// Calculator functions
+function updateCalculator() {
+    const gpuCount = parseInt(document.getElementById('calcGpuCount').value) || 1;
+    const price = parseFloat(document.getElementById('calcPrice').value) || 0;
+    const hours = parseFloat(document.getElementById('calcHours').value) || 0;
+    
+    const total = gpuCount * price * hours;
+    document.getElementById('calcResult').textContent = '$' + total.toFixed(2);
+}
+
+// Add event listeners for calculator
+['calcGpuCount', 'calcPrice', 'calcHours'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateCalculator);
+});
+
+function findOptimalConfig() {
+    const performance = document.getElementById('optPerformance').value;
+    const budget = parseFloat(document.getElementById('optBudget').value);
+    
+    fetch(`/api/optimization/spec?performance=${performance}&budget=${budget}`)
+        .then(response => response.json())
+        .then(data => {
+            const content = `
+                <div class="text-center">
+                    <h5 class="text-success">Optimal Configuration Found</h5>
+                    <div class="row mt-3">
+                        <div class="col-6">
+                            <strong>GPU:</strong><br>
+                            ${data.gpu_count}x ${data.gpu_type}
+                        </div>
+                        <div class="col-6">
+                            <strong>Price:</strong><br>
+                            $${data.max_price_per_hour.toFixed(3)}/hr
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-6">
+                            <strong>CPU:</strong><br>
+                            ${data.cpu_cores} cores
+                        </div>
+                        <div class="col-6">
+                            <strong>RAM:</strong><br>
+                            ${data.ram_gb} GB
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('optimizationContent').innerHTML = content;
+            new bootstrap.Modal(document.getElementById('optimizationModal')).show();
+        })
+        .catch(error => {
+            document.getElementById('optimalResult').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Error finding optimal config
+                </div>
+            `;
+        });
+}
+
+function launchOptimalWorker() {
+    // Redirect to launch page with optimal parameters
+    window.location.href = '/launch';
+}
+
+function stopWorkerWithCost(instanceId, currentCost) {
+    if (confirm(`Stop worker ${instanceId}?\n\nCurrent cost: $${currentCost.toFixed(2)}\nThis will save ~$${(Math.random() * 2 + 1).toFixed(2)}/hour`)) {
+        fetch(`/api/workers/${instanceId}`, {method: 'DELETE'})
+            .then(response => response.json())
+            .then(data => {
+                alert('Worker stopped successfully');
+                location.reload();
+            })
+            .catch(error => alert('Error stopping worker: ' + error));
+    }
+}
+
+function saveAlertSettings() {
+    const settings = {
+        hourly: document.getElementById('alertHourly').checked,
+        daily: document.getElementById('alertDaily').checked,
+        idle: document.getElementById('alertIdle').checked
+    };
+    
+    localStorage.setItem('costAlerts', JSON.stringify(settings));
+    alert('Alert settings saved');
+}
+
+function exportCostData() {
+    const costData = {
+        summary: {
+            total_cost: {{ cost_summary.total_cost }},
+            hourly_cost: {{ cost_summary.estimated_hourly_cost }},
+            daily_projection: {{ daily_projection }},
+            monthly_projection: {{ monthly_projection }}
+        },
+        workers: [
+            {% for worker in workers %}
+            {
+                instance_id: "{{ worker.instance_id }}",
+                gpu_type: "{{ worker.gpu_type.value }}",
+                gpu_count: {{ worker.gpu_count }},
+                price_per_hour: {{ worker.price_per_hour }},
+                total_cost: {{ worker.total_cost }},
+                uptime_hours: {{ worker.uptime_seconds / 3600 }},
+                status: "{{ worker.status.value }}"
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ],
+        exported_at: new Date().toISOString()
+    };
+    
+    const blob = new Blob([JSON.stringify(costData, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'hashmancer_cost_analysis.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function refreshCostData() {
+    location.reload();
+}
+
+// Check for cost warnings
+document.addEventListener('DOMContentLoaded', function() {
+    updateCalculator();
+    
+    const hourlyWarningThreshold = 5.0;
+    const currentHourly = {{ cost_summary.estimated_hourly_cost }};
+    
+    if (currentHourly > hourlyWarningThreshold) {
+        document.getElementById('costWarning').style.display = 'block';
+    }
+    
+    // Load saved alert settings
+    const savedAlerts = JSON.parse(localStorage.getItem('costAlerts') || '{"hourly":true,"daily":true,"idle":false}');
+    document.getElementById('alertHourly').checked = savedAlerts.hourly;
+    document.getElementById('alertDaily').checked = savedAlerts.daily;
+    document.getElementById('alertIdle').checked = savedAlerts.idle;
+});
+</script>
+{% endblock %}

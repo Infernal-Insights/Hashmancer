@@ -1,0 +1,172 @@
+{
+  "hashmancer_templates": {
+    "budget_cracker": {
+      "name": "Budget Hash Cracker",
+      "description": "Cost-effective setup for basic hash cracking",
+      "image": "derekhartwig/hashmancer:latest",
+      "gpu_requirements": {
+        "min_gpu_memory": 6000,
+        "preferred_gpus": ["rtx3060", "rtx3070", "gtx1080ti"],
+        "gpu_count": 1
+      },
+      "system_requirements": {
+        "cpu_cores": 2,
+        "ram_gb": 8,
+        "storage_gb": 30
+      },
+      "pricing": {
+        "max_price_per_hour": 0.50,
+        "auto_bid": true
+      },
+      "startup_script": "quick_setup_budget.sh",
+      "env_vars": {
+        "HASHCAT_OPTIMIZATION": "basic",
+        "WORDLIST_SIZE": "small"
+      }
+    },
+    
+    "balanced_cracker": {
+      "name": "Balanced Performance Cracker",
+      "description": "Good balance of performance and cost",
+      "image": "derekhartwig/hashmancer:latest",
+      "gpu_requirements": {
+        "min_gpu_memory": 10000,
+        "preferred_gpus": ["rtx4070", "rtx4080", "rtx4090", "rtx3080", "rtx3090"],
+        "gpu_count": 1
+      },
+      "system_requirements": {
+        "cpu_cores": 4,
+        "ram_gb": 16,
+        "storage_gb": 50
+      },
+      "pricing": {
+        "max_price_per_hour": 1.50,
+        "auto_bid": true
+      },
+      "startup_script": "quick_setup_balanced.sh",
+      "env_vars": {
+        "HASHCAT_OPTIMIZATION": "standard",
+        "WORDLIST_SIZE": "medium"
+      }
+    },
+    
+    "performance_cracker": {
+      "name": "High Performance Cracker",
+      "description": "Maximum speed for urgent jobs",
+      "image": "derekhartwig/hashmancer:latest",
+      "gpu_requirements": {
+        "min_gpu_memory": 20000,
+        "preferred_gpus": ["a100_40gb", "a100_80gb", "h100", "rtx4090"],
+        "gpu_count": 1
+      },
+      "system_requirements": {
+        "cpu_cores": 8,
+        "ram_gb": 32,
+        "storage_gb": 100
+      },
+      "pricing": {
+        "max_price_per_hour": 4.00,
+        "auto_bid": true
+      },
+      "startup_script": "quick_setup_performance.sh",
+      "env_vars": {
+        "HASHCAT_OPTIMIZATION": "aggressive",
+        "WORDLIST_SIZE": "large"
+      }
+    },
+    
+    "multi_gpu_farm": {
+      "name": "Multi-GPU Farm",
+      "description": "Massive parallel processing power",
+      "image": "derekhartwig/hashmancer:latest",
+      "gpu_requirements": {
+        "min_gpu_memory": 8000,
+        "preferred_gpus": ["rtx4090", "rtx4080", "a100_40gb"],
+        "gpu_count": 4
+      },
+      "system_requirements": {
+        "cpu_cores": 16,
+        "ram_gb": 64,
+        "storage_gb": 200
+      },
+      "pricing": {
+        "max_price_per_hour": 8.00,
+        "auto_bid": true
+      },
+      "startup_script": "quick_setup_multigpu.sh",
+      "env_vars": {
+        "HASHCAT_OPTIMIZATION": "multigpu",
+        "WORDLIST_SIZE": "xlarge",
+        "GPU_WORKLOAD_SPLIT": "auto"
+      }
+    }
+  },
+  
+  "wordlist_templates": {
+    "small": {
+      "name": "Quick Start Wordlists",
+      "files": [
+        "rockyou.txt",
+        "common-passwords.txt",
+        "top-10k-passwords.txt"
+      ],
+      "total_size_mb": 150,
+      "download_urls": [
+        "https://github.com/danielmiessler/SecLists/raw/master/Passwords/Leaked-Databases/rockyou.txt.tar.gz",
+        "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/10-million-password-list-top-10000.txt"
+      ]
+    },
+    
+    "medium": {
+      "name": "Standard Wordlist Collection",
+      "files": [
+        "rockyou.txt",
+        "crackstation-human-only.txt",
+        "hashkiller-dict.txt",
+        "weakpass_2a.txt"
+      ],
+      "total_size_mb": 2500,
+      "download_urls": [
+        "https://crackstation.net/files/crackstation.txt.gz",
+        "https://weakpass.com/wordlist/1950"
+      ]
+    },
+    
+    "large": {
+      "name": "Comprehensive Wordlist Suite",
+      "files": [
+        "rockyou.txt",
+        "crackstation.txt",
+        "weakpass_2a.txt",
+        "kaonashi.txt",
+        "hashesorg2019.txt"
+      ],
+      "total_size_mb": 15000,
+      "download_urls": [
+        "https://crackstation.net/files/crackstation.txt.gz",
+        "https://weakpass.com/wordlist/1950",
+        "https://download.weakpass.com/wordlists/1948/kaonashi.txt.gz"
+      ]
+    }
+  },
+  
+  "rule_templates": {
+    "basic": {
+      "name": "Essential Rules",
+      "files": ["best64.rule", "leetspeak.rule"],
+      "description": "Most common password mutations"
+    },
+    
+    "comprehensive": {
+      "name": "Complete Rule Set",
+      "files": ["best64.rule", "leetspeak.rule", "dive.rule", "InsidePro-PasswordsPro.rule"],
+      "description": "Extensive rule coverage for thorough cracking"
+    },
+    
+    "corporate": {
+      "name": "Corporate Password Rules",
+      "files": ["corporate.rule", "keyboard-patterns.rule", "years.rule"],
+      "description": "Rules optimized for corporate password policies"
+    }
+  }
+}

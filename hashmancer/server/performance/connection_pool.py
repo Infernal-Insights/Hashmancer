@@ -8,7 +8,10 @@ from typing import Optional, Dict, Any, List
 from contextlib import contextmanager
 from threading import Lock
 from redis.sentinel import Sentinel
-from rediscluster import RedisCluster
+try:
+    from rediscluster import RedisCluster
+except ImportError:
+    RedisCluster = None
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +79,11 @@ class RedisConnectionPool:
     
     def _initialize_cluster(self):
         """Initialize Redis cluster connection."""
+        if RedisCluster is None:
+            logger.warning("rediscluster module not available, falling back to standalone Redis")
+            self._initialize_standalone()
+            return
+            
         startup_nodes = []
         for node in self.config['cluster_nodes']:
             if ':' in node:

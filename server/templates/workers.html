@@ -1,0 +1,463 @@
+{% extends "base.html" %}
+
+{% block title %}Workers - Hashmancer Portal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1><i class="bi bi-cpu"></i> Workers</h1>
+                <p class="text-muted">Manage your vast.ai worker instances</p>
+            </div>
+            <div>
+                <a href="/launch" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Launch Worker
+                </a>
+                <button class="btn btn-secondary" onclick="refreshWorkers()">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <label class="form-label">Filter by Status:</label>
+                        <select class="form-select" id="statusFilter" onchange="filterWorkers()">
+                            <option value="">All Status</option>
+                            <option value="running">Running</option>
+                            <option value="creating">Creating</option>
+                            <option value="starting">Starting</option>
+                            <option value="stopped">Stopped</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Filter by GPU:</label>
+                        <select class="form-select" id="gpuFilter" onchange="filterWorkers()">
+                            <option value="">All GPUs</option>
+                            {% for gpu in gpu_types %}
+                            <option value="{{ gpu }}">{{ gpu }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Sort by:</label>
+                        <select class="form-select" id="sortBy" onchange="sortWorkers()">
+                            <option value="created">Created Date</option>
+                            <option value="cost">Total Cost</option>
+                            <option value="uptime">Uptime</option>
+                            <option value="price">Price/Hour</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-warning me-2" onclick="stopAllWorkers()">
+                            <i class="bi bi-stop"></i> Stop All
+                        </button>
+                        <button class="btn btn-info" onclick="exportWorkerData()">
+                            <i class="bi bi-download"></i> Export
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Workers Table -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-list"></i> Worker Instances ({{ workers|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if workers %}
+                <div class="table-responsive">
+                    <table class="table table-hover" id="workersTable">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                                </th>
+                                <th>Instance ID</th>
+                                <th>Vast ID</th>
+                                <th>Status</th>
+                                <th>GPU Configuration</th>
+                                <th>Price/Hour</th>
+                                <th>Uptime</th>
+                                <th>Total Cost</th>
+                                <th>IP Address</th>
+                                <th>Job Assignments</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for worker in workers %}
+                            <tr data-status="{{ worker.status.value }}" data-gpu="{{ worker.gpu_type.value }}">
+                                <td>
+                                    <input type="checkbox" class="worker-select" value="{{ worker.instance_id }}">
+                                </td>
+                                <td>
+                                    <code class="text-primary">{{ worker.instance_id[:16] }}...</code>
+                                    <br>
+                                    <small class="text-muted">{{ worker.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                </td>
+                                <td>
+                                    <strong>{{ worker.vast_id }}</strong>
+                                </td>
+                                <td>
+                                    <span class="badge 
+                                        {% if worker.status.value == 'running' %}bg-success
+                                        {% elif worker.status.value == 'creating' or worker.status.value == 'starting' %}bg-warning
+                                        {% elif worker.status.value == 'stopped' %}bg-secondary
+                                        {% elif worker.status.value == 'failed' %}bg-danger
+                                        {% else %}bg-info
+                                        {% endif %}">
+                                        {{ worker.status.value }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <strong>{{ worker.gpu_count }}x {{ worker.gpu_type.value }}</strong>
+                                    {% if worker.performance_metrics %}
+                                    <br>
+                                    <small class="text-muted">
+                                        Utilization: {{ worker.performance_metrics.get('gpu_utilization', 0) }}%
+                                    </small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>${{ "%.3f"|format(worker.price_per_hour) }}</strong>
+                                </td>
+                                <td>
+                                    <strong>{{ "%.1f"|format(worker.uptime_seconds / 3600) }}h</strong>
+                                    {% if worker.status.value == 'running' %}
+                                    <br>
+                                    <small class="text-success">
+                                        <i class="bi bi-clock"></i> Active
+                                    </small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>${{ "%.2f"|format(worker.total_cost) }}</strong>
+                                </td>
+                                <td>
+                                    {% if worker.ip_address %}
+                                    <code>{{ worker.ip_address }}:{{ worker.ssh_port or 22 }}</code>
+                                    <br>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('{{ worker.ip_address }}:{{ worker.ssh_port or 22 }}')">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                    {% else %}
+                                    <span class="text-muted">Not available</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if worker.job_assignments %}
+                                    {% for job_id in worker.job_assignments %}
+                                    <span class="badge bg-info me-1">{{ job_id }}</span>
+                                    {% endfor %}
+                                    {% else %}
+                                    <span class="text-muted">No assignments</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-sm btn-outline-info" onclick="showWorkerDetails('{{ worker.instance_id }}')">
+                                            <i class="bi bi-info-circle"></i>
+                                        </button>
+                                        {% if worker.status.value in ['running', 'creating', 'starting'] %}
+                                        <button class="btn btn-sm btn-outline-warning" onclick="assignJob('{{ worker.instance_id }}')">
+                                            <i class="bi bi-plus"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" onclick="stopWorker('{{ worker.instance_id }}')">
+                                            <i class="bi bi-stop"></i>
+                                        </button>
+                                        {% else %}
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="removeWorker('{{ worker.instance_id }}')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Bulk Actions -->
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <button class="btn btn-outline-danger" id="bulkStopBtn" onclick="bulkStopWorkers()" disabled>
+                                <i class="bi bi-stop"></i> Stop Selected
+                            </button>
+                            <button class="btn btn-outline-warning" id="bulkAssignBtn" onclick="bulkAssignJob()" disabled>
+                                <i class="bi bi-plus-circle"></i> Assign Job
+                            </button>
+                        </div>
+                        <div>
+                            <span id="selectedCount">0 workers selected</span>
+                        </div>
+                    </div>
+                </div>
+
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-cpu fs-1 text-muted"></i>
+                    <h3 class="text-muted mt-3">No Workers Deployed</h3>
+                    <p class="text-muted">Launch your first worker to get started with distributed hash cracking.</p>
+                    <a href="/launch" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Launch Your First Worker
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Worker Details Modal -->
+<div class="modal fade" id="workerDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-info-circle"></i> Worker Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="workerDetailsContent">
+                Loading...
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Job Assignment Modal -->
+<div class="modal fade" id="jobAssignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Assign Job</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="jobAssignForm">
+                    <div class="mb-3">
+                        <label class="form-label">Job ID:</label>
+                        <input type="text" class="form-control" id="jobIdInput" placeholder="Enter job ID" required>
+                    </div>
+                    <input type="hidden" id="assignWorkerId">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="executeJobAssignment()">Assign Job</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Worker management functions
+function refreshWorkers() {
+    location.reload();
+}
+
+function filterWorkers() {
+    const statusFilter = document.getElementById('statusFilter').value;
+    const gpuFilter = document.getElementById('gpuFilter').value;
+    const rows = document.querySelectorAll('#workersTable tbody tr');
+    
+    rows.forEach(row => {
+        const status = row.dataset.status;
+        const gpu = row.dataset.gpu;
+        
+        const statusMatch = !statusFilter || status === statusFilter;
+        const gpuMatch = !gpuFilter || gpu === gpuFilter;
+        
+        row.style.display = (statusMatch && gpuMatch) ? '' : 'none';
+    });
+}
+
+function sortWorkers() {
+    const sortBy = document.getElementById('sortBy').value;
+    const tbody = document.querySelector('#workersTable tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    rows.sort((a, b) => {
+        // Sorting logic would go here
+        return 0; // Placeholder
+    });
+    
+    rows.forEach(row => tbody.appendChild(row));
+}
+
+function stopWorker(instanceId) {
+    if (confirm('Are you sure you want to stop this worker?')) {
+        fetch(`/api/workers/${instanceId}`, {method: 'DELETE'})
+            .then(response => response.json())
+            .then(data => {
+                alert('Worker stop initiated');
+                refreshWorkers();
+            })
+            .catch(error => alert('Error: ' + error));
+    }
+}
+
+function stopAllWorkers() {
+    if (confirm('Are you sure you want to stop ALL workers? This action cannot be undone.')) {
+        const runningWorkers = document.querySelectorAll('tr[data-status="running"]');
+        runningWorkers.forEach(row => {
+            const checkbox = row.querySelector('.worker-select');
+            const instanceId = checkbox.value;
+            fetch(`/api/workers/${instanceId}`, {method: 'DELETE'})
+                .catch(error => console.error('Failed to stop worker:', error));
+        });
+        setTimeout(refreshWorkers, 2000);
+    }
+}
+
+function showWorkerDetails(instanceId) {
+    fetch(`/api/workers/${instanceId}/status`)
+        .then(response => response.json())
+        .then(worker => {
+            const content = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Basic Information</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Instance ID:</strong></td><td><code>${worker.instance_id}</code></td></tr>
+                            <tr><td><strong>Vast ID:</strong></td><td>${worker.vast_id}</td></tr>
+                            <tr><td><strong>Status:</strong></td><td><span class="badge bg-${worker.status === 'running' ? 'success' : 'secondary'}">${worker.status}</span></td></tr>
+                            <tr><td><strong>GPU:</strong></td><td>${worker.gpu_count}x ${worker.gpu_type}</td></tr>
+                            <tr><td><strong>Price/Hour:</strong></td><td>$${worker.price_per_hour.toFixed(3)}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Runtime Information</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Uptime:</strong></td><td>${worker.uptime_hours.toFixed(1)} hours</td></tr>
+                            <tr><td><strong>Total Cost:</strong></td><td>$${worker.total_cost.toFixed(2)}</td></tr>
+                            <tr><td><strong>IP Address:</strong></td><td>${worker.ip_address || 'Not available'}</td></tr>
+                            <tr><td><strong>Job Assignments:</strong></td><td>${worker.job_assignments.join(', ') || 'None'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+            `;
+            document.getElementById('workerDetailsContent').innerHTML = content;
+            new bootstrap.Modal(document.getElementById('workerDetailsModal')).show();
+        })
+        .catch(error => {
+            document.getElementById('workerDetailsContent').innerHTML = `<div class="alert alert-danger">Error loading worker details: ${error}</div>`;
+        });
+}
+
+function assignJob(instanceId) {
+    document.getElementById('assignWorkerId').value = instanceId;
+    new bootstrap.Modal(document.getElementById('jobAssignModal')).show();
+}
+
+function executeJobAssignment() {
+    const instanceId = document.getElementById('assignWorkerId').value;
+    const jobId = document.getElementById('jobIdInput').value;
+    
+    if (!jobId) {
+        alert('Please enter a job ID');
+        return;
+    }
+    
+    fetch(`/api/workers/${instanceId}/assign`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({job_id: jobId})
+    })
+        .then(response => response.json())
+        .then(data => {
+            alert('Job assigned successfully');
+            bootstrap.Modal.getInstance(document.getElementById('jobAssignModal')).hide();
+            refreshWorkers();
+        })
+        .catch(error => alert('Error: ' + error));
+}
+
+// Selection management
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.worker-select');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    
+    updateBulkActions();
+}
+
+function updateBulkActions() {
+    const selectedBoxes = document.querySelectorAll('.worker-select:checked');
+    const count = selectedBoxes.length;
+    
+    document.getElementById('selectedCount').textContent = `${count} workers selected`;
+    document.getElementById('bulkStopBtn').disabled = count === 0;
+    document.getElementById('bulkAssignBtn').disabled = count === 0;
+}
+
+function bulkStopWorkers() {
+    const selectedBoxes = document.querySelectorAll('.worker-select:checked');
+    if (selectedBoxes.length === 0) return;
+    
+    if (confirm(`Stop ${selectedBoxes.length} selected workers?`)) {
+        selectedBoxes.forEach(checkbox => {
+            fetch(`/api/workers/${checkbox.value}`, {method: 'DELETE'})
+                .catch(error => console.error('Failed to stop worker:', error));
+        });
+        setTimeout(refreshWorkers, 2000);
+    }
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard');
+    });
+}
+
+function exportWorkerData() {
+    const workers = Array.from(document.querySelectorAll('#workersTable tbody tr')).map(row => {
+        const cells = row.querySelectorAll('td');
+        return {
+            instance_id: cells[1].querySelector('code').textContent,
+            vast_id: cells[2].textContent,
+            status: cells[3].textContent.trim(),
+            gpu: cells[4].textContent.trim(),
+            price: cells[5].textContent.trim(),
+            uptime: cells[6].textContent.trim(),
+            cost: cells[7].textContent.trim()
+        };
+    });
+    
+    const blob = new Blob([JSON.stringify(workers, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'workers_export.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// Initialize selection handlers
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.worker-select').forEach(checkbox => {
+        checkbox.addEventListener('change', updateBulkActions);
+    });
+});
+</script>
+{% endblock %}

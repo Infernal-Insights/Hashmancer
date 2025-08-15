@@ -1,0 +1,506 @@
+{% extends "base.html" %}
+
+{% block title %}Launch Worker - Hashmancer Portal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1><i class="bi bi-plus-circle"></i> Launch Worker</h1>
+                <p class="text-muted">Deploy a new worker instance on vast.ai</p>
+            </div>
+            <div>
+                <a href="/workers" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Workers
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- Launch Form -->
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-gear"></i> Worker Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="launchForm">
+                    <div class="row">
+                        <!-- GPU Configuration -->
+                        <div class="col-md-6">
+                            <h6 class="text-primary mb-3">GPU Configuration</h6>
+                            
+                            <div class="mb-3">
+                                <label for="gpu_type" class="form-label">GPU Type *</label>
+                                <select class="form-select" id="gpu_type" name="gpu_type" required onchange="updatePricing()">
+                                    <option value="">Select GPU Type</option>
+                                    {% for gpu in gpu_types %}
+                                    <option value="{{ gpu }}" {% if gpu == 'rtx4090' %}selected{% endif %}>
+                                        {{ gpu|upper }} 
+                                        <span class="text-muted" id="gpu-{{ gpu }}-info"></span>
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">Higher-end GPUs provide better hash cracking performance</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="gpu_count" class="form-label">GPU Count</label>
+                                <select class="form-select" id="gpu_count" name="gpu_count" onchange="updatePricing()">
+                                    <option value="1" selected>1 GPU</option>
+                                    <option value="2">2 GPUs</option>
+                                    <option value="4">4 GPUs</option>
+                                    <option value="8">8 GPUs</option>
+                                </select>
+                                <div class="form-text">More GPUs = faster cracking but higher cost</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="max_price" class="form-label">Maximum Price per Hour *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="max_price" name="max_price" 
+                                           step="0.001" min="0.1" max="10" value="1.000" required onchange="updatePricing()">
+                                    <span class="input-group-text">/hour</span>
+                                </div>
+                                <div class="form-text">We'll find the cheapest available option under this price</div>
+                            </div>
+                        </div>
+
+                        <!-- System Configuration -->
+                        <div class="col-md-6">
+                            <h6 class="text-primary mb-3">System Resources</h6>
+                            
+                            <div class="mb-3">
+                                <label for="cpu_cores" class="form-label">CPU Cores</label>
+                                <select class="form-select" id="cpu_cores" name="cpu_cores">
+                                    <option value="2">2 Cores</option>
+                                    <option value="4" selected>4 Cores</option>
+                                    <option value="8">8 Cores</option>
+                                    <option value="16">16 Cores</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="ram_gb" class="form-label">RAM (GB)</label>
+                                <select class="form-select" id="ram_gb" name="ram_gb">
+                                    <option value="8">8 GB</option>
+                                    <option value="16" selected>16 GB</option>
+                                    <option value="32">32 GB</option>
+                                    <option value="64">64 GB</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="storage_gb" class="form-label">Storage (GB)</label>
+                                <select class="form-select" id="storage_gb" name="storage_gb">
+                                    <option value="20">20 GB</option>
+                                    <option value="50" selected>50 GB</option>
+                                    <option value="100">100 GB</option>
+                                    <option value="200">200 GB</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Job Assignment -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h6 class="text-primary mb-3">Job Assignment (Optional)</h6>
+                            
+                            <div class="mb-3">
+                                <label for="job_id" class="form-label">Assign to Job</label>
+                                <input type="text" class="form-control" id="job_id" name="job_id" 
+                                       placeholder="Leave empty to create unassigned worker">
+                                <div class="form-text">Worker will automatically start processing this job when ready</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Advanced Options (Collapsible) -->
+                    <div class="mb-3">
+                        <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#advancedOptions" aria-expanded="false">
+                            <i class="bi bi-gear-wide-connected"></i> Advanced Options
+                        </button>
+                    </div>
+
+                    <div class="collapse" id="advancedOptions">
+                        <div class="card card-body bg-light">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="image" class="form-label">Docker Image</label>
+                                        <input type="text" class="form-control" id="image" name="image" 
+                                               value="pytorch/pytorch:2.0.1-cuda11.7-cudnn8-runtime">
+                                        <div class="form-text">Custom Docker image (advanced users only)</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="startup_script" class="form-label">Startup Script</label>
+                                        <textarea class="form-control" id="startup_script" name="startup_script" rows="3" 
+                                                  placeholder="Custom startup commands..."></textarea>
+                                        <div class="form-text">Additional commands to run on startup</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Buttons -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" class="btn btn-outline-primary" onclick="checkAvailability()">
+                            <i class="bi bi-search"></i> Check Availability
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="launchBtn">
+                            <i class="bi bi-rocket"></i> Launch Worker
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Quick Launch Presets -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5><i class="bi bi-lightning"></i> Quick Launch Presets</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">Budget</h6>
+                                <p class="card-text">RTX 3060, 1 GPU<br>$0.50/hour max</p>
+                                <button class="btn btn-sm btn-outline-primary" onclick="applyPreset('budget')">
+                                    Use Preset
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">Balanced</h6>
+                                <p class="card-text">RTX 4090, 1 GPU<br>$1.00/hour max</p>
+                                <button class="btn btn-sm btn-outline-primary" onclick="applyPreset('balanced')">
+                                    Use Preset
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">Performance</h6>
+                                <p class="card-text">A100, 1 GPU<br>$3.00/hour max</p>
+                                <button class="btn btn-sm btn-outline-primary" onclick="applyPreset('performance')">
+                                    Use Preset
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Panel -->
+    <div class="col-md-4">
+        <!-- Cost Estimation -->
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-calculator"></i> Cost Estimation</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center">
+                    <div class="mb-3">
+                        <h3 class="text-primary" id="estimatedCost">$0.000</h3>
+                        <p class="text-muted">per hour</p>
+                    </div>
+                    
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <h6 id="dailyCost">$0.00</h6>
+                            <small class="text-muted">per day</small>
+                        </div>
+                        <div class="col-6">
+                            <h6 id="weeklyCost">$0.00</h6>
+                            <small class="text-muted">per week</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div id="availabilityStatus">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 
+                        Click "Check Availability" to see current offers
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Guide -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5><i class="bi bi-speedometer2"></i> Performance Guide</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <td><strong>RTX 3060</strong></td>
+                            <td><span class="badge bg-warning">Basic</span></td>
+                            <td>~2 GH/s MD5</td>
+                        </tr>
+                        <tr>
+                            <td><strong>RTX 4090</strong></td>
+                            <td><span class="badge bg-success">High</span></td>
+                            <td>~12 GH/s MD5</td>
+                        </tr>
+                        <tr>
+                            <td><strong>A100</strong></td>
+                            <td><span class="badge bg-danger">Extreme</span></td>
+                            <td>~20 GH/s MD5</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="form-text">Actual performance varies by hash type and complexity</div>
+            </div>
+        </div>
+
+        <!-- Launch History -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5><i class="bi bi-clock-history"></i> Recent Launches</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush" id="recentLaunches">
+                    <div class="text-muted text-center py-3">
+                        No recent launches
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Availability Modal -->
+<div class="modal fade" id="availabilityModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-search"></i> Available Offers</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="availabilityContent">
+                Loading...
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Presets configuration
+const presets = {
+    budget: {
+        gpu_type: 'rtx3060',
+        gpu_count: 1,
+        max_price: 0.500,
+        cpu_cores: 2,
+        ram_gb: 8,
+        storage_gb: 20
+    },
+    balanced: {
+        gpu_type: 'rtx4090',
+        gpu_count: 1,
+        max_price: 1.000,
+        cpu_cores: 4,
+        ram_gb: 16,
+        storage_gb: 50
+    },
+    performance: {
+        gpu_type: 'a100_80gb',
+        gpu_count: 1,
+        max_price: 3.000,
+        cpu_cores: 8,
+        ram_gb: 32,
+        storage_gb: 100
+    }
+};
+
+function applyPreset(presetName) {
+    const preset = presets[presetName];
+    if (!preset) return;
+    
+    document.getElementById('gpu_type').value = preset.gpu_type;
+    document.getElementById('gpu_count').value = preset.gpu_count;
+    document.getElementById('max_price').value = preset.max_price.toFixed(3);
+    document.getElementById('cpu_cores').value = preset.cpu_cores;
+    document.getElementById('ram_gb').value = preset.ram_gb;
+    document.getElementById('storage_gb').value = preset.storage_gb;
+    
+    updatePricing();
+}
+
+function updatePricing() {
+    const gpuCount = parseInt(document.getElementById('gpu_count').value) || 1;
+    const maxPrice = parseFloat(document.getElementById('max_price').value) || 0;
+    
+    const hourly = maxPrice * gpuCount;
+    const daily = hourly * 24;
+    const weekly = daily * 7;
+    
+    document.getElementById('estimatedCost').textContent = `$${hourly.toFixed(3)}`;
+    document.getElementById('dailyCost').textContent = `$${daily.toFixed(2)}`;
+    document.getElementById('weeklyCost').textContent = `$${weekly.toFixed(2)}`;
+}
+
+function checkAvailability() {
+    const gpuType = document.getElementById('gpu_type').value;
+    const gpuCount = document.getElementById('gpu_count').value;
+    const maxPrice = document.getElementById('max_price').value;
+    
+    if (!gpuType || !maxPrice) {
+        alert('Please select GPU type and maximum price first');
+        return;
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('availabilityModal'));
+    modal.show();
+    
+    // Mock availability check - in real implementation, this would call the API
+    setTimeout(() => {
+        const mockOffers = [
+            {
+                id: 12345,
+                gpu_name: gpuType,
+                num_gpus: gpuCount,
+                dph_total: (parseFloat(maxPrice) * 0.8).toFixed(3),
+                cpu_cores: 4,
+                cpu_ram: 16384,
+                disk_space: 51200,
+                reliability: 0.95
+            },
+            {
+                id: 12346,
+                gpu_name: gpuType,
+                num_gpus: gpuCount,
+                dph_total: (parseFloat(maxPrice) * 0.9).toFixed(3),
+                cpu_cores: 8,
+                cpu_ram: 32768,
+                disk_space: 102400,
+                reliability: 0.98
+            }
+        ];
+        
+        let content = '<div class="table-responsive"><table class="table"><thead><tr><th>Provider</th><th>GPU</th><th>Price/hr</th><th>CPU</th><th>RAM</th><th>Storage</th><th>Reliability</th></tr></thead><tbody>';
+        
+        mockOffers.forEach(offer => {
+            content += `<tr>
+                <td>#${offer.id}</td>
+                <td>${offer.num_gpus}x ${offer.gpu_name}</td>
+                <td>$${offer.dph_total}</td>
+                <td>${offer.cpu_cores} cores</td>
+                <td>${(offer.cpu_ram/1024).toFixed(0)} GB</td>
+                <td>${(offer.disk_space/1024).toFixed(0)} GB</td>
+                <td><span class="badge bg-${offer.reliability > 0.9 ? 'success' : 'warning'}">${(offer.reliability*100).toFixed(0)}%</span></td>
+            </tr>`;
+        });
+        
+        content += '</tbody></table></div>';
+        content += '<div class="alert alert-success"><i class="bi bi-check-circle"></i> Found ' + mockOffers.length + ' available offers matching your criteria</div>';
+        
+        document.getElementById('availabilityContent').innerHTML = content;
+        
+        // Update availability status
+        document.getElementById('availabilityStatus').innerHTML = `
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle"></i> 
+                ${mockOffers.length} offers available from $${mockOffers[0].dph_total}/hr
+            </div>
+        `;
+    }, 1000);
+}
+
+// Form submission
+document.getElementById('launchForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const submitBtn = document.getElementById('launchBtn');
+    const originalText = submitBtn.innerHTML;
+    
+    submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Launching...';
+    submitBtn.disabled = true;
+    
+    // Get form data
+    const formData = new FormData(this);
+    
+    fetch('/launch', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.text();
+        } else {
+            throw new Error('Launch failed');
+        }
+    })
+    .then(html => {
+        // If successful, redirect or show success
+        if (html.includes('launch_success')) {
+            window.location.href = '/workers';
+        } else {
+            // Show any errors from the form
+            document.body.innerHTML = html;
+        }
+    })
+    .catch(error => {
+        alert('Error launching worker: ' + error.message);
+    })
+    .finally(() => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+});
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    updatePricing();
+    
+    // Load recent launches from localStorage
+    const recentLaunches = JSON.parse(localStorage.getItem('recentLaunches') || '[]');
+    if (recentLaunches.length > 0) {
+        const container = document.getElementById('recentLaunches');
+        container.innerHTML = '';
+        
+        recentLaunches.slice(0, 3).forEach(launch => {
+            const item = document.createElement('div');
+            item.className = 'list-group-item';
+            item.innerHTML = `
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">${launch.gpu_type} x${launch.gpu_count}</h6>
+                    <small>$${launch.price}/hr</small>
+                </div>
+                <p class="mb-1">${launch.status}</p>
+                <small class="text-muted">${launch.time}</small>
+            `;
+            container.appendChild(item);
+        });
+    }
+});
+</script>
+{% endblock %}

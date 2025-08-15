@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+
+{% block title %}Vast.AI Settings - Hashmancer Portal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="bi bi-gear"></i> Vast.AI Configuration</h1>
+        </div>
+    </div>
+</div>
+
+<!-- API Configuration -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-key"></i> API Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form id="api-config-form">
+                    <div class="mb-3">
+                        <label for="vast_api_key" class="form-label">Vast.AI API Key</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="vast_api_key" 
+                                   value="{% if api_key %}{{ api_key[:10] }}...{% endif %}" 
+                                   placeholder="Enter your Vast.AI API key">
+                            <button class="btn btn-outline-secondary" type="button" id="toggle-api-key">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            Get your API key from <a href="https://cloud.vast.ai/account/" target="_blank">Vast.AI Account Settings</a>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="server_url" class="form-label">Hashmancer Server URL</label>
+                        <input type="url" class="form-control" id="server_url" 
+                               value="{{ server_url or 'http://localhost:8080' }}" 
+                               placeholder="http://your-server:8080">
+                        <div class="form-text">URL where workers can reach this Hashmancer instance</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> Update API Settings
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" id="test-connection">
+                        <i class="bi bi-wifi"></i> Test Connection
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-shield-lock"></i> SSH Configuration</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">SSH Key Status</label>
+                    <div class="d-flex align-items-center">
+                        {% if ssh_key_exists %}
+                        <span class="badge bg-success me-2">
+                            <i class="bi bi-check-circle"></i> Key exists
+                        </span>
+                        {% else %}
+                        <span class="badge bg-warning me-2">
+                            <i class="bi bi-exclamation-triangle"></i> No key found
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if ssh_public_key %}
+                <div class="mb-3">
+                    <label class="form-label">Public Key</label>
+                    <textarea class="form-control" rows="3" readonly>{{ ssh_public_key }}</textarea>
+                    <div class="form-text">
+                        Copy this key to your <a href="https://cloud.vast.ai/account/" target="_blank">Vast.AI SSH settings</a>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="d-grid gap-2">
+                    {% if not ssh_key_exists %}
+                    <button class="btn btn-primary" id="generate-ssh-key">
+                        <i class="bi bi-plus-circle"></i> Generate SSH Key
+                    </button>
+                    {% endif %}
+                    <button class="btn btn-outline-primary" id="test-ssh">
+                        <i class="bi bi-terminal"></i> Test SSH Connection
+                    </button>
+                    <button class="btn btn-outline-secondary" id="refresh-ssh">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh Status
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Default Worker Settings -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-cpu"></i> Default Worker Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form id="worker-defaults-form">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="default_gpu_type" class="form-label">Default GPU Type</label>
+                                <select class="form-select" id="default_gpu_type">
+                                    {% for gpu in gpu_types %}
+                                    <option value="{{ gpu }}" {% if gpu == default_gpu_type %}selected{% endif %}>{{ gpu }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="default_max_price" class="form-label">Max Price/Hour ($)</label>
+                                <input type="number" class="form-control" id="default_max_price" 
+                                       value="{{ default_max_price or 1.50 }}" step="0.01" min="0.01">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="default_cpu_cores" class="form-label">CPU Cores</label>
+                                <input type="number" class="form-control" id="default_cpu_cores" 
+                                       value="{{ default_cpu_cores or 4 }}" min="1" max="32">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="default_ram_gb" class="form-label">RAM (GB)</label>
+                                <input type="number" class="form-control" id="default_ram_gb" 
+                                       value="{{ default_ram_gb or 16 }}" min="1" max="128">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="default_storage_gb" class="form-label">Storage (GB)</label>
+                                <input type="number" class="form-control" id="default_storage_gb" 
+                                       value="{{ default_storage_gb or 50 }}" min="10" max="1000">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3 form-check">
+                                <input class="form-check-input" type="checkbox" id="auto_scaling_enabled" 
+                                       {% if auto_scaling_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="auto_scaling_enabled">
+                                    Enable Auto-scaling
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3 form-check">
+                                <input class="form-check-input" type="checkbox" id="cost_monitoring_enabled" 
+                                       {% if cost_monitoring_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="cost_monitoring_enabled">
+                                    Enable Cost Monitoring
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle"></i> Save Default Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-lightning"></i> Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-primary" id="refresh-instances">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh Instances
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-warning" id="stop-all-workers">
+                                <i class="bi bi-stop-circle"></i> Stop All Workers
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-info" id="export-config">
+                                <i class="bi bi-download"></i> Export Configuration
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-secondary" id="view-logs">
+                                <i class="bi bi-file-text"></i> View Logs
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Action Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="status-content">
+                    <!-- Status content will be populated here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Toggle API key visibility
+    document.getElementById('toggle-api-key').addEventListener('click', function() {
+        const input = document.getElementById('vast_api_key');
+        const icon = this.querySelector('i');
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'bi bi-eye-slash';
+        } else {
+            input.type = 'password';
+            icon.className = 'bi bi-eye';
+        }
+    });
+    
+    // API Configuration form
+    document.getElementById('api-config-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData();
+        formData.append('vast_api_key', document.getElementById('vast_api_key').value);
+        formData.append('server_url', document.getElementById('server_url').value);
+        
+        try {
+            const response = await fetch('/api/vast-settings/api-config', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            showStatus(result.success ? 'success' : 'error', result.message);
+        } catch (error) {
+            showStatus('error', 'Failed to update API settings: ' + error.message);
+        }
+    });
+    
+    // Worker defaults form
+    document.getElementById('worker-defaults-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData();
+        formData.append('default_gpu_type', document.getElementById('default_gpu_type').value);
+        formData.append('default_max_price', document.getElementById('default_max_price').value);
+        formData.append('default_cpu_cores', document.getElementById('default_cpu_cores').value);
+        formData.append('default_ram_gb', document.getElementById('default_ram_gb').value);
+        formData.append('default_storage_gb', document.getElementById('default_storage_gb').value);
+        formData.append('auto_scaling_enabled', document.getElementById('auto_scaling_enabled').checked);
+        formData.append('cost_monitoring_enabled', document.getElementById('cost_monitoring_enabled').checked);
+        
+        try {
+            const response = await fetch('/api/vast-settings/worker-defaults', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            showStatus(result.success ? 'success' : 'error', result.message);
+        } catch (error) {
+            showStatus('error', 'Failed to update worker defaults: ' + error.message);
+        }
+    });
+    
+    // Test connection
+    document.getElementById('test-connection').addEventListener('click', async function() {
+        this.disabled = true;
+        this.innerHTML = '<i class="bi bi-hourglass-split"></i> Testing...';
+        
+        try {
+            const response = await fetch('/api/vast-settings/test-connection');
+            const result = await response.json();
+            showStatus(result.success ? 'success' : 'error', result.message);
+        } catch (error) {
+            showStatus('error', 'Connection test failed: ' + error.message);
+        } finally {
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-wifi"></i> Test Connection';
+        }
+    });
+    
+    // Generate SSH key
+    if (document.getElementById('generate-ssh-key')) {
+        document.getElementById('generate-ssh-key').addEventListener('click', async function() {
+            this.disabled = true;
+            this.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
+            
+            try {
+                const response = await fetch('/api/vast-settings/generate-ssh-key', {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                showStatus(result.success ? 'success' : 'error', result.message);
+                
+                if (result.success) {
+                    setTimeout(() => location.reload(), 2000);
+                }
+            } catch (error) {
+                showStatus('error', 'Failed to generate SSH key: ' + error.message);
+            } finally {
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-plus-circle"></i> Generate SSH Key';
+            }
+        });
+    }
+    
+    // Test SSH
+    document.getElementById('test-ssh').addEventListener('click', async function() {
+        this.disabled = true;
+        this.innerHTML = '<i class="bi bi-hourglass-split"></i> Testing...';
+        
+        try {
+            const response = await fetch('/api/vast-settings/test-ssh');
+            const result = await response.json();
+            showStatus(result.success ? 'success' : 'error', result.message);
+        } catch (error) {
+            showStatus('error', 'SSH test failed: ' + error.message);
+        } finally {
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-terminal"></i> Test SSH Connection';
+        }
+    });
+    
+    // Quick actions
+    document.getElementById('refresh-instances').addEventListener('click', async function() {
+        await performQuickAction('refresh-instances', this);
+    });
+    
+    document.getElementById('stop-all-workers').addEventListener('click', async function() {
+        if (confirm('Are you sure you want to stop ALL workers? This action cannot be undone.')) {
+            await performQuickAction('stop-all-workers', this);
+        }
+    });
+    
+    document.getElementById('export-config').addEventListener('click', async function() {
+        await performQuickAction('export-config', this);
+    });
+    
+    document.getElementById('view-logs').addEventListener('click', function() {
+        window.open('/logs', '_blank');
+    });
+    
+    async function performQuickAction(action, button) {
+        const originalText = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+        
+        try {
+            const response = await fetch(`/api/vast-settings/${action}`, {
+                method: 'POST'
+            });
+            const result = await response.json();
+            showStatus(result.success ? 'success' : 'error', result.message);
+        } catch (error) {
+            showStatus('error', `Failed to ${action}: ` + error.message);
+        } finally {
+            button.disabled = false;
+            button.innerHTML = originalText;
+        }
+    }
+    
+    function showStatus(type, message) {
+        const statusContent = document.getElementById('status-content');
+        const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+        const icon = type === 'success' ? 'bi-check-circle' : 'bi-exclamation-triangle';
+        
+        statusContent.innerHTML = `
+            <div class="alert ${alertClass}" role="alert">
+                <i class="bi ${icon}"></i> ${message}
+            </div>
+        `;
+        
+        const modal = new bootstrap.Modal(document.getElementById('statusModal'));
+        modal.show();
+    }
+});
+</script>
+{% endblock %}
