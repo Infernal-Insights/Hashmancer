@@ -6,9 +6,24 @@ __pycache__/
 dist/
 build/
 .venv/
+venv/
 env/
 *.so
 *.o
 *.pem
 keys/
 worker_*key.pem
+
+# Environment and configuration files
+.env
+.env.local
+.claude/settings.local.json
+
+# Generated binaries and executables
+hashmancer-cli
+simple_portal.py
+
+# Logs and temporary files
+*.log
+*.tmp
+.cache/
