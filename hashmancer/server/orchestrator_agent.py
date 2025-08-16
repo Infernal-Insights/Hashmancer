@@ -13,7 +13,15 @@ from hashmancer.utils.event_logger import log_error
 from . import wordlist_db
 from .pattern_stats import generate_mask, TOKEN_RE
 from .pattern_utils import is_valid_word
-from hashmancer.darkling import charsets
+try:
+    from hashmancer.darkling import charsets
+except (ImportError, AttributeError):
+    # Fallback if darkling charsets not available
+    class MockCharsets:
+        ENGLISH_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        ENGLISH_LOWER = "abcdefghijklmnopqrstuvwxyz"
+        COMMON_SYMBOLS = "!@#$%^&*()_+-="
+    charsets = MockCharsets()
 from hashmancer.server.server_utils import redis_manager
 
 try:  # optional local LLM orchestrator
@@ -72,12 +80,12 @@ TOKEN_TO_ID = {
 # Charsets referenced by those identifiers. These are serialized into the job
 # so low-bandwidth workers can load the correct lookup tables.
 ID_TO_CHARSET = {
-    "?1": charsets.ENGLISH_UPPER,
-    "?2": charsets.ENGLISH_LOWER,
+    "?1": getattr(charsets, 'ENGLISH_UPPER', "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+    "?2": getattr(charsets, 'ENGLISH_LOWER', "abcdefghijklmnopqrstuvwxyz"),
     "?3": "0123456789",
-    "?4": charsets.COMMON_SYMBOLS,
-    "?5": charsets.COMMON_SYMBOLS,
-    "?6": charsets.EMOJI,
+    "?4": getattr(charsets, 'COMMON_SYMBOLS', "!@#$%^&*()_+-="),
+    "?5": getattr(charsets, 'COMMON_SYMBOLS', "!@#$%^&*()_+-="),
+    "?6": getattr(charsets, 'EMOJI', "😀😁😂🤣😃😄😅😆😉😊"),
 }
 
 

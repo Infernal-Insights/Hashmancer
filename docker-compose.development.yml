@@ -1,0 +1,210 @@
+version: "3.8"
+
+services:
+  # Redis for development
+  redis-dev:
+    image: redis:7-alpine
+    container_name: hashmancer-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-dev-data:/data
+    networks:
+      - hashmancer-dev-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Development server with hot reload
+  hashmancer-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.development
+      args:
+        - DEV_MODE=true
+    container_name: hashmancer-server-dev
+    ports:
+      - "8000:8000"
+      - "8001:8001"  # Debug port
+    depends_on:
+      redis-dev:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis-dev:6379
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - DEBUG=true
+      - RELOAD=true
+      - LOG_LEVEL=DEBUG
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+    volumes:
+      # Mount source code for hot reload
+      - ./hashmancer:/app/hashmancer
+      - ./config:/app/config
+      - dev-logs:/app/logs
+      - dev-temp:/app/temp
+    networks:
+      - hashmancer-dev-network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+    working_dir: /app/hashmancer/server
+
+  # Development worker
+  worker-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.development
+    container_name: hashmancer-worker-dev
+    depends_on:
+      redis-dev:
+        condition: service_healthy
+      hashmancer-dev:
+        condition: service_started
+    environment:
+      - REDIS_URL=redis://redis-dev:6379
+      - SERVER_URL=http://hashmancer-dev:8000
+      - WORKER_ID=dev-worker-1
+      - WORKER_THREADS=2
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - DEBUG=true
+    volumes:
+      - ./hashmancer:/app/hashmancer
+      - dev-worker-data:/app/data
+      - dev-wordlists:/app/wordlists
+    networks:
+      - hashmancer-dev-network
+    command: python -m hashmancer.worker.worker_agent
+
+  # Database for development (PostgreSQL)
+  postgres-dev:
+    image: postgres:15-alpine
+    container_name: hashmancer-postgres-dev
+    environment:
+      - POSTGRES_DB=hashmancer_dev
+      - POSTGRES_USER=hashmancer
+      - POSTGRES_PASSWORD=dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+      - ./scripts/sql:/docker-entrypoint-initdb.d
+    networks:
+      - hashmancer-dev-network
+    profiles:
+      - database
+
+  # Mailhog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: hashmancer-mailhog-dev
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - hashmancer-dev-network
+    profiles:
+      - email
+
+  # MinIO for S3-compatible object storage testing
+  minio:
+    image: minio/minio:latest
+    container_name: hashmancer-minio-dev
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio-data:/data
+    networks:
+      - hashmancer-dev-network
+    command: server /data --console-address ":9001"
+    profiles:
+      - storage
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: hashmancer-jaeger-dev
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Jaeger HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - hashmancer-dev-network
+    profiles:
+      - tracing
+
+  # Prometheus for metrics (development)
+  prometheus-dev:
+    image: prom/prometheus:latest
+    container_name: hashmancer-prometheus-dev
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus-dev.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-dev-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=1d'
+      - '--web.enable-lifecycle'
+    networks:
+      - hashmancer-dev-network
+    profiles:
+      - monitoring
+
+  # Grafana for development
+  grafana-dev:
+    image: grafana/grafana:latest
+    container_name: hashmancer-grafana-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - grafana-dev-data:/var/lib/grafana
+      - ./config/grafana-dev:/etc/grafana/provisioning:ro
+    networks:
+      - hashmancer-dev-network
+    profiles:
+      - monitoring
+
+volumes:
+  # Development volumes
+  redis-dev-data:
+    driver: local
+  postgres-dev-data:
+    driver: local
+  minio-data:
+    driver: local
+  dev-logs:
+    driver: local
+  dev-temp:
+    driver: local
+  dev-worker-data:
+    driver: local
+  dev-wordlists:
+    driver: local
+  prometheus-dev-data:
+    driver: local
+  grafana-dev-data:
+    driver: local
+
+networks:
+  hashmancer-dev-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
