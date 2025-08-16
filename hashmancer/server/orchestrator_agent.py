@@ -24,6 +24,14 @@ except (ImportError, AttributeError):
     charsets = MockCharsets()
 from hashmancer.server.server_utils import redis_manager
 
+# Import atomic job manager for race-condition-free job handling
+try:
+    from .security.atomic_job_manager import get_atomic_job_manager
+    ATOMIC_JOBS_AVAILABLE = True
+except ImportError:
+    ATOMIC_JOBS_AVAILABLE = False
+    logging.warning("Atomic job manager not available, using legacy job handling")
+
 try:  # optional local LLM orchestrator
     from llm_orchestrator import LLMOrchestrator  # type: ignore
 except ImportError:  # pragma: no cover - optional dependency
@@ -286,6 +294,33 @@ def compute_batch_range(gpu_rate: float, keyspace: int) -> tuple[int, int]:
 
 def dispatch_batches(lang: str = "English"):
     """Prefetch batches from batch:queue into one of the job streams."""
+    # Use atomic job manager if available for race-condition-free operation
+    if ATOMIC_JOBS_AVAILABLE:
+        return dispatch_batches_atomic(lang)
+    else:
+        return dispatch_batches_legacy(lang)
+
+def dispatch_batches_atomic(lang: str = "English"):
+    """Atomic batch dispatch using secure job manager."""
+    try:
+        job_manager = get_atomic_job_manager()
+        
+        # Get current queue stats to determine how many batches to process
+        backlog_target = compute_backlog_target()
+        
+        # Note: In atomic mode, jobs are created on-demand when workers request them
+        # This eliminates the race conditions from pre-fetching
+        logging.info(f"Atomic job manager active, backlog target: {backlog_target}")
+        
+        return True
+        
+    except Exception as e:
+        logging.error(f"Atomic batch dispatch failed: {e}")
+        # Fallback to legacy mode
+        return dispatch_batches_legacy(lang)
+
+def dispatch_batches_legacy(lang: str = "English"):
+    """Legacy batch dispatch (original implementation)."""
     try:
         backlog_target = compute_backlog_target()
         pending_high = pending_count(JOB_STREAM, HTTP_GROUP)

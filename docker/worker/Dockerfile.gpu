@@ -1,0 +1,124 @@
+# Hashmancer GPU Worker Dockerfile with CUDA, Hashcat, and Darkling
+FROM nvidia/cuda:12.1-devel-ubuntu22.04
+
+# Set build arguments
+ARG CUDA_VERSION=12.1
+ARG HASHCAT_VERSION=6.2.6
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    CUDA_VERSION=${CUDA_VERSION} \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    # Basic tools
+    curl \
+    wget \
+    git \
+    unzip \
+    build-essential \
+    pkg-config \
+    \
+    # Python and development
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
+    python3.11-venv \
+    \
+    # CUDA and GPU support
+    nvidia-utils-525 \
+    libnvidia-compute-525 \
+    \
+    # Hashcat dependencies
+    libssl-dev \
+    libxxhash-dev \
+    zlib1g-dev \
+    libbz2-dev \
+    \
+    # Additional libraries
+    libffi-dev \
+    libc6-dev \
+    \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create python3 symlink
+RUN ln -s /usr/bin/python3.11 /usr/bin/python
+
+# Upgrade pip
+RUN python -m pip install --no-cache-dir --upgrade pip
+
+# Create app directory
+WORKDIR /app
+
+# Install Hashcat from source for latest version and GPU support
+RUN cd /tmp && \
+    wget https://github.com/hashcat/hashcat/archive/v${HASHCAT_VERSION}.tar.gz && \
+    tar -xzf v${HASHCAT_VERSION}.tar.gz && \
+    cd hashcat-${HASHCAT_VERSION} && \
+    make && \
+    make install && \
+    cd / && \
+    rm -rf /tmp/hashcat-*
+
+# Verify Hashcat installation
+RUN hashcat --version
+
+# Install OpenCL support for Hashcat GPU acceleration
+RUN apt-get update && apt-get install -y \
+    ocl-icd-opencl-dev \
+    opencl-headers \
+    clinfo \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY hashmancer/worker/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install additional worker dependencies
+RUN pip install --no-cache-dir \
+    redis \
+    psutil \
+    GPUtil \
+    pynvml \
+    numpy
+
+# Copy application code
+COPY hashmancer/ /app/hashmancer/
+COPY config/ /app/config/
+
+# Copy worker startup script
+COPY docker/worker/start-worker.sh /app/start-worker.sh
+RUN chmod +x /app/start-worker.sh
+
+# Copy GPU health check script
+COPY docker/worker/gpu-health-check.sh /app/gpu-health-check.sh
+RUN chmod +x /app/gpu-health-check.sh
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/data /app/tmp
+
+# Create non-root user (but allow GPU access)
+RUN useradd --create-home --shell /bin/bash hashmancer && \
+    usermod -aG video hashmancer && \
+    chown -R hashmancer:hashmancer /app
+
+# Copy GPU utilities
+COPY docker/worker/gpu-utils.py /app/gpu-utils.py
+
+# Switch to hashmancer user
+USER hashmancer
+
+# Test GPU access
+RUN python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'GPU count: {torch.cuda.device_count()}')" || echo "PyTorch CUDA test failed, but container will still work"
+
+# Health check
+HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=3 \
+    CMD /app/gpu-health-check.sh
+
+# Start command
+CMD ["/app/start-worker.sh"]

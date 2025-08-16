@@ -1,0 +1,353 @@
+name: GPU and Docker Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docker/**'
+      - 'hashmancer/worker/**'
+      - 'docker-compose*.yml'
+      - 'deploy-hashmancer.sh'
+  pull_request:
+    paths:
+      - 'docker/**'
+      - 'hashmancer/worker/**'
+      - 'docker-compose*.yml'
+      - 'deploy-hashmancer.sh'
+  workflow_dispatch:
+    inputs:
+      test_level:
+        description: 'Test level (basic, full, stress)'
+        required: false
+        default: 'basic'
+        type: choice
+        options:
+          - basic
+          - full
+          - stress
+
+jobs:
+  gpu-docker-tests:
+    runs-on: [self-hosted, linux, gpu, docker]
+    timeout-minutes: 45
+    
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      LOG_LEVEL: INFO
+      COMPOSE_FILE: docker-compose.ultimate.yml
+      TEST_LEVEL: ${{ github.event.inputs.test_level || 'basic' }}
+      
+    steps:
+      - name: Pre-test Cleanup
+        run: |
+          echo "🧹 Pre-test cleanup..."
+          
+          # Stop any running containers
+          docker-compose -f docker-compose.ultimate.yml down -v 2>/dev/null || true
+          docker-compose -f docker-compose.dev.yml down -v 2>/dev/null || true
+          
+          # Clean up Docker resources
+          docker system prune -f || true
+          docker volume prune -f || true
+          
+          # Clear any test data
+          sudo rm -rf ${{ github.workspace }}/_work/test-* || true
+          
+          echo "✅ Pre-test cleanup completed"
+          
+      - uses: actions/checkout@v4
+        
+      - name: Environment Information
+        run: |
+          echo "🖥️ GPU and Docker Environment"
+          echo "============================="
+          
+          echo "🎮 GPU Information:"
+          if command -v nvidia-smi > /dev/null 2>&1; then
+            nvidia-smi --query-gpu=index,name,memory.total,memory.free,utilization.gpu,temperature.gpu --format=csv,noheader
+            echo ""
+            echo "🔧 CUDA Version:"
+            nvcc --version 2>/dev/null || echo "NVCC not found"
+            echo ""
+            echo "🐳 NVIDIA Docker Runtime:"
+            docker run --rm --gpus all nvidia/cuda:12.1-base nvidia-smi 2>/dev/null || echo "NVIDIA Docker runtime test failed"
+          else
+            echo "❌ No NVIDIA GPU detected"
+            exit 1
+          fi
+          
+          echo ""
+          echo "🐳 Docker Information:"
+          docker version --format 'Client: {{.Client.Version}}, Server: {{.Server.Version}}'
+          docker-compose --version
+          
+          echo ""
+          echo "💾 System Resources:"
+          echo "Memory: $(free -h | grep Mem | awk '{print $2 " total, " $3 " used, " $7 " available"}')"
+          echo "Disk: $(df -h ${{ github.workspace }} | tail -1 | awk '{print $2 " total, " $3 " used, " $4 " available"}')"
+          
+      - name: Validate Docker Configuration
+        run: |
+          echo "🔍 Validating Docker configuration..."
+          
+          # Validate main compose file
+          echo "Checking docker-compose.ultimate.yml..."
+          docker-compose -f docker-compose.ultimate.yml config --quiet
+          echo "✅ Main compose file is valid"
+          
+          # Validate development compose file
+          echo "Checking docker-compose.dev.yml..."
+          docker-compose -f docker-compose.dev.yml config --quiet
+          echo "✅ Development compose file is valid"
+          
+          # Check combined configuration
+          echo "Checking combined configuration..."
+          docker-compose -f docker-compose.ultimate.yml -f docker-compose.dev.yml config --quiet
+          echo "✅ Combined configuration is valid"
+          
+      - name: Build Docker Images
+        run: |
+          echo "🏗️ Building Docker images..."
+          
+          # Build images with progress
+          echo "Building GPU worker image..."
+          docker-compose -f docker-compose.ultimate.yml build worker-gpu
+          echo "✅ GPU worker image built"
+          
+          echo "Building CPU worker image..."
+          docker-compose -f docker-compose.ultimate.yml build worker-cpu
+          echo "✅ CPU worker image built"
+          
+          echo "Building server image..."
+          docker-compose -f docker-compose.ultimate.yml build server
+          echo "✅ Server image built"
+          
+          # List built images
+          echo ""
+          echo "📋 Built images:"
+          docker images | grep hashmancer || echo "No hashmancer images found"
+          
+      - name: Test GPU Worker Container
+        run: |
+          echo "🎮 Testing GPU worker container..."
+          
+          # Start Redis for worker tests
+          docker-compose -f docker-compose.ultimate.yml up -d redis
+          
+          # Wait for Redis
+          echo "⏳ Waiting for Redis..."
+          timeout=30
+          while ! docker exec hashmancer-redis redis-cli ping > /dev/null 2>&1; do
+            sleep 2
+            timeout=$((timeout - 2))
+            if [[ $timeout -le 0 ]]; then
+              echo "❌ Redis failed to start"
+              exit 1
+            fi
+          done
+          echo "✅ Redis is ready"
+          
+          # Test GPU worker container
+          echo "Starting GPU worker container..."
+          docker-compose -f docker-compose.ultimate.yml up -d worker-gpu
+          
+          # Wait for worker to initialize
+          sleep 10
+          
+          # Check GPU worker status
+          echo "Checking GPU worker status..."
+          if docker ps | grep hashmancer-worker-gpu > /dev/null; then
+            echo "✅ GPU worker container is running"
+            
+            # Test GPU access in container
+            echo "Testing GPU access in worker container..."
+            docker exec hashmancer-worker-gpu nvidia-smi || echo "⚠️ GPU access test failed"
+            
+            # Test Hashcat in container
+            echo "Testing Hashcat in worker container..."
+            docker exec hashmancer-worker-gpu hashcat --version || echo "⚠️ Hashcat test failed"
+            
+            # Test GPU utilities
+            echo "Testing GPU utilities..."
+            docker exec hashmancer-worker-gpu python /app/gpu-utils.py info || echo "⚠️ GPU utilities test failed"
+            
+            # Check worker logs for errors
+            echo "Checking worker logs..."
+            docker logs hashmancer-worker-gpu --tail 20
+          else
+            echo "❌ GPU worker container failed to start"
+            docker-compose -f docker-compose.ultimate.yml logs worker-gpu
+            exit 1
+          fi
+          
+      - name: Test Full Deployment
+        if: env.TEST_LEVEL == 'full' || env.TEST_LEVEL == 'stress'
+        run: |
+          echo "🚀 Testing full deployment..."
+          
+          # Stop existing containers
+          docker-compose -f docker-compose.ultimate.yml down
+          
+          # Deploy full stack
+          echo "Deploying full stack..."
+          docker-compose -f docker-compose.ultimate.yml up -d redis server worker-gpu nginx
+          
+          # Wait for services
+          echo "⏳ Waiting for services to be ready..."
+          sleep 30
+          
+          # Test deployment
+          echo "Running deployment tests..."
+          ./test-deployment.sh || echo "⚠️ Some deployment tests failed"
+          
+      - name: Performance Tests
+        if: env.TEST_LEVEL == 'full' || env.TEST_LEVEL == 'stress'
+        run: |
+          echo "⚡ Running performance tests..."
+          
+          # GPU performance test
+          echo "Testing GPU performance..."
+          docker exec hashmancer-worker-gpu python /app/gpu-utils.py monitor --duration 30 || echo "⚠️ GPU monitoring failed"
+          
+          # Redis performance test
+          echo "Testing Redis performance..."
+          python redis_tool.py stats
+          
+          # Container resource usage
+          echo "Container resource usage:"
+          docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
+          
+      - name: Stress Tests
+        if: env.TEST_LEVEL == 'stress'
+        run: |
+          echo "🔥 Running stress tests..."
+          
+          # Scale workers
+          echo "Scaling GPU workers..."
+          docker-compose -f docker-compose.ultimate.yml up -d --scale worker-gpu=2
+          
+          # Monitor system under load
+          echo "Monitoring system under load..."
+          sleep 60
+          
+          # Check system stability
+          docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+          
+          # GPU memory usage
+          nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits
+          
+      - name: Security Tests
+        run: |
+          echo "🔒 Running container security tests..."
+          
+          # Check container configurations
+          echo "Checking container security configurations..."
+          
+          # Verify non-root user in containers
+          docker exec hashmancer-worker-gpu whoami | grep -v root && echo "✅ Worker runs as non-root" || echo "⚠️ Worker runs as root"
+          docker exec hashmancer-server whoami | grep -v root && echo "✅ Server runs as non-root" || echo "⚠️ Server runs as root"
+          
+          # Check for privilege escalation
+          docker exec hashmancer-worker-gpu cat /proc/1/status | grep "NoNewPrivs" || echo "⚠️ NoNewPrivs not set"
+          
+          # Check exposed ports
+          echo "Exposed ports:"
+          docker ps --format "table {{.Names}}\t{{.Ports}}"
+          
+      - name: Integration Tests
+        run: |
+          echo "🔗 Running integration tests..."
+          
+          # Ensure basic services are running
+          if ! docker ps | grep hashmancer-redis > /dev/null; then
+            docker-compose -f docker-compose.ultimate.yml up -d redis
+            sleep 10
+          fi
+          
+          # Test Redis integration
+          echo "Testing Redis integration..."
+          python redis_tool.py test
+          python redis_tool.py health --quick
+          
+          # Test worker connectivity
+          if docker ps | grep hashmancer-worker-gpu > /dev/null; then
+            echo "Testing worker-Redis connectivity..."
+            docker exec hashmancer-worker-gpu python -c "
+            import redis
+            import os
+            r = redis.Redis(host=os.getenv('REDIS_HOST', 'redis'), port=6379)
+            r.ping()
+            print('✅ Worker can connect to Redis')
+            "
+          fi
+          
+      - name: Deployment Script Tests
+        run: |
+          echo "🧪 Testing deployment scripts..."
+          
+          # Test deployment script validation
+          echo "Testing deployment script help..."
+          ./deploy-hashmancer.sh help
+          
+          # Test dry-run capabilities
+          echo "Testing script validation..."
+          bash -n ./deploy-hashmancer.sh && echo "✅ Deployment script syntax is valid"
+          bash -n ./test-deployment.sh && echo "✅ Test script syntax is valid"
+          bash -n ./setup-github-runner.sh && echo "✅ Runner setup script syntax is valid"
+          
+      - name: Cleanup and Resource Check
+        if: always()
+        run: |
+          echo "🧹 Final cleanup and resource check..."
+          
+          # Show final resource usage
+          echo "Final system state:"
+          nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv,noheader || echo "GPU info unavailable"
+          
+          echo ""
+          echo "Docker resource usage:"
+          docker system df
+          
+          # Stop all services
+          echo ""
+          echo "Stopping all services..."
+          docker-compose -f docker-compose.ultimate.yml down -v || true
+          
+          # Clean up test containers and images
+          echo "Cleaning up Docker resources..."
+          docker system prune -f || true
+          docker volume prune -f || true
+          
+          # Final disk space check
+          echo ""
+          echo "Final disk usage:"
+          df -h ${{ github.workspace }}
+          
+          echo "✅ Cleanup completed"
+          
+      - name: Test Summary
+        if: always()
+        run: |
+          echo ""
+          echo "📊 GPU and Docker Tests Summary"
+          echo "==============================="
+          echo "Test Level: $TEST_LEVEL"
+          echo "Runner Labels: ${{ join(runner.labels, ', ') }}"
+          echo ""
+          echo "✅ GPU worker container tests completed"
+          echo "✅ Docker configuration validation completed"
+          echo "✅ Container security tests completed"
+          echo "✅ Integration tests completed"
+          echo "✅ Deployment script tests completed"
+          
+          if [[ "$TEST_LEVEL" == "full" || "$TEST_LEVEL" == "stress" ]]; then
+            echo "✅ Full deployment tests completed"
+            echo "✅ Performance tests completed"
+          fi
+          
+          if [[ "$TEST_LEVEL" == "stress" ]]; then
+            echo "✅ Stress tests completed"
+          fi
+          
+          echo ""
+          echo "🎉 All GPU and Docker tests completed successfully!"

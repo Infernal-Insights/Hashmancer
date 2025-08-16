@@ -66,6 +66,9 @@ from .auth_middleware import sign_session, verify_session_token
 import secrets
 from functools import wraps
 
+# Import improved WebSocket manager
+from .websocket_manager import websocket_manager, handle_websocket_connection, broadcast_message
+
 # Performance monitoring
 try:
     from .performance.monitor import get_performance_monitor, start_performance_monitoring
@@ -1861,32 +1864,70 @@ async def portal_page():
 
 @app.websocket("/ws/portal")
 async def portal_ws(ws: WebSocket):
-    """Push periodic metrics and found hashes over a WebSocket."""
-    await ws.accept()
+    """Push periodic metrics and found hashes over a WebSocket with improved memory management."""
+    
+    async def handle_portal_messages(connection_id: str, data: Dict[str, Any]):
+        """Handle incoming portal WebSocket messages."""
+        # Portal is primarily push-based, but handle ping/pong and requests
+        if data.get("type") == "request_update":
+            # Force immediate update
+            try:
+                metrics = await server_status()
+                workers = await list_workers()
+                total = r.llen("found:results")
+                
+                await websocket_manager.send_to_connection(connection_id, {
+                    "type": "portal_update",
+                    "metrics": metrics,
+                    "workers": workers,
+                    "found_count": total,
+                    "timestamp": time.time()
+                })
+            except Exception as e:
+                log_error("server", "system", "S732", "Portal update error", e)
+    
+    # Use improved WebSocket handler
+    connection_id = await handle_websocket_connection(
+        ws, 
+        handle_portal_messages,
+        ["portal_updates"]
+    )
+    
+    if not connection_id:
+        return
+    
+    # Start periodic updates for this connection
     last_count = 0
     try:
-        while True:
-            metrics = await server_status()
-            workers = await list_workers()
-            total = r.llen("found:results")
-            founds: list[str] = []
-            if total > last_count:
-                founds = r.lrange("found:results", last_count, total - 1)
-                last_count = total
-            await ws.send_text(
-                json.dumps(
-                    {
-                        "metrics": metrics,
-                        "workers": workers,
-                        "founds": founds,
-                    }
-                )
-            )
-            await asyncio.sleep(5)
-    except WebSocketDisconnect:
-        pass
+        while connection_id in websocket_manager._connections:
+            try:
+                metrics = await server_status()
+                workers = await list_workers()
+                total = r.llen("found:results")
+                founds: list[str] = []
+                if total > last_count:
+                    founds = r.lrange("found:results", last_count, total - 1)
+                    last_count = total
+                
+                success = await websocket_manager.send_to_connection(connection_id, {
+                    "type": "portal_update",
+                    "metrics": metrics,
+                    "workers": workers,
+                    "founds": founds,
+                    "timestamp": time.time()
+                })
+                
+                if not success:
+                    break
+                    
+                await asyncio.sleep(5)
+                
+            except Exception as e:
+                log_error("server", "system", "S731", "Portal WS error", e)
+                break
+                
     except Exception as e:
-        log_error("server", "system", "S731", "Portal WS error", e)
+        log_error("server", "system", "S733", "Portal WS outer error", e)
 
 
 # Security endpoints
@@ -2318,172 +2359,102 @@ async def get_adaptation_history(limit: int = 50):
 
 
 # =============================================================================
-# WebSocket for Real-Time AI Insights
+# WebSocket for Real-Time AI Insights (Using Improved Manager)
 # =============================================================================
 
-class AIWebSocketManager:
-    """Manages WebSocket connections for real-time AI insights."""
-    
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-        self.broadcast_enabled = True
-    
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-        logging.info(f"AI WebSocket connected. Total connections: {len(self.active_connections)}")
-    
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-            logging.info(f"AI WebSocket disconnected. Total connections: {len(self.active_connections)}")
-    
-    async def broadcast_ai_insights(self, insights: Dict[str, Any]):
-        """Broadcast AI insights to all connected clients."""
-        if not self.broadcast_enabled or not self.active_connections:
-            return
-        
-        message = {
-            "type": "ai_insights",
-            "data": insights,
+async def broadcast_ai_insights(insights: Dict[str, Any]):
+    """Broadcast AI insights to all connected clients."""
+    message = {
+        "type": "ai_insights",
+        "data": insights,
+        "timestamp": time.time()
+    }
+    return await broadcast_message(message, "ai_insights")
+
+async def broadcast_strategy_change(old_strategy: str, new_strategy: str, reason: str):
+    """Broadcast strategy changes to connected clients."""
+    message = {
+        "type": "strategy_change",
+        "data": {
+            "old_strategy": old_strategy,
+            "new_strategy": new_strategy,
+            "reason": reason,
             "timestamp": time.time()
         }
-        
-        # Send to all connected clients
-        disconnected = []
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception as e:
-                logging.warning(f"Failed to send AI insights to WebSocket: {e}")
-                disconnected.append(connection)
-        
-        # Remove disconnected clients
-        for connection in disconnected:
-            self.disconnect(connection)
-    
-    async def broadcast_strategy_change(self, old_strategy: str, new_strategy: str, reason: str):
-        """Broadcast strategy changes to connected clients."""
-        if not self.broadcast_enabled or not self.active_connections:
-            return
-        
-        message = {
-            "type": "strategy_change",
-            "data": {
-                "old_strategy": old_strategy,
-                "new_strategy": new_strategy,
-                "reason": reason,
-                "timestamp": time.time()
-            }
-        }
-        
-        disconnected = []
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception:
-                disconnected.append(connection)
-        
-        for connection in disconnected:
-            self.disconnect(connection)
-    
-    async def broadcast_pattern_prediction(self, prediction_data: Dict[str, Any]):
-        """Broadcast pattern predictions to connected clients."""
-        if not self.broadcast_enabled or not self.active_connections:
-            return
-        
-        message = {
-            "type": "pattern_prediction", 
-            "data": prediction_data,
-            "timestamp": time.time()
-        }
-        
-        disconnected = []
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception:
-                disconnected.append(connection)
-        
-        for connection in disconnected:
-            self.disconnect(connection)
+    }
+    return await broadcast_message(message, "strategy_changes")
 
-
-# Global WebSocket manager
-ai_websocket_manager = AIWebSocketManager()
+async def broadcast_pattern_prediction(prediction_data: Dict[str, Any]):
+    """Broadcast pattern predictions to connected clients."""
+    message = {
+        "type": "pattern_prediction", 
+        "data": prediction_data,
+        "timestamp": time.time()
+    }
+    return await broadcast_message(message, "pattern_predictions")
 
 
 @app.websocket("/ws/ai-insights")
 async def websocket_ai_insights(websocket: WebSocket):
-    """WebSocket endpoint for real-time AI insights."""
-    await ai_websocket_manager.connect(websocket)
+    """WebSocket endpoint for real-time AI insights with improved memory management."""
     
-    try:
-        # Send initial AI status
-        if AI_API_AVAILABLE:
-            try:
-                status = await api_get_ai_status()
-                await websocket.send_json({
-                    "type": "ai_status",
-                    "data": status,
-                    "timestamp": time.time()
-                })
-            except Exception as e:
-                logging.warning(f"Failed to send initial AI status: {e}")
+    async def handle_ai_messages(connection_id: str, data: Dict[str, Any]):
+        """Handle incoming WebSocket messages for AI insights."""
+        try:
+            if data.get("type") == "request_insights":
+                if AI_API_AVAILABLE:
+                    try:
+                        insights = await api_get_ai_insights()
+                        await websocket_manager.send_to_connection(connection_id, {
+                            "type": "ai_insights", 
+                            "data": insights,
+                            "timestamp": time.time()
+                        })
+                    except Exception as e:
+                        await websocket_manager.send_to_connection(connection_id, {
+                            "type": "error",
+                            "message": f"Failed to get AI insights: {e}",
+                            "timestamp": time.time()
+                        })
+            
+            elif data.get("type") == "request_pattern_insights":
+                if AI_API_AVAILABLE:
+                    try:
+                        limit = data.get("limit", 10)
+                        patterns = await api_get_pattern_insights(limit)
+                        await websocket_manager.send_to_connection(connection_id, {
+                            "type": "pattern_insights",
+                            "data": patterns,
+                            "timestamp": time.time()
+                        })
+                    except Exception as e:
+                        await websocket_manager.send_to_connection(connection_id, {
+                            "type": "error",
+                            "message": f"Failed to get pattern insights: {e}",
+                            "timestamp": time.time()
+                        })
         
-        # Keep connection alive and handle incoming messages
-        while True:
-            try:
-                # Wait for client messages (ping/pong, requests, etc.)
-                data = await websocket.receive_json()
-                
-                # Handle different message types
-                if data.get("type") == "ping":
-                    await websocket.send_json({"type": "pong", "timestamp": time.time()})
-                
-                elif data.get("type") == "request_insights":
-                    if AI_API_AVAILABLE:
-                        try:
-                            insights = await api_get_ai_insights()
-                            await websocket.send_json({
-                                "type": "ai_insights", 
-                                "data": insights,
-                                "timestamp": time.time()
-                            })
-                        except Exception as e:
-                            await websocket.send_json({
-                                "type": "error",
-                                "message": f"Failed to get AI insights: {e}",
-                                "timestamp": time.time()
-                            })
-                
-                elif data.get("type") == "request_pattern_insights":
-                    if AI_API_AVAILABLE:
-                        try:
-                            limit = data.get("limit", 10)
-                            patterns = await api_get_pattern_insights(limit)
-                            await websocket.send_json({
-                                "type": "pattern_insights",
-                                "data": patterns,
-                                "timestamp": time.time()
-                            })
-                        except Exception as e:
-                            await websocket.send_json({
-                                "type": "error",
-                                "message": f"Failed to get pattern insights: {e}",
-                                "timestamp": time.time()
-                            })
-                
-            except WebSocketDisconnect:
-                break
-            except Exception as e:
-                logging.error(f"WebSocket error: {e}")
-                break
-                
-    except WebSocketDisconnect:
-        pass
-    finally:
-        ai_websocket_manager.disconnect(websocket)
+        except Exception as e:
+            logging.error(f"AI WebSocket message handler error: {e}")
+    
+    # Use the improved WebSocket handler
+    connection_id = await handle_websocket_connection(
+        websocket, 
+        handle_ai_messages,
+        ["ai_insights", "strategy_changes", "pattern_predictions"]
+    )
+    
+    # Send initial AI status if connection was successful
+    if connection_id and AI_API_AVAILABLE:
+        try:
+            status = await api_get_ai_status()
+            await websocket_manager.send_to_connection(connection_id, {
+                "type": "ai_status",
+                "data": status,
+                "timestamp": time.time()
+            })
+        except Exception as e:
+            logging.warning(f"Failed to send initial AI status: {e}")
 
 
 # =============================================================================
@@ -2492,10 +2463,10 @@ async def websocket_ai_insights(websocket: WebSocket):
 
 async def broadcast_ai_insights_to_clients():
     """Get current AI insights and broadcast to WebSocket clients."""
-    if AI_API_AVAILABLE and ai_websocket_manager.active_connections:
+    if AI_API_AVAILABLE and websocket_manager.get_connection_count() > 0:
         try:
             insights = await api_get_ai_insights()
-            await ai_websocket_manager.broadcast_ai_insights(insights)
+            await broadcast_ai_insights(insights)
         except Exception as e:
             logging.error(f"Failed to broadcast AI insights: {e}")
 
@@ -2514,7 +2485,7 @@ async def notify_ai_cracking_success(hash_value: str, password: str, hash_type: 
         )
         
         # Broadcast to WebSocket clients
-        await ai_websocket_manager.broadcast_pattern_prediction({
+        await broadcast_pattern_prediction({
             "success": True,
             "hash_type": hash_type,
             "pattern": password,  # Will be converted to pattern by collector
@@ -2534,7 +2505,7 @@ async def notify_ai_strategy_change(old_strategy: str, new_strategy: str, reason
         await collector.collect_strategy_switch(old_strategy, new_strategy, reason, 0.0)
         
         # Broadcast to WebSocket clients
-        await ai_websocket_manager.broadcast_strategy_change(old_strategy, new_strategy, reason)
+        await broadcast_strategy_change(old_strategy, new_strategy, reason)
         
     except Exception as e:
         logging.error(f"Failed to notify AI of strategy change: {e}")

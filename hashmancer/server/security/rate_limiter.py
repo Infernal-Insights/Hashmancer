@@ -3,6 +3,9 @@
 import time
 import hashlib
 import logging
+import asyncio
+import json
+import secrets
 from typing import Dict, Optional, List, Tuple, Any
 from dataclasses import dataclass, asdict
 from collections import defaultdict, deque
@@ -11,6 +14,8 @@ from functools import wraps
 from fastapi import Request, HTTPException
 import ipaddress
 import re
+
+from ..redis_utils import get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +58,7 @@ class RateLimiter:
         self._blocked_ips: Dict[str, float] = {}
         self._suspicious_activity: List[SuspiciousActivity] = []
         self._lock = Lock()
+        self.redis = get_redis()
         
         # Default rate limiting rules
         self._rules = {
@@ -168,6 +174,85 @@ class RateLimiter:
             if severity == 'high':
                 self._blocked_ips[client_ip] = current_time + 3600  # Block for 1 hour
                 logger.error(f"Auto-blocked IP {client_ip} for {activity_type}")
+    
+    async def allow_request(
+        self, 
+        key: str, 
+        max_requests: int, 
+        window_seconds: int,
+        burst_allowance: int = 0
+    ) -> bool:
+        """Redis-based distributed rate limiting."""
+        try:
+            current_time = int(time.time())
+            window_start = current_time - window_seconds
+            
+            # Use Redis sorted set for sliding window
+            rate_key = f"rate_limit:{key}"
+            
+            # Remove old entries
+            self.redis.zremrangebyscore(rate_key, 0, window_start)
+            
+            # Count current requests
+            current_requests = self.redis.zcard(rate_key)
+            
+            # Check if within limit
+            if current_requests >= max_requests + burst_allowance:
+                # Set expiration for cleanup
+                self.redis.expire(rate_key, window_seconds)
+                return False
+            
+            # Add current request
+            request_id = f"{current_time}:{secrets.token_hex(8)}"
+            self.redis.zadd(rate_key, {request_id: current_time})
+            
+            # Set expiration
+            self.redis.expire(rate_key, window_seconds)
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Redis rate limiting failed for {key}: {e}")
+            # Fallback to allow request on Redis failure
+            return True
+    
+    async def is_ip_blocked(self, ip: str) -> bool:
+        """Check if IP is blocked in Redis."""
+        try:
+            block_key = f"blocked_ip:{ip}"
+            blocked_until = self.redis.get(block_key)
+            if blocked_until:
+                if int(blocked_until) > time.time():
+                    return True
+                else:
+                    self.redis.delete(block_key)
+            return False
+        except Exception as e:
+            logger.error(f"Failed to check IP block status: {e}")
+            return False
+    
+    async def block_ip_redis(self, ip: str, duration: int, reason: str):
+        """Block IP in Redis for distributed blocking."""
+        try:
+            block_key = f"blocked_ip:{ip}"
+            blocked_until = int(time.time()) + duration
+            self.redis.setex(block_key, duration, blocked_until)
+            
+            # Log the block
+            block_log_key = f"block_log:{ip}"
+            block_info = {
+                "timestamp": int(time.time()),
+                "duration": duration,
+                "reason": reason,
+                "blocked_until": blocked_until
+            }
+            self.redis.lpush(block_log_key, json.dumps(block_info))
+            self.redis.ltrim(block_log_key, 0, 99)  # Keep last 100 blocks
+            self.redis.expire(block_log_key, 86400 * 30)  # Expire after 30 days
+            
+            logger.warning(f"Blocked IP {ip} for {duration} seconds: {reason}")
+        except Exception as e:
+            logger.error(f"Failed to block IP {ip}: {e}")
     
     def check_rate_limit(
         self, 

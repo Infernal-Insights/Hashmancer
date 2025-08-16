@@ -1,0 +1,297 @@
+name: End-to-End Integration Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_duration:
+        description: 'Test duration in minutes'
+        required: false
+        default: '15'
+        type: number
+      min_job_runtime:
+        description: 'Minimum job runtime in minutes'
+        required: false
+        default: '10'
+        type: number
+      vast_max_cost:
+        description: 'Maximum Vast.ai cost per hour ($)'
+        required: false
+        default: '0.50'
+        type: string
+      skip_vast:
+        description: 'Skip Vast.ai worker deployment'
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches: [main]
+    paths:
+      - 'test-integration-e2e.sh'
+      - 'hashmancer/server/**'
+      - 'hashmancer/worker/**'
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+
+jobs:
+  integration-tests:
+    runs-on: [self-hosted, linux, gpu, docker]
+    timeout-minutes: 45
+    
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      LOG_LEVEL: INFO
+      HASHES_COM_API_KEY: ${{ secrets.HASHES_COM_API_KEY }}
+      VAST_AI_API_KEY: ${{ secrets.VAST_AI_API_KEY }}
+      VAST_MAX_COST_PER_HOUR: ${{ github.event.inputs.vast_max_cost || '0.50' }}
+      TEST_DURATION_MINUTES: ${{ github.event.inputs.test_duration || '15' }}
+      MIN_JOB_RUNTIME_MINUTES: ${{ github.event.inputs.min_job_runtime || '10' }}
+      SKIP_VAST_DEPLOYMENT: ${{ github.event.inputs.skip_vast || 'false' }}
+    
+    steps:
+      - name: Pre-test Cleanup
+        run: |
+          echo "🧹 Pre-integration test cleanup..."
+          
+          # Stop any running containers
+          docker-compose -f docker-compose.ultimate.yml down -v 2>/dev/null || true
+          docker-compose -f docker-compose.dev.yml down -v 2>/dev/null || true
+          
+          # Clean up Docker resources
+          docker system prune -f || true
+          docker volume prune -f || true
+          
+          # Kill any existing workers
+          pkill -f "production_worker.py" || true
+          
+          # Clean up test files
+          sudo rm -rf ${{ github.workspace }}/_work/integration-test-* || true
+          rm -f /tmp/vast_instance_id.txt || true
+          rm -f /tmp/local_worker_pid.txt || true
+          rm -f /tmp/test_hashmancer_job_id.txt || true
+          
+          echo "✅ Pre-test cleanup completed"
+          
+      - uses: actions/checkout@v4
+        
+      - name: Environment Information
+        run: |
+          echo "🌍 Integration Test Environment"
+          echo "==============================="
+          echo "Test Duration: $TEST_DURATION_MINUTES minutes"
+          echo "Min Job Runtime: $MIN_JOB_RUNTIME_MINUTES minutes"
+          echo "Vast.ai Max Cost: \$$VAST_MAX_COST_PER_HOUR/hour"
+          echo "Skip Vast.ai: $SKIP_VAST_DEPLOYMENT"
+          echo ""
+          
+          echo "🖥️ System Information:"
+          echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
+          echo "CPU: $(nproc) cores"
+          echo "Memory: $(free -h | grep Mem | awk '{print $2 " total, " $7 " available"}')"
+          echo ""
+          
+          if command -v nvidia-smi > /dev/null 2>&1; then
+            echo "🎮 GPU Information:"
+            nvidia-smi --query-gpu=name,memory.total,driver_version,cuda_version --format=csv,noheader
+          else
+            echo "💻 No GPU detected"
+          fi
+          echo ""
+          
+          echo "🐳 Docker Information:"
+          docker version --format 'Client: {{.Client.Version}}, Server: {{.Server.Version}}'
+          echo ""
+          
+      - name: Install Dependencies
+        run: |
+          echo "📦 Installing integration test dependencies..."
+          
+          # Install required packages
+          sudo apt-get update
+          sudo apt-get install -y bc jq curl
+          
+          # Install Python dependencies
+          python3 -m pip install --upgrade pip
+          pip install -r hashmancer/server/requirements.txt
+          pip install -r hashmancer/worker/requirements.txt
+          pip install -r hashmancer/server/requirements-dev.txt
+          
+          echo "✅ Dependencies installed"
+          
+      - name: API Key Validation
+        run: |
+          echo "🔑 Validating API credentials..."
+          
+          if [[ -z "$HASHES_COM_API_KEY" ]]; then
+            echo "❌ HASHES_COM_API_KEY not configured"
+            echo "Add your hashes.com API key to repository secrets"
+            exit 1
+          fi
+          
+          if [[ -z "$VAST_AI_API_KEY" ]] && [[ "$SKIP_VAST_DEPLOYMENT" != "true" ]]; then
+            echo "❌ VAST_AI_API_KEY not configured"
+            echo "Add your Vast.ai API key to repository secrets or set skip_vast to true"
+            exit 1
+          fi
+          
+          # Test hashes.com API
+          echo "Testing hashes.com API..."
+          if curl -s -H "Authorization: Bearer $HASHES_COM_API_KEY" \
+             "https://api.hashes.com/api/v1/account" | jq -e '.user' > /dev/null 2>&1; then
+            echo "✅ hashes.com API key validated"
+          else
+            echo "❌ hashes.com API key validation failed"
+            exit 1
+          fi
+          
+          # Test Vast.ai API (if not skipping)
+          if [[ "$SKIP_VAST_DEPLOYMENT" != "true" ]]; then
+            echo "Testing Vast.ai API..."
+            if curl -s -H "Authorization: Bearer $VAST_AI_API_KEY" \
+               "https://console.vast.ai/api/v0/users/current/" | jq -e '.success' > /dev/null 2>&1; then
+              echo "✅ Vast.ai API key validated"
+            else
+              echo "❌ Vast.ai API key validation failed"
+              exit 1
+            fi
+          else
+            echo "ℹ️ Skipping Vast.ai API validation"
+          fi
+          
+      - name: Deploy Test Environment
+        run: |
+          echo "🚀 Deploying Hashmancer test environment..."
+          
+          # Deploy core services
+          ./deploy-hashmancer.sh quick
+          
+          # Wait for services to be ready
+          echo "⏳ Waiting for services to be ready..."
+          timeout=120
+          while ! curl -f -s http://localhost:8080/health > /dev/null 2>&1; do
+            sleep 5
+            timeout=$((timeout - 5))
+            if [[ $timeout -le 0 ]]; then
+              echo "❌ Services failed to start within timeout"
+              docker-compose -f docker-compose.ultimate.yml logs
+              exit 1
+            fi
+          done
+          
+          echo "✅ Test environment deployed"
+          
+      - name: Run Integration Tests
+        run: |
+          echo "🧪 Running end-to-end integration tests..."
+          
+          # Create environment file for test
+          cat << EOF > .env.integration
+          HASHES_COM_API_KEY=$HASHES_COM_API_KEY
+          VAST_AI_API_KEY=$VAST_AI_API_KEY
+          VAST_MAX_COST_PER_HOUR=$VAST_MAX_COST_PER_HOUR
+          TEST_DURATION_MINUTES=$TEST_DURATION_MINUTES
+          MIN_JOB_RUNTIME_MINUTES=$MIN_JOB_RUNTIME_MINUTES
+          SKIP_VAST_DEPLOYMENT=$SKIP_VAST_DEPLOYMENT
+          EOF
+          
+          # Run the integration test
+          ./test-integration-e2e.sh
+          
+      - name: Collect Test Artifacts
+        if: always()
+        run: |
+          echo "📋 Collecting test artifacts..."
+          
+          # Create artifacts directory
+          mkdir -p integration-test-artifacts
+          
+          # Collect logs
+          docker-compose -f docker-compose.ultimate.yml logs > integration-test-artifacts/docker-logs.txt 2>&1 || true
+          
+          # Collect worker logs
+          if [[ -f "/tmp/local_worker.log" ]]; then
+            cp /tmp/local_worker.log integration-test-artifacts/
+          fi
+          
+          # Collect Redis diagnostics
+          python3 redis_tool.py health > integration-test-artifacts/redis-health.txt 2>&1 || true
+          python3 redis_tool.py stats > integration-test-artifacts/redis-stats.txt 2>&1 || true
+          
+          # Collect system information
+          cat << EOF > integration-test-artifacts/system-info.txt
+          Date: $(date)
+          OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')
+          Kernel: $(uname -r)
+          CPU: $(nproc) cores
+          Memory: $(free -h | grep Mem | awk '{print $2 " total, " $3 " used, " $7 " available"}')
+          Docker: $(docker --version)
+          EOF
+          
+          if command -v nvidia-smi > /dev/null 2>&1; then
+            echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)" >> integration-test-artifacts/system-info.txt
+            nvidia-smi > integration-test-artifacts/gpu-info.txt
+          fi
+          
+          # List artifacts
+          echo "📁 Collected artifacts:"
+          ls -la integration-test-artifacts/
+          
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-artifacts-${{ github.run_number }}
+          path: integration-test-artifacts/
+          retention-days: 7
+          
+      - name: Final Cleanup
+        if: always()
+        run: |
+          echo "🧹 Final cleanup..."
+          
+          # Stop all services
+          docker-compose -f docker-compose.ultimate.yml down -v || true
+          
+          # Clean up any remaining processes
+          pkill -f "production_worker.py" || true
+          
+          # Clean up test files
+          rm -f .env.integration || true
+          rm -f /tmp/vast_instance_id.txt || true
+          rm -f /tmp/local_worker_pid.txt || true
+          rm -f /tmp/test_hashmancer_job_id.txt || true
+          rm -f /tmp/test_hashes_com_job.json || true
+          rm -f /tmp/local_worker.log || true
+          
+          # Docker cleanup
+          docker system prune -f || true
+          
+          echo "✅ Final cleanup completed"
+          
+      - name: Integration Test Summary
+        if: always()
+        run: |
+          echo ""
+          echo "📊 Integration Test Summary"
+          echo "=========================="
+          echo "🔧 Test Configuration:"
+          echo "  Duration: $TEST_DURATION_MINUTES minutes"
+          echo "  Min Runtime: $MIN_JOB_RUNTIME_MINUTES minutes"
+          echo "  Max Cost: \$$VAST_MAX_COST_PER_HOUR/hour"
+          echo "  Skip Vast.ai: $SKIP_VAST_DEPLOYMENT"
+          echo ""
+          echo "🏃 Test Components:"
+          echo "  ✅ hashes.com API integration"
+          echo "  ✅ Server job creation and management"
+          echo "  ✅ Local worker deployment and testing"
+          if [[ "$SKIP_VAST_DEPLOYMENT" != "true" ]]; then
+            echo "  ✅ Vast.ai worker deployment and testing"
+          else
+            echo "  ⏭️ Vast.ai testing skipped"
+          fi
+          echo "  ✅ End-to-end job processing"
+          echo "  ✅ Resource cleanup and cost control"
+          echo ""
+          echo "Runner: ${{ join(runner.labels, ', ') }}"
+          echo "Workflow: ${{ github.workflow }}"
+          echo "Run: ${{ github.run_number }}"

@@ -13,18 +13,32 @@ import subprocess
 import threading
 import signal
 import logging
+import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 import hashlib
 
+# Import secure authentication client
+try:
+    from .auth_client import create_worker_auth_client, WorkerAuthClient
+    SECURE_AUTH_AVAILABLE = True
+except ImportError:
+    SECURE_AUTH_AVAILABLE = False
+    logging.warning("Secure authentication not available, using legacy mode")
+
 # Configure logging
 log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+
+# Create log directory if it doesn't exist (use relative path for development)
+log_dir = Path(os.environ.get('LOG_DIR', './logs'))
+log_dir.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     level=getattr(logging, log_level),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('/app/logs/worker.log')
+        logging.FileHandler(log_dir / 'worker.log')
     ]
 )
 logger = logging.getLogger('hashmancer-worker')
@@ -38,11 +52,24 @@ class HashmancerProductionWorker:
         self.worker_port = int(os.environ.get('WORKER_PORT', '8081'))
         self.max_jobs = int(os.environ.get('MAX_CONCURRENT_JOBS', '3'))
         
+        # Server URL
+        self.server_url = f"http://{self.server_host}:{self.server_port}"
+        
         # State management
         self.running = True
         self.registered = False
         self.active_jobs = {}
         self.job_lock = threading.Lock()
+        
+        # Initialize authentication client if available
+        self.auth_client = None
+        if SECURE_AUTH_AVAILABLE:
+            try:
+                self.auth_client = create_worker_auth_client(self.server_url, self.worker_id)
+                logger.info("🔒 Secure authentication enabled")
+            except Exception as e:
+                logger.warning(f"Failed to initialize secure auth: {e}")
+                SECURE_AUTH_AVAILABLE = False
         
         # Setup signal handlers
         signal.signal(signal.SIGTERM, self._shutdown_handler)
@@ -54,8 +81,9 @@ class HashmancerProductionWorker:
             sys.exit(1)
         
         logger.info(f"Worker initialized: {self.worker_id}")
-        logger.info(f"Server: {self.server_host}:{self.server_port}")
+        logger.info(f"Server: {self.server_url}")
         logger.info(f"Max concurrent jobs: {self.max_jobs}")
+        logger.info(f"Authentication: {'Secure' if self.auth_client else 'Legacy'}")
     
     def _generate_worker_id(self):
         """Generate unique worker ID"""
@@ -158,7 +186,56 @@ class HashmancerProductionWorker:
         return gpu_info
     
     def register_with_server(self):
-        """Register worker with the Hashmancer server"""
+        """Register worker with the Hashmancer server (with secure auth if available)"""
+        # Use secure authentication if available
+        if self.auth_client:
+            return self._register_secure()
+        else:
+            return self._register_legacy()
+    
+    def _register_secure(self):
+        """Register using secure authentication"""
+        try:
+            logger.info("🔒 Registering with secure authentication...")
+            
+            # Prepare metadata
+            metadata = {
+                'worker_id': self.worker_id,
+                'host': self._get_public_ip(),
+                'port': self.worker_port,
+                'capabilities': self.get_system_capabilities(),
+                'status': 'ready',
+                'max_concurrent_jobs': self.max_jobs,
+                'version': '2.0.0',
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
+            
+            # Use async registration within sync context
+            async def do_registration():
+                return await self.auth_client.register_with_server(metadata)
+            
+            # Run async registration
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                success = loop.run_until_complete(do_registration())
+                if success:
+                    logger.info("✅ Successfully registered with secure authentication")
+                    self.registered = True
+                    return True
+                else:
+                    logger.error("❌ Secure registration failed")
+                    return False
+            finally:
+                loop.close()
+                
+        except Exception as e:
+            logger.error(f"Secure registration failed: {e}")
+            logger.info("Falling back to legacy registration...")
+            return self._register_legacy()
+    
+    def _register_legacy(self):
+        """Register using legacy method"""
         registration_data = {
             'worker_id': self.worker_id,
             'host': self._get_public_ip(),
@@ -175,7 +252,7 @@ class HashmancerProductionWorker:
         
         for attempt in range(1, max_attempts + 1):
             try:
-                logger.info(f"Registration attempt {attempt}/{max_attempts}")
+                logger.info(f"Legacy registration attempt {attempt}/{max_attempts}")
                 
                 response = requests.post(
                     f'http://{self.server_host}:{self.server_port}/worker/register',
@@ -184,7 +261,7 @@ class HashmancerProductionWorker:
                 )
                 
                 if response.status_code == 200:
-                    logger.info("✅ Successfully registered with server")
+                    logger.info("✅ Successfully registered with server (legacy)")
                     self.registered = True
                     return True
                 elif response.status_code == 409:

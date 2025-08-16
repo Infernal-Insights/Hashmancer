@@ -1,5 +1,5 @@
 import redis
-from ..redis_utils import get_redis
+from ..unified_redis import get_redis_manager, redis_connection, with_redis_sync
 import json
 import uuid
 import time
@@ -7,62 +7,32 @@ import logging
 from typing import Any, Optional, Dict, List
 from .. import orchestrator_agent
 
-# Import performance optimizations
-try:
-    from ..performance.connection_pool import get_optimized_redis, get_redis_pipeline
-    from ..performance.query_optimizer import get_query_optimizer, batch_redis_operations
-    from ..performance.cache_manager import get_cache_manager, cache_with_ttl
-    PERFORMANCE_ENABLED = True
-except ImportError:
-    PERFORMANCE_ENABLED = False
-    logging.warning("Performance optimizations not available")
+logger = logging.getLogger(__name__)
 
-# Connection pool for Redis operations
-_redis_pool: Optional[redis.ConnectionPool] = None
-r = get_redis()
-
-
+# Use the unified Redis manager
 def _get_redis_with_retry() -> redis.Redis:
-    """Get Redis connection with retry logic and performance optimizations."""
-    global _redis_pool, r
-    
-    # Use optimized connection if available
-    if PERFORMANCE_ENABLED:
-        try:
-            return get_optimized_redis('write')
-        except Exception as e:
-            logging.warning(f"Failed to get optimized Redis connection: {e}")
-    
-    # Fallback to original logic
-    if _redis_pool is None:
-        from ..redis_utils import redis_options_from_env
-        opts = redis_options_from_env()
-        _redis_pool = redis.ConnectionPool(**opts)
-    
+    """Get Redis connection using the unified manager."""
     try:
-        return redis.Redis(connection_pool=_redis_pool)
-    except redis.exceptions.ConnectionError:
-        return r
+        manager = get_redis_manager()
+        return manager.get_legacy_sync_client()
+    except Exception as e:
+        logger.error(f"Failed to get Redis connection: {e}")
+        raise
 
 
 def _redis_retry(func, *args, max_retries: int = 3, **kwargs) -> Any:
-    """Execute Redis operation with retry logic."""
-    last_error = None
-    for attempt in range(max_retries):
-        try:
-            redis_client = _get_redis_with_retry()
-            return func(redis_client, *args, **kwargs)
-        except redis.exceptions.RedisError as e:
-            last_error = e
-            if attempt < max_retries - 1:
-                time.sleep(0.5 * (2 ** attempt))  # Exponential backoff
-            continue
-    
-    logging.error(f"Redis operation failed after {max_retries} attempts: {last_error}")
-    raise last_error
+    """Execute Redis operation with retry logic using unified manager."""
+    try:
+        manager = get_redis_manager()
+        return manager.execute_with_retry(func, *args, **kwargs)
+    except Exception as e:
+        logger.error(f"Redis operation failed: {e}")
+        raise
 
 
+@with_redis_sync
 def store_batch(
+    redis_client,
     hashes,
     mask="",
     wordlist="",
@@ -72,49 +42,24 @@ def store_batch(
     hash_mode="0",
     priority: int = 0,
 ):
+    """Store a batch of hashes for processing with improved error handling and atomicity."""
     batch_id = str(uuid.uuid4())
     
-    def _store_batch_ops(redis_client, batch_id, hashes, mask, wordlist, rule, ttl, target, hash_mode, priority, keyspace):
-        # Use pipeline for batch operations if performance optimizations are enabled
-        if PERFORMANCE_ENABLED:
+    try:
+        # Calculate keyspace estimate
+        keyspace = 0
+        if mask:
             try:
-                with get_redis_pipeline('write') as pipeline:
-                    # Store batch data
-                    pipeline.hset(
-                        f"batch:{batch_id}",
-                        mapping={
-                            "hashes": json.dumps(hashes),
-                            "mask": mask,
-                            "wordlist": wordlist,
-                            "rule": rule,
-                            "created": int(time.time()),
-                            "target": json.dumps(target),
-                            "status": "queued",
-                            "hash_mode": str(hash_mode),
-                            "keyspace": keyspace,
-                            "priority": int(priority),
-                        },
-                    )
-                    pipeline.expire(f"batch:{batch_id}", ttl)
-                    pipeline.lpush("batch:queue", batch_id)
-                    
-                    if int(priority) > 0:
-                        pipeline.zadd("batch:prio", {batch_id: int(priority)})
-                    
-                    # Batch hash operations
-                    for h in hashes:
-                        pipeline.sadd(f"hash_batches:{h}", batch_id)
-                        pipeline.expire(f"hash_batches:{h}", ttl)
-                    
-                    pipeline.execute()
-                return
+                cs_map = orchestrator_agent.build_mask_charsets()
+                keyspace = orchestrator_agent.estimate_keyspace(mask, cs_map)
             except Exception as e:
-                logging.warning(f"Optimized batch store failed, falling back: {e}")
+                logger.warning(f"Failed to estimate keyspace: {e}")
+                keyspace = 0
         
-        # Fallback to original implementation
-        redis_client.hset(
-            f"batch:{batch_id}",
-            mapping={
+        # Use pipeline for atomic batch operations
+        with redis_client.pipeline(transaction=True) as pipeline:
+            # Store batch metadata
+            batch_data = {
                 "hashes": json.dumps(hashes),
                 "mask": mask,
                 "wordlist": wordlist,
@@ -123,106 +68,204 @@ def store_batch(
                 "target": json.dumps(target),
                 "status": "queued",
                 "hash_mode": str(hash_mode),
-                "keyspace": keyspace,
+                "keyspace": str(keyspace),
                 "priority": int(priority),
-            },
-        )
-        redis_client.expire(f"batch:{batch_id}", ttl)
-        redis_client.lpush("batch:queue", batch_id)
-        if int(priority) > 0:
-            redis_client.zadd("batch:prio", {batch_id: int(priority)})
-        for h in hashes:
-            redis_client.sadd(f"hash_batches:{h}", batch_id)
-            redis_client.expire(f"hash_batches:{h}", ttl)
-    
-    try:
-        keyspace = 0
-        if mask:
-            try:
-                cs_map = orchestrator_agent.build_mask_charsets()
-                keyspace = orchestrator_agent.estimate_keyspace(mask, cs_map)
-            except Exception:
-                keyspace = 0
-                
-        _redis_retry(_store_batch_ops, batch_id, hashes, mask, wordlist, rule, ttl, target, hash_mode, priority, keyspace)
+            }
+            
+            pipeline.hset(f"batch:{batch_id}", mapping=batch_data)
+            pipeline.expire(f"batch:{batch_id}", ttl)
+            pipeline.lpush("batch:queue", batch_id)
+            
+            # Add to priority queue if needed
+            if int(priority) > 0:
+                pipeline.zadd("batch:prio", {batch_id: int(priority)})
+            
+            # Associate hashes with batch
+            for h in hashes:
+                pipeline.sadd(f"hash_batches:{h}", batch_id)
+                pipeline.expire(f"hash_batches:{h}", ttl)
+            
+            # Execute all operations atomically
+            pipeline.execute()
+            
+        logger.info(f"Stored batch {batch_id} with {len(hashes)} hashes, priority {priority}")
         return batch_id
-    except redis.exceptions.RedisError as e:
-        logging.warning("Redis unavailable: %s", e)
+        
+    except Exception as e:
+        logger.error(f"Failed to store batch: {e}")
         return None
 
 
-def get_next_batch():
-    def _get_next_batch_ops(redis_client):
+@with_redis_sync
+def get_next_batch(redis_client):
+    """Get the next batch from the queue with proper error handling."""
+    try:
         batch_id = redis_client.rpop("batch:queue")
         if not batch_id:
             return None
+            
         data = redis_client.hgetall(f"batch:{batch_id}")
+        if not data:
+            logger.warning(f"Batch {batch_id} metadata not found")
+            return None
+            
         data["batch_id"] = batch_id
+        logger.debug(f"Retrieved batch {batch_id} from queue")
         return data
-    
-    try:
-        return _redis_retry(_get_next_batch_ops)
-    except redis.exceptions.RedisError as e:
-        logging.warning("Redis unavailable: %s", e)
+        
+    except Exception as e:
+        logger.error(f"Failed to get next batch: {e}")
         return None
 
 
-def requeue_batch(batch_id):
-    def _requeue_batch_ops(redis_client, batch_id):
-        redis_client.lpush("batch:queue", batch_id)
-        prio = redis_client.hget(f"batch:{batch_id}", "priority")
-        if prio and int(prio) > 0:
-            redis_client.zadd("batch:prio", {batch_id: int(prio)})
-    
+@with_redis_sync
+def requeue_batch(redis_client, batch_id: str):
+    """Requeue a batch with proper priority handling."""
     try:
-        _redis_retry(_requeue_batch_ops, batch_id)
-    except redis.exceptions.RedisError as e:
-        logging.warning("Redis unavailable: %s", e)
+        with redis_client.pipeline(transaction=True) as pipeline:
+            pipeline.lpush("batch:queue", batch_id)
+            
+            # Check if batch has priority
+            prio = redis_client.hget(f"batch:{batch_id}", "priority")
+            if prio and int(prio) > 0:
+                pipeline.zadd("batch:prio", {batch_id: int(prio)})
+            
+            pipeline.execute()
+            
+        logger.info(f"Requeued batch {batch_id}")
+        
+    except Exception as e:
+        logger.error(f"Failed to requeue batch {batch_id}: {e}")
 
 
-def queue_range(batch_id: str, start: int, end: int) -> None:
+@with_redis_sync
+def queue_range(redis_client, batch_id: str, start: int, end: int) -> None:
     """Record a keyspace range as queued for the batch."""
-    def _queue_range_ops(redis_client, batch_id, start, end):
+    try:
         redis_client.rpush(f"keyspace:queued:{batch_id}", f"{start}:{end}")
-    
-    try:
-        _redis_retry(_queue_range_ops, batch_id, start, end)
-    except redis.exceptions.RedisError:
-        pass
+        logger.debug(f"Queued range {start}:{end} for batch {batch_id}")
+    except Exception as e:
+        logger.warning(f"Failed to queue range for batch {batch_id}: {e}")
 
 
-def complete_range(batch_id: str, start: int, end: int) -> None:
+@with_redis_sync
+def complete_range(redis_client, batch_id: str, start: int, end: int) -> None:
     """Mark a keyspace range as completed for the batch."""
-    def _complete_range_ops(redis_client, batch_id, start, end):
-        redis_client.rpush(f"keyspace:done:{batch_id}", f"{start}:{end}")
-        redis_client.lrem(f"keyspace:queued:{batch_id}", 0, f"{start}:{end}")
-    
     try:
-        _redis_retry(_complete_range_ops, batch_id, start, end)
-    except redis.exceptions.RedisError:
-        pass
+        with redis_client.pipeline(transaction=True) as pipeline:
+            pipeline.rpush(f"keyspace:done:{batch_id}", f"{start}:{end}")
+            pipeline.lrem(f"keyspace:queued:{batch_id}", 0, f"{start}:{end}")
+            pipeline.execute()
+            
+        logger.debug(f"Completed range {start}:{end} for batch {batch_id}")
+        
+    except Exception as e:
+        logger.warning(f"Failed to complete range for batch {batch_id}: {e}")
 
 
-def update_status(batch_id: str, status: str) -> None:
-    """Set the status field for a batch and refresh TTL."""
-    def _update_status_ops(redis_client, batch_id, status):
-        redis_client.hset(f"batch:{batch_id}", "status", status)
-        if status == "processing":
-            redis_client.persist(f"batch:{batch_id}")
-    
+@with_redis_sync
+def update_status(redis_client, batch_id: str, status: str) -> None:
+    """Set the status field for a batch and manage TTL."""
     try:
-        _redis_retry(_update_status_ops, batch_id, status)
-    except redis.exceptions.RedisError as e:
-        logging.warning("Redis unavailable: %s", e)
+        with redis_client.pipeline(transaction=True) as pipeline:
+            pipeline.hset(f"batch:{batch_id}", "status", status)
+            pipeline.hset(f"batch:{batch_id}", "updated", int(time.time()))
+            
+            if status == "processing":
+                # Remove TTL for processing batches
+                pipeline.persist(f"batch:{batch_id}")
+            elif status == "completed" or status == "failed":
+                # Set shorter TTL for completed/failed batches
+                pipeline.expire(f"batch:{batch_id}", 3600)  # 1 hour
+            
+            pipeline.execute()
+            
+        logger.info(f"Updated batch {batch_id} status to {status}")
+        
+    except Exception as e:
+        logger.error(f"Failed to update status for batch {batch_id}: {e}")
 
 
-def get_hash_batches(hash_value: str) -> list[str]:
+@with_redis_sync
+def get_hash_batches(redis_client, hash_value: str) -> list[str]:
     """Return batch IDs associated with the given hash."""
-    def _get_hash_batches_ops(redis_client, hash_value):
-        return list(redis_client.smembers(f"hash_batches:{hash_value}"))
-    
     try:
-        return _redis_retry(_get_hash_batches_ops, hash_value)
-    except redis.exceptions.RedisError as e:
-        logging.warning("Redis unavailable: %s", e)
+        batch_ids = list(redis_client.smembers(f"hash_batches:{hash_value}"))
+        logger.debug(f"Found {len(batch_ids)} batches for hash {hash_value}")
+        return batch_ids
+        
+    except Exception as e:
+        logger.error(f"Failed to get batches for hash {hash_value}: {e}")
         return []
+
+
+@with_redis_sync 
+def get_batch_status(redis_client, batch_id: str) -> Optional[Dict[str, Any]]:
+    """Get comprehensive status information for a batch."""
+    try:
+        batch_data = redis_client.hgetall(f"batch:{batch_id}")
+        if not batch_data:
+            return None
+        
+        # Get queue information
+        queued_ranges = redis_client.lrange(f"keyspace:queued:{batch_id}", 0, -1)
+        completed_ranges = redis_client.lrange(f"keyspace:done:{batch_id}", 0, -1)
+        
+        return {
+            "batch_id": batch_id,
+            "status": batch_data.get("status", "unknown"),
+            "created": batch_data.get("created"),
+            "updated": batch_data.get("updated"),
+            "priority": int(batch_data.get("priority", 0)),
+            "hash_count": len(json.loads(batch_data.get("hashes", "[]"))),
+            "keyspace": batch_data.get("keyspace", "0"),
+            "queued_ranges": len(queued_ranges),
+            "completed_ranges": len(completed_ranges),
+            "mask": batch_data.get("mask", ""),
+            "wordlist": batch_data.get("wordlist", ""),
+            "rule": batch_data.get("rule", ""),
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get batch status for {batch_id}: {e}")
+        return None
+
+
+@with_redis_sync
+def cleanup_expired_batches(redis_client, max_age_hours: int = 24) -> int:
+    """Clean up old batch data to prevent Redis memory bloat."""
+    try:
+        cutoff_time = int(time.time()) - (max_age_hours * 3600)
+        cleaned_count = 0
+        
+        # Find batches to clean up
+        for key in redis_client.scan_iter("batch:*"):
+            try:
+                created = redis_client.hget(key, "created")
+                if created and int(created) < cutoff_time:
+                    batch_id = key.split(":", 1)[1]
+                    
+                    with redis_client.pipeline(transaction=True) as pipeline:
+                        # Remove batch data
+                        pipeline.delete(key)
+                        pipeline.delete(f"keyspace:queued:{batch_id}")
+                        pipeline.delete(f"keyspace:done:{batch_id}")
+                        
+                        # Remove from queues
+                        pipeline.lrem("batch:queue", 0, batch_id)
+                        pipeline.zrem("batch:prio", batch_id)
+                        
+                        pipeline.execute()
+                        
+                    cleaned_count += 1
+                    
+            except Exception as e:
+                logger.warning(f"Error cleaning batch {key}: {e}")
+                continue
+        
+        logger.info(f"Cleaned up {cleaned_count} expired batches")
+        return cleaned_count
+        
+    except Exception as e:
+        logger.error(f"Failed to cleanup expired batches: {e}")
+        return 0

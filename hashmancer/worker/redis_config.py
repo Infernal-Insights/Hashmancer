@@ -1,28 +1,36 @@
 """Utilities for configuring Redis connections from environment variables.
 
-This module centralizes the logic for reading ``REDIS_*`` environment
-variables including optional SSL certificates and passwords.  It exposes two
-helpers:
-
-``redis_options_from_env`` – returns a dictionary of keyword arguments that can
-be passed to :class:`redis.Redis`.
-``redis_from_env`` – returns a configured :class:`redis.Redis` instance.
-
-Both helpers respect the common ``*_FILE`` variants which allow sensitive values
-such as passwords or certificate PEM data to be provided via a file path.
+This module has been updated to use the unified Redis manager for better
+connection management, pooling, and error handling across the entire application.
 """
 
 from __future__ import annotations
 
 import os
 import tempfile
+import logging
 from pathlib import Path
 from typing import Any, Dict
 
 import redis
 
+logger = logging.getLogger(__name__)
+
+# Try to import the unified Redis manager
+try:
+    from hashmancer.server.unified_redis import (
+        get_redis_manager, 
+        redis_connection, 
+        get_redis, 
+        get_redis_stats
+    )
+    UNIFIED_REDIS_AVAILABLE = True
+except ImportError:
+    UNIFIED_REDIS_AVAILABLE = False
+    logger.warning("Unified Redis manager not available, using legacy Redis connection")
+
 # ---------------------------------------------------------------------------
-# helper functions
+# helper functions (kept for compatibility)
 
 def _read_secret(var: str) -> str | None:
     """Return the value of ``var`` or the contents of ``var_FILE``.
@@ -88,10 +96,10 @@ def cleanup_temp_ssl_files() -> None:
 
 def redis_options_from_env(**overrides: Any) -> Dict[str, Any]:
     """Build a dictionary of ``redis.Redis`` keyword arguments.
-
-    Environment variables are used as defaults but can be overridden by keyword
-    arguments.
+    
+    NOTE: This function is deprecated. The unified Redis manager should be used instead.
     """
+    logger.warning("redis_options_from_env() is deprecated. Use the unified Redis manager instead.")
 
     host = overrides.get("host") or os.getenv("REDIS_HOST", "localhost")
     port = int(overrides.get("port") or os.getenv("REDIS_PORT", 6379))
@@ -131,7 +139,78 @@ def redis_options_from_env(**overrides: Any) -> Dict[str, Any]:
             opts["ssl_keyfile"] = ssl_key
     return opts
 
-def redis_from_env(**overrides: Any) -> redis.Redis:
-    """Return a :class:`redis.Redis` instance configured from the environment."""
 
+def redis_from_env(**overrides: Any) -> redis.Redis:
+    """Return a :class:`redis.Redis` instance configured from the environment.
+    
+    This function now uses the unified Redis manager when available for better
+    connection management and error handling.
+    """
+    
+    if UNIFIED_REDIS_AVAILABLE:
+        try:
+            if overrides:
+                logger.warning("redis_from_env() overrides are ignored when using unified Redis manager")
+            return get_redis()
+        except Exception as e:
+            logger.error(f"Failed to get Redis connection from unified manager: {e}")
+            # Fall back to legacy method
+    
+    # Legacy fallback
+    logger.info("Using legacy Redis connection method")
     return redis.Redis(**redis_options_from_env(**overrides))
+
+
+def get_redis_connection():
+    """Get Redis connection with proper context management.
+    
+    Example usage:
+        with get_redis_connection() as redis_conn:
+            redis_conn.set("key", "value")
+    """
+    if UNIFIED_REDIS_AVAILABLE:
+        return redis_connection()
+    else:
+        # Fallback context manager for legacy connections
+        from contextlib import contextmanager
+        
+        @contextmanager
+        def legacy_redis_connection():
+            conn = redis_from_env()
+            try:
+                yield conn
+            finally:
+                try:
+                    conn.close()
+                except:
+                    pass
+        
+        return legacy_redis_connection()
+
+
+def get_redis_health() -> Dict[str, Any]:
+    """Get Redis health status and statistics."""
+    if UNIFIED_REDIS_AVAILABLE:
+        try:
+            return get_redis_stats()
+        except Exception as e:
+            return {"error": str(e), "healthy": False}
+    else:
+        # Simple health check for legacy connections
+        try:
+            with get_redis_connection() as conn:
+                conn.ping()
+            return {"healthy": True, "legacy_mode": True}
+        except Exception as e:
+            return {"healthy": False, "error": str(e), "legacy_mode": True}
+
+
+def test_redis_connection() -> bool:
+    """Test if Redis connection is working."""
+    try:
+        with get_redis_connection() as conn:
+            conn.ping()
+        return True
+    except Exception as e:
+        logger.error(f"Redis connection test failed: {e}")
+        return False

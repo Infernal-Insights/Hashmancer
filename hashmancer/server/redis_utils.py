@@ -1,4 +1,4 @@
-"""Centralized Redis connection utilities."""
+"""Centralized Redis connection utilities - Updated to use Unified Redis Manager."""
 
 import os
 import json
@@ -6,8 +6,18 @@ import redis
 from typing import Any, Dict
 from pathlib import Path
 import tempfile
+import logging
 
-from .app.config import CONFIG_FILE
+# Import the new unified Redis manager
+from .unified_redis import get_redis_manager, redis_connection, get_redis_stats
+
+logger = logging.getLogger(__name__)
+
+# For backward compatibility, keep the config loading functions
+try:
+    from .app.config import CONFIG_FILE
+except ImportError:
+    CONFIG_FILE = Path("config.json")
 
 
 def _read_secret(var: str) -> str | None:
@@ -60,6 +70,9 @@ def cleanup_temp_ssl_files() -> None:
 
 def redis_options_from_env(**overrides: Any) -> Dict[str, Any]:
     """Build a dictionary of Redis keyword arguments from environment and config."""
+    # This function is kept for compatibility but now logs a deprecation warning
+    logger.warning("redis_options_from_env() is deprecated. Use unified_redis.RedisConfig.from_env() instead.")
+    
     # Load from config file if it exists
     config_overrides = {}
     if CONFIG_FILE.exists():
@@ -121,5 +134,42 @@ def redis_options_from_env(**overrides: Any) -> Dict[str, Any]:
 
 
 def get_redis(**overrides: Any) -> redis.Redis:
-    """Return a Redis connection using environment variables and config file."""
-    return redis.Redis(**redis_options_from_env(**overrides))
+    """Return a Redis connection using the unified Redis manager.
+    
+    This function now uses the unified Redis manager for better connection management,
+    pooling, and error handling. The overrides parameter is ignored as configuration
+    should be done through environment variables or config files.
+    """
+    if overrides:
+        logger.warning("get_redis() overrides are deprecated. Use environment variables or config files.")
+    
+    try:
+        manager = get_redis_manager()
+        return manager.get_legacy_sync_client()
+    except Exception as e:
+        logger.error(f"Failed to get Redis connection: {e}")
+        # Fallback to direct connection for extreme compatibility
+        try:
+            return redis.Redis(**redis_options_from_env(**overrides))
+        except Exception as fallback_error:
+            logger.error(f"Fallback Redis connection also failed: {fallback_error}")
+            raise
+
+
+# Add convenience functions for the new unified system
+def get_redis_with_context():
+    """Get Redis connection with proper context management.
+    
+    Example usage:
+        with get_redis_with_context() as redis_conn:
+            redis_conn.set("key", "value")
+    """
+    return redis_connection()
+
+
+def get_redis_health():
+    """Get Redis health status and statistics."""
+    try:
+        return get_redis_stats()
+    except Exception as e:
+        return {"error": str(e), "healthy": False}

@@ -73,12 +73,14 @@ class InputValidator:
         
         # Dangerous patterns to detect
         self.dangerous_patterns = [
-            (re.compile(r'(?i)(union|select|insert|delete|drop|exec|script)', re.I), 'SQL injection attempt'),
-            (re.compile(r'(?i)(<script|javascript:|vbscript:|onload=)', re.I), 'XSS attempt'),
-            (re.compile(r'(?i)(\.\.\/|\.\.\\|\/etc\/|\/proc\/)', re.I), 'Path traversal attempt'),
-            (re.compile(r'(?i)(cmd|powershell|bash|sh)[\s=]', re.I), 'Command injection attempt'),
-            (re.compile(r'(?i)(\${|<%|%{)', re.I), 'Template injection attempt'),
-            (re.compile(r'(?i)(eval\s*\(|system\s*\(|exec\s*\()', re.I), 'Code execution attempt'),
+            (re.compile(r'(?i)(union|select|insert|delete|drop|exec|script|create|alter)', re.I), 'SQL injection attempt'),
+            (re.compile(r'(?i)(<script|javascript:|vbscript:|onload=|onerror=|onclick=)', re.I), 'XSS attempt'),
+            (re.compile(r'(?i)(\.\.\/|\.\.\\|\/etc\/|\/proc\/|\/dev\/|file:\/\/)', re.I), 'Path traversal attempt'),
+            (re.compile(r'(?i)(cmd|powershell|bash|sh|nc|netcat|curl|wget)[\s=]', re.I), 'Command injection attempt'),
+            (re.compile(r'(?i)(\${|<%|%{|{{)', re.I), 'Template injection attempt'),
+            (re.compile(r'(?i)(eval\s*\(|system\s*\(|exec\s*\(|subprocess|os\.)', re.I), 'Code execution attempt'),
+            (re.compile(r'(?i)(ldap|smtp|ftp|sftp|ssh)://', re.I), 'Protocol injection attempt'),
+            (re.compile(r'(?i)(0x[0-9a-f]+|\\\d{1,3})', re.I), 'Encoding bypass attempt'),
         ]
         
         # Default validation rules
@@ -138,6 +140,17 @@ class InputValidator:
             'a': ['href', 'title'],
             'img': ['src', 'alt', 'title'],
         }
+    
+    def sanitize_string(self, value: str, max_length: int = 1000) -> str:
+        """Sanitize string input by removing dangerous content."""
+        if not isinstance(value, str):
+            return str(value)[:max_length]
+        
+        # Basic sanitization
+        sanitized = html.escape(value)
+        sanitized = sanitized[:max_length]
+        
+        return sanitized
     
     def validate(
         self, 
@@ -401,6 +414,192 @@ class InputValidator:
             return True
         except Exception:
             return False
+    
+    def validate_worker_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate worker registration/update data."""
+        validated = {}
+        
+        # Worker ID validation
+        if 'worker_id' in data:
+            validated['worker_id'] = self.validate(
+                data['worker_id'], 
+                InputType.ALPHANUMERIC, 
+                min_length=8, 
+                max_length=64,
+                field_name="worker_id"
+            )
+        
+        # Capabilities validation
+        if 'capabilities' in data:
+            caps = data['capabilities']
+            if not isinstance(caps, dict):
+                raise ValidationError("capabilities must be a dictionary")
+            
+            validated_caps = {}
+            for key, value in caps.items():
+                clean_key = self.validate(key, InputType.ALPHANUMERIC, field_name=f"capability key {key}")
+                if isinstance(value, str):
+                    clean_value = self.sanitize_string(value)
+                elif isinstance(value, (int, float, bool)):
+                    clean_value = value
+                else:
+                    raise ValidationError(f"Invalid capability value type for {key}")
+                validated_caps[clean_key] = clean_value
+            validated['capabilities'] = validated_caps
+        
+        # Status validation
+        if 'status' in data:
+            status = str(data['status']).lower()
+            if status not in ['idle', 'busy', 'offline', 'error', 'ready']:
+                raise ValidationError("Invalid worker status")
+            validated['status'] = status
+        
+        # Metadata validation
+        if 'metadata' in data:
+            metadata = data['metadata']
+            if not isinstance(metadata, dict):
+                raise ValidationError("metadata must be a dictionary")
+            
+            validated_metadata = {}
+            for key, value in metadata.items():
+                clean_key = self.sanitize_string(key)[:50]  # Limit key length
+                if isinstance(value, str):
+                    clean_value = self.sanitize_string(value)[:200]  # Limit value length
+                elif isinstance(value, (int, float, bool)):
+                    clean_value = value
+                else:
+                    clean_value = str(value)[:200]
+                validated_metadata[clean_key] = clean_value
+            validated['metadata'] = validated_metadata
+        
+        return validated
+    
+    def validate_hash_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate hash-related data."""
+        validated = {}
+        
+        # Hash validation
+        if 'hash' in data:
+            hash_value = str(data['hash']).strip()
+            validated['hash'] = self.validate(hash_value, InputType.HASH, field_name="hash")
+        
+        # Hash list validation
+        if 'hashes' in data:
+            hashes = data['hashes']
+            if isinstance(hashes, str):
+                # Parse JSON string
+                try:
+                    hashes = json.loads(hashes)
+                except json.JSONDecodeError:
+                    raise ValidationError("Invalid JSON in hashes field")
+            
+            if not isinstance(hashes, list):
+                raise ValidationError("hashes must be a list")
+            
+            if len(hashes) > 10000:  # Limit batch size
+                raise ValidationError("Too many hashes in batch (max 10000)")
+            
+            validated_hashes = []
+            for i, hash_value in enumerate(hashes):
+                try:
+                    clean_hash = self.validate(str(hash_value).strip(), InputType.HASH, field_name=f"hash {i}")
+                    validated_hashes.append(clean_hash)
+                except ValidationError as e:
+                    logger.warning(f"Invalid hash at index {i}: {e}")
+                    continue  # Skip invalid hashes
+            
+            validated['hashes'] = validated_hashes
+        
+        # Algorithm validation
+        if 'algorithm' in data:
+            algo = str(data['algorithm']).lower().strip()
+            # Allow common hash algorithms
+            allowed_algos = {
+                'md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512',
+                'ntlm', 'lm', 'bcrypt', 'scrypt', 'argon2', 'pbkdf2',
+                'mysql', 'mssql', 'oracle', 'postgresql'
+            }
+            if algo not in allowed_algos:
+                raise ValidationError(f"Unsupported hash algorithm: {algo}")
+            validated['algorithm'] = algo
+        
+        return validated
+    
+    def validate_job_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate job submission data."""
+        validated = {}
+        
+        # Job ID validation
+        if 'job_id' in data:
+            validated['job_id'] = self.validate(
+                data['job_id'], 
+                InputType.UUID, 
+                field_name="job_id"
+            )
+        
+        # Priority validation
+        if 'priority' in data:
+            priority = data['priority']
+            if isinstance(priority, str):
+                priority = int(priority)
+            if not isinstance(priority, int) or priority < 0 or priority > 10:
+                raise ValidationError("priority must be an integer between 0 and 10")
+            validated['priority'] = priority
+        
+        # Wordlist validation
+        if 'wordlist' in data:
+            wordlist = str(data['wordlist']).strip()
+            if not self.is_safe_path(wordlist):
+                raise ValidationError("Invalid wordlist path")
+            validated['wordlist'] = wordlist
+        
+        # Mask validation
+        if 'mask' in data:
+            mask = str(data['mask']).strip()
+            # Basic mask pattern validation
+            if not re.match(r'^[\?a-zA-Z0-9\-_\.\s]+$', mask):
+                raise ValidationError("Invalid mask pattern")
+            if len(mask) > 100:
+                raise ValidationError("Mask too long (max 100 characters)")
+            validated['mask'] = mask
+        
+        # Rules validation
+        if 'rules' in data:
+            rules = str(data['rules']).strip()
+            if not self.is_safe_path(rules):
+                raise ValidationError("Invalid rules path")
+            validated['rules'] = rules
+        
+        return validated
+    
+    def validate_api_request(self, data: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
+        """Validate API request data based on endpoint."""
+        validated = {}
+        
+        # Common validations for all endpoints
+        for key, value in data.items():
+            if isinstance(value, str):
+                # Check for dangerous patterns
+                for pattern, threat_type in self.dangerous_patterns:
+                    if pattern.search(value):
+                        logger.warning(f"Dangerous pattern detected in {key}: {threat_type}")
+                        raise ValidationError(f"Invalid content in {key}")
+        
+        # Endpoint-specific validation
+        if endpoint.startswith('/api/worker/'):
+            validated.update(self.validate_worker_data(data))
+        elif endpoint.startswith('/api/hash/') or endpoint.startswith('/api/job/'):
+            validated.update(self.validate_hash_data(data))
+            validated.update(self.validate_job_data(data))
+        else:
+            # Generic validation for other endpoints
+            for key, value in data.items():
+                if isinstance(value, str):
+                    validated[key] = self.sanitize_string(value)
+                else:
+                    validated[key] = value
+        
+        return validated
     
     def get_validation_stats(self) -> Dict[str, Any]:
         """Get validation statistics (placeholder for future metrics)."""

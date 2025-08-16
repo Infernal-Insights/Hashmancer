@@ -1,129 +1,41 @@
+# Development override for docker-compose.ultimate.yml
 version: '3.8'
 
 services:
-  # Hashmancer Server
-  hashmancer-server:
-    build: 
-      context: .
-      dockerfile: server/Dockerfile.dev
+  server:
+    build:
+      args:
+        - BUILD_ENV=development
+    environment:
+      - BUILD_ENV=development
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./hashmancer:/app/hashmancer:rw
+      - ./config:/app/config:rw
     ports:
       - "8080:8080"
-      - "9090:9090"  # Metrics
-    environment:
-      - ENVIRONMENT=development
-      - LOG_LEVEL=debug
-      - DATABASE_URL=postgresql://hashmancer:dev123@postgres:5432/hashmancer_dev
-      - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - ./server:/app/server
-      - ./shared:/app/shared
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - hashmancer-net
+      - "8000:8000"
+      - "5678:5678"
 
-  # Database
-  postgres:
-    image: postgres:15-alpine
+  worker-gpu:
     environment:
-      - POSTGRES_DB=hashmancer_dev
-      - POSTGRES_USER=hashmancer
-      - POSTGRES_PASSWORD=dev123
-    ports:
-      - "5432:5432"
+      - LOG_LEVEL=DEBUG
+      - WORKER_LOG_LEVEL=DEBUG
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - hashmancer-net
+      - ./hashmancer:/app/hashmancer:rw
 
-  # Redis for caching and job queues
+  worker-cpu:
+    environment:
+      - LOG_LEVEL=DEBUG  
+      - WORKER_LOG_LEVEL=DEBUG
+    volumes:
+      - ./hashmancer:/app/hashmancer:rw
+
   redis:
-    image: redis:7-alpine
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    networks:
-      - hashmancer-net
-
-  # Worker Node Simulator (for development)
-  hashmancer-worker-sim:
-    build:
-      context: .
-      dockerfile: worker/Dockerfile.dev
-    environment:
-      - SERVER_URL=http://hashmancer-server:8080
-      - WORKER_ID=dev-worker-1
-      - GPU_COUNT=1
-      - LOG_LEVEL=debug
-    volumes:
-      - ./worker:/app/worker
-      - ./darkling:/app/darkling
-      - ./shared:/app/shared
-    depends_on:
-      - hashmancer-server
-    networks:
-      - hashmancer-net
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-  # Monitoring
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9091:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-    networks:
-      - hashmancer-net
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin123
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards
-      - ./monitoring/grafana-datasources:/etc/grafana/provisioning/datasources
-    networks:
-      - hashmancer-net
-
-  # Development tools
-  jupyter:
-    image: jupyter/datascience-notebook:latest
-    ports:
-      - "8888:8888"
-    environment:
-      - JUPYTER_ENABLE_LAB=yes
-    volumes:
-      - ./notebooks:/home/jovyan/work
-      - ./data:/home/jovyan/data
-    networks:
-      - hashmancer-net
-
-volumes:
-  postgres_data:
-  redis_data:
-  prometheus_data:
-  grafana_data:
+    command: redis-server --appendonly yes --maxmemory 1gb --loglevel debug
 
 networks:
-  hashmancer-net:
+  hashmancer-network:
     driver: bridge
