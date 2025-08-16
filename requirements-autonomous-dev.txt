@@ -1,0 +1,72 @@
+# Hashmancer Autonomous Development Requirements
+# ============================================
+
+# Core async and HTTP libraries
+asyncio>=3.4.3
+aiohttp>=3.8.0
+aiofiles>=0.8.0
+
+# Redis and data processing
+redis>=4.3.0
+python-redis-lock>=3.7.0
+
+# System monitoring and management
+psutil>=5.9.0
+GPUtil>=1.4.0  # Alternative GPU monitoring
+py3nvml>=0.2.7  # NVIDIA GPU management
+
+# Configuration and data handling
+PyYAML>=6.0
+python-dotenv>=0.19.0
+configparser>=5.3.0
+
+# Data analysis and optimization
+numpy>=1.21.0
+pandas>=1.4.0
+scikit-learn>=1.1.0  # For ML-based optimization
+
+# API clients and web requests
+requests>=2.28.0
+anthropic>=0.3.0  # For Claude Opus API integration
+
+# Logging and monitoring
+structlog>=22.1.0
+prometheus-client>=0.14.0
+
+# Testing and validation
+pytest>=7.1.0
+pytest-asyncio>=0.19.0
+
+# Development utilities
+black>=22.0.0  # Code formatting
+flake8>=4.0.0  # Linting
+mypy>=0.961    # Type checking
+
+# Performance and profiling
+cProfile>=1.0
+memory-profiler>=0.60.0
+line-profiler>=3.5.0
+
+# Docker integration
+docker>=6.0.0
+docker-compose>=1.29.0
+
+# JSON and data serialization
+ujson>=5.4.0
+msgpack>=1.0.4
+
+# Scheduling and timing
+APScheduler>=3.9.0
+python-crontab>=2.6.0
+
+# Security and encryption
+cryptography>=37.0.0
+bcrypt>=3.2.0
+
+# Machine learning for optimization
+torch>=1.12.0  # For GPU-accelerated ML
+torchvision>=0.13.0
+
+# Optional: Advanced monitoring
+grafana-api>=1.0.3
+influxdb-client>=1.30.0

@@ -1,0 +1,149 @@
+# Hashmancer Autonomous Development Configuration
+# ================================================
+
+# Testing Configuration
+testing:
+  docker_compose_file: 'docker-compose.ultimate.yml'
+  test_duration_minutes: 30
+  performance_monitoring_interval: 60  # seconds
+  log_analysis_interval: 300  # seconds
+  dual_gpu_optimization: true
+  rtx_2080ti_specific_settings: true
+
+# Development Configuration
+development:
+  max_opus_calls_per_day: 15  # Conservative limit to control costs
+  development_cycles_per_day: 6  # Every 4 hours
+  auto_commit_changes: true
+  run_github_actions_locally: true
+  focus_areas:
+    - gpu_optimization
+    - redis_performance
+    - worker_efficiency
+    - error_reduction
+    - hash_cracking_speed
+
+# Monitoring Configuration
+monitoring:
+  gpu_monitoring: true
+  redis_monitoring: true
+  container_monitoring: true
+  performance_thresholds:
+    cpu_usage_max: 80
+    memory_usage_max: 85
+    gpu_temp_max: 80  # Conservative for 2080 Ti
+    gpu_memory_usage_max: 90
+    redis_latency_max: 5  # milliseconds
+    hash_rate_min: 1000000  # hashes per second minimum
+  
+  alerts:
+    gpu_temp_warning: 75
+    gpu_temp_critical: 83
+    memory_leak_detection: true
+    performance_degradation_threshold: 0.2  # 20% degradation
+
+# Claude Opus Integration
+claude_opus:
+  model: 'claude-3-5-sonnet-20241022'
+  max_tokens: 4000
+  temperature: 0.3  # Lower for more focused technical analysis
+  use_cases:
+    - complex_error_analysis
+    - performance_optimization_strategy
+    - architectural_improvements
+    - security_analysis
+    - advanced_debugging
+  
+  cost_optimization:
+    batch_similar_issues: true
+    use_local_claude_code_first: true
+    only_for_complex_problems: true
+
+# GPU-Specific Configuration
+gpu_configuration:
+  dual_rtx_2080ti:
+    memory_per_gpu: 11264  # MB
+    cuda_cores_per_gpu: 4352
+    optimal_batch_sizes:
+      md5: 1000000
+      sha1: 800000
+      sha256: 500000
+      bcrypt: 10000
+    
+    power_management:
+      target_power_limit: 250  # watts per GPU
+      temperature_target: 75
+      fan_curve_aggressive: true
+    
+    optimization_flags:
+      - "--optimize-gpu-memory"
+      - "--dual-gpu-load-balance" 
+      - "--memory-coalescing"
+      - "--async-memory-transfer"
+
+# Improvement Roadmap
+improvement_priorities:
+  high_priority:
+    - dual_gpu_load_balancing
+    - memory_optimization
+    - thermal_management
+    - error_handling_robustness
+  
+  medium_priority:
+    - hash_algorithm_optimization
+    - worker_scheduling_efficiency
+    - redis_connection_pooling
+    - monitoring_dashboard
+  
+  low_priority:
+    - ui_improvements
+    - documentation_updates
+    - code_refactoring
+    - test_coverage_increase
+
+# Automation Settings
+automation:
+  auto_restart_on_failure: true
+  auto_update_dependencies: false  # Manual approval for stability
+  auto_deploy_improvements: true
+  auto_rollback_on_errors: true
+  
+  continuous_monitoring:
+    enabled: true
+    check_interval: 30  # seconds
+    alert_on_anomalies: true
+  
+  development_workflow:
+    run_tests_before_changes: true
+    validate_gpu_access: true
+    backup_before_major_changes: true
+    log_all_changes: true
+
+# Logging Configuration
+logging:
+  level: INFO
+  detailed_gpu_logging: true
+  performance_metrics_logging: true
+  error_stack_traces: true
+  log_rotation:
+    max_size_mb: 100
+    backup_count: 10
+  
+  log_analysis:
+    pattern_detection: true
+    anomaly_detection: true
+    performance_trend_analysis: true
+
+# Safety and Limits
+safety:
+  max_gpu_temperature: 83  # Celsius
+  max_power_consumption: 500  # Watts total
+  emergency_shutdown_triggers:
+    - gpu_temp_over_85
+    - memory_leak_detected
+    - system_unresponsive
+  
+  change_validation:
+    require_successful_tests: true
+    rollback_on_performance_regression: true
+    human_approval_for_major_changes: false  # Autonomous mode
