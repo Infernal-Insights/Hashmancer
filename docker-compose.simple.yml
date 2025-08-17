@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    
+  server:
+    image: hashmancer-server:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - PATH=/root/.local/bin:${PATH}
+    restart: unless-stopped
+    
+  worker:
+    image: hashmancer-worker:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    depends_on:
+      - redis
+      - server
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - SERVER_URL=http://server:8080
+      - PATH=/root/.local/bin:${PATH}
+    volumes:
+      - ~/.hashmancer:/root/.hashmancer
+    restart: unless-stopped
+
+volumes:
+  redis-data:

@@ -74,7 +74,18 @@
       "Bash(./demo-vast-setup.sh:*)",
       "Bash(docker build:*)",
       "Bash(./test-docker-setup.sh:*)",
-      "Bash(./test-digitalocean-setup.sh:*)"
+      "Bash(./test-digitalocean-setup.sh:*)",
+      "Bash(sed:*)",
+      "Bash(find:*)",
+      "Bash(touch:*)",
+      "Bash(git rm:*)",
+      "Bash(./hashmancer-cli sshkey:*)",
+      "Bash(./install-cli.sh:*)",
+      "Bash(export:*)",
+      "Bash(hashmancer:*)",
+      "Bash(/home/derekhartwig/.local/bin/hashmancer:*)",
+      "Bash(./test-docker-cli-install.sh:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

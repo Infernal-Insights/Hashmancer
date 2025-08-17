@@ -1,0 +1,58 @@
+version: "3.8"
+
+services:
+  # CLI installer init container
+  cli-installer:
+    build:
+      context: .
+      dockerfile: Dockerfile.cli-installer
+    volumes:
+      - cli-bin:/usr/local/bin
+    command: /install-cli-global.sh
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    
+  server:
+    image: hashmancer-server:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+      - cli-installer
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - PATH=/usr/local/bin:/root/.local/bin:${PATH}
+    volumes:
+      - cli-bin:/usr/local/bin:ro
+    restart: unless-stopped
+    
+  worker:
+    image: hashmancer-worker:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    depends_on:
+      - redis
+      - server
+      - cli-installer
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - SERVER_URL=http://server:8080
+      - PATH=/usr/local/bin:/root/.local/bin:${PATH}
+    volumes:
+      - ~/.hashmancer:/root/.hashmancer
+      - cli-bin:/usr/local/bin:ro
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  cli-bin:

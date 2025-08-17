@@ -2,14 +2,16 @@
 
 from pathlib import Path
 
-try:
-    from manage import main  # type: ignore
-except ImportError:  # pragma: no cover - fallback when not on path
-    def main() -> None:  # type: ignore
-        raise RuntimeError("manage script unavailable")
+# Manage script functionality moved elsewhere
+def main() -> None:  # type: ignore
+    raise RuntimeError("manage script unavailable - use hashmancer CLI instead")
 import os
 import shutil
-from hashmancer.utils import event_logger
+# Conditional import to avoid issues during build
+try:
+    from hashmancer.utils import event_logger
+except ImportError:
+    event_logger = None
 try:
     import requests
 except ImportError:  # pragma: no cover - optional during build
@@ -54,6 +56,7 @@ def download_prebuilt_engine() -> None:
         dest.chmod(0o755)
         print(f"Downloaded darkling-engine to {dest}")
     except (requests.RequestException, OSError) as e:
-        event_logger.log_error("setup", "system", "S001", "Download prebuilt engine failed", e)
+        if event_logger:
+            event_logger.log_error("setup", "system", "S001", "Download prebuilt engine failed", e)
         print(f"⚠️  Failed to download prebuilt engine: {e}")
 
