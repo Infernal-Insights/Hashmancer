@@ -85,7 +85,13 @@
       "Bash(hashmancer:*)",
       "Bash(/home/derekhartwig/.local/bin/hashmancer:*)",
       "Bash(./test-docker-cli-install.sh:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker inspect:*)",
+      "Bash(docker run:*)",
+      "Bash(git config:*)"
     ],
     "deny": []
   }

@@ -27,3 +27,4 @@ simple_portal.py
 *.log
 *.tmp
 .cache/
+.claude/agents/developer.md
