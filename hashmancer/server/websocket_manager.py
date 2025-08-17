@@ -60,7 +60,7 @@ class ImprovedWebSocketManager:
         self._max_connections = max_connections
         self._cleanup_interval = cleanup_interval
         self._cleanup_task: Optional[asyncio.Task] = None
-        self._shutdown_event = asyncio.Event()
+        self._shutdown_event: Optional[asyncio.Event] = None
         
         # Message rate limiting
         self._message_counts: Dict[str, int] = {}
@@ -76,16 +76,21 @@ class ImprovedWebSocketManager:
             "cleanup_runs": 0
         }
         
-        # Start cleanup task
-        self._start_cleanup_task()
+        # Cleanup task will be started when first connection is made
     
     def _start_cleanup_task(self):
         """Start the periodic cleanup task."""
-        if self._cleanup_task is None or self._cleanup_task.done():
-            self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
+        try:
+            if self._cleanup_task is None or self._cleanup_task.done():
+                self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
+        except RuntimeError:
+            # No event loop running yet - task will be started later
+            pass
     
     async def _periodic_cleanup(self):
         """Periodic cleanup of stale connections."""
+        if self._shutdown_event is None:
+            self._shutdown_event = asyncio.Event()
         while not self._shutdown_event.is_set():
             try:
                 await asyncio.sleep(self._cleanup_interval)
@@ -180,6 +185,10 @@ class ImprovedWebSocketManager:
         
         try:
             await websocket.accept()
+            
+            # Start cleanup task if not already running
+            if self._cleanup_task is None or self._cleanup_task.done():
+                self._start_cleanup_task()
             
             connection_id = self._generate_connection_id()
             connection = WebSocketConnection(
@@ -319,6 +328,8 @@ class ImprovedWebSocketManager:
     async def shutdown(self):
         """Gracefully shutdown the WebSocket manager."""
         logger.info("Shutting down WebSocket manager...")
+        if self._shutdown_event is None:
+            self._shutdown_event = asyncio.Event()
         self._shutdown_event.set()
         
         # Cancel cleanup task

@@ -5,6 +5,7 @@ import logging
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from pathlib import Path
 from .config import CONFIG, PORTAL_KEY
 
 # Import security components
@@ -196,11 +197,27 @@ class PortalAuthMiddleware:
 # Temporarily disable auth for testing
 # app.add_middleware(PortalAuthMiddleware, key=PORTAL_KEY)
 
-# Add a simple test route
-@app.get("/")
-async def root():
-    """Test route to verify server is working."""
-    return {"message": "Hashmancer Enhanced Portal is running!", "status": "active"}
+# Portal route - serve the enhanced portal HTML
+@app.get("/", response_class=HTMLResponse)
+@app.get("/portal", response_class=HTMLResponse)
+async def portal_page():
+    """Serve the enhanced portal interface."""
+    try:
+        # Serve the enhanced portal
+        html_path = Path(__file__).parent.parent / "portal_enhanced.html"
+        if html_path.exists():
+            return html_path.read_text()
+        else:
+            # Fallback error message
+            return HTMLResponse(
+                content="<h1>Portal not found</h1><p>portal_enhanced.html is missing</p>",
+                status_code=500
+            )
+    except Exception as e:
+        return HTMLResponse(
+            content=f"<h1>Error loading portal</h1><p>{str(e)}</p>",
+            status_code=500
+        )
 
 @app.get("/health")
 async def health():

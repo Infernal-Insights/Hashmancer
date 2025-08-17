@@ -101,7 +101,7 @@ class HashmancerSimpleWorker:
                 logger.info(f"Registration attempt {attempt}/{max_attempts}")
                 
                 response = requests.post(
-                    f'http://{self.server_host}:{self.server_port}/worker/register',
+                    f'http://{self.server_host}:{self.server_port}/api/worker/register/initiate',
                     json=registration_data,
                     timeout=10
                 )

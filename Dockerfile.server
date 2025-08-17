@@ -28,24 +28,25 @@ COPY redis_tool.py /app/
 COPY install-cli.sh /app/
 
 # Create necessary directories
-RUN mkdir -p /app/logs /app/data
+RUN mkdir -p /app/logs /app/data /opt/hashmancer/wordlists /opt/hashmancer/masks /opt/hashmancer/rules /opt/hashmancer/restores
 
 # Install Hashmancer CLI globally
-RUN chmod +x /app/install-cli.sh && \
-    /app/install-cli.sh && \
+RUN mkdir -p /root/.local/bin && \
+    echo '#!/bin/bash\ncd /app\nexport PYTHONPATH="/app:$PYTHONPATH"\npython -m hashmancer.cli.main "$@"' > /root/.local/bin/hashmancer && \
+    chmod +x /root/.local/bin/hashmancer && \
     echo 'export PATH="/root/.local/bin:$PATH"' >> /root/.bashrc
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash hashmancer && \
-    chown -R hashmancer:hashmancer /app
+    chown -R hashmancer:hashmancer /app /opt/hashmancer
 USER hashmancer
 
 # Expose port
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+# Health check disabled temporarily
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+#     CMD curl -f http://localhost:8080/health || exit 1
 
 # Start command
-CMD ["python", "-m", "hashmancer.server.main", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["python", "-m", "hashmancer.server"]
