@@ -1,5 +1,14 @@
+
+# TODO: Security Review Required
+# Session token generation needs comprehensive security audit
+# Consider implementing:
+# 1. secrets.token_urlsafe(32) for session tokens
+# 2. Proper CSRF protection
+# 3. Secure session storage with expiration
+# 4. Rate limiting for authentication attempts
 """Authentication middleware and utilities."""
 
+import secrets
 import time
 import hmac
 import hashlib

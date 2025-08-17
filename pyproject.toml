@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
     "fastapi==0.116.1",
     "uvicorn==0.35.0",
-    "redis==6.2.0",
+    "redis>=7.0.8",
     "requests==2.32.4",
     "pydantic==2.11.7",
     "cryptography==45.0.5",
@@ -18,14 +18,16 @@ dependencies = [
     "psutil==7.0.0",
     "filelock==3.18.0",
     "argon2-cffi==25.1.0",
+    "click>=8.0.0",
 ]
 
 [project.scripts]
+hashmancer = "hashmancer.cli.main:cli"
 hashmancer-server = "hashmancer.server.__main__:main"
 hashmancer-worker = "hashmancer.worker.hashmancer_worker.worker_agent:main"
 
-[tool.setuptools.packages.find]
-where = ["hashmancer"]
+[tool.setuptools]
+packages = ["hashmancer", "hashmancer.cli", "hashmancer.server", "hashmancer.worker", "hashmancer.darkling", "hashmancer.utils"]
 
 [tool.setuptools.package-data]
 "hashmancer.server" = [
